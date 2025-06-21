@@ -1,0 +1,7 @@
+{
+  "functions": {
+    "app/api/send-messages/route.ts": {
+      "maxDuration": 30
+    }
+  }
+}

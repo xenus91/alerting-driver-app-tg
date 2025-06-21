@@ -1,0 +1,557 @@
+import { neon } from "@neondatabase/serverless"
+
+const sql = neon(process.env.DATABASE_URL!)
+
+export interface User {
+  id: number
+  telegram_id: number
+  phone: string
+  name: string
+  first_name?: string
+  last_name?: string
+  full_name?: string
+  carpark?: string
+  registration_state?: string
+  temp_first_name?: string
+  temp_last_name?: string
+  created_at: string
+}
+
+export interface Trip {
+  id: number
+  trip_identifier?: string
+  vehicle_number?: string
+  planned_loading_time?: string
+  driver_comment?: string
+  created_at: string
+  status: string
+}
+
+export interface Point {
+  id: number
+  point_id: string // Краткий номер пункта
+  point_name: string
+  door_open_1?: string
+  door_open_2?: string
+  door_open_3?: string
+  created_at: string
+  updated_at: string
+}
+
+export interface TripPoint {
+  id: number
+  trip_id: number
+  point_id: number
+  point_type: "P" | "D" // P = погрузка, D = разгрузка
+  point_num: number
+  created_at: string
+  point_name?: string // Joined from points table
+  point_short_id?: string // Joined point_id from points table
+  door_open_1?: string
+  door_open_2?: string
+  door_open_3?: string
+}
+
+export interface TripMessage {
+  id: number
+  trip_id: number
+  phone: string
+  message: string
+  telegram_id?: number
+  status: string
+  error_message?: string
+  sent_at?: string
+  created_at: string
+  response_status: string
+  response_comment?: string
+  response_at?: string
+  trip_identifier?: string
+  vehicle_number?: string
+  planned_loading_time?: string
+  driver_comment?: string
+  sent_time?: string
+}
+
+export interface UserPendingAction {
+  user_id: number
+  action_type: string
+  related_message_id?: number
+  created_at: string
+}
+
+export async function createUser(telegramId: number, phone: string, name: string) {
+  try {
+    const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone
+
+    console.log(`Creating user: telegramId=${telegramId}, phone=${phone} -> ${normalizedPhone}, name=${name}`)
+
+    const result = await sql`
+      INSERT INTO users (telegram_id, phone, name, registration_state)
+      VALUES (${telegramId}, ${normalizedPhone}, ${name}, 'awaiting_first_name')
+      ON CONFLICT (telegram_id) DO UPDATE SET
+        phone = EXCLUDED.phone,
+        name = EXCLUDED.name
+      RETURNING *
+    `
+
+    console.log(`User created/updated:`, result[0])
+    return result[0] as User
+  } catch (error) {
+    console.error("Error creating user:", error)
+    throw error
+  }
+}
+
+export async function updateUserRegistrationStep(telegramId: number, step: string, data?: any) {
+  try {
+    let updateQuery
+
+    switch (step) {
+      case "first_name":
+        updateQuery = sql`
+          UPDATE users 
+          SET temp_first_name = ${data}, registration_state = 'awaiting_last_name'
+          WHERE telegram_id = ${telegramId}
+          RETURNING *
+        `
+        break
+      case "last_name":
+        updateQuery = sql`
+          UPDATE users 
+          SET temp_last_name = ${data}, registration_state = 'awaiting_carpark'
+          WHERE telegram_id = ${telegramId}
+          RETURNING *
+        `
+        break
+      case "carpark":
+        updateQuery = sql`
+          UPDATE users 
+          SET carpark = ${data}, 
+              first_name = temp_first_name,
+              last_name = temp_last_name,
+              full_name = temp_first_name || ' ' || temp_last_name,
+              registration_state = 'completed',
+              temp_first_name = NULL,
+              temp_last_name = NULL
+          WHERE telegram_id = ${telegramId}
+          RETURNING *
+        `
+        break
+      default:
+        throw new Error(`Unknown registration step: ${step}`)
+    }
+
+    const result = await updateQuery
+    console.log(`User registration step updated:`, result[0])
+    return result[0] as User
+  } catch (error) {
+    console.error("Error updating user registration step:", error)
+    throw error
+  }
+}
+
+export async function getUserByTelegramId(telegramId: number) {
+  try {
+    const result = await sql`
+      SELECT * FROM users WHERE telegram_id = ${telegramId}
+    `
+    return result[0] as User | undefined
+  } catch (error) {
+    console.error("Error getting user by telegram id:", error)
+    throw error
+  }
+}
+
+export async function getUserByPhone(phone: string) {
+  try {
+    const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone
+
+    console.log(`Looking for user by phone: ${phone} -> ${normalizedPhone}`)
+
+    const result = await sql`
+      SELECT * FROM users WHERE phone = ${normalizedPhone}
+    `
+
+    console.log(`Found user:`, result[0] || "not found")
+    return result[0] as User | undefined
+  } catch (error) {
+    console.error("Error getting user by phone:", error)
+    throw error
+  }
+}
+
+export async function createTrip() {
+  try {
+    const result = await sql`
+      INSERT INTO trips (status) VALUES ('active')
+      RETURNING *
+    `
+    return result[0] as Trip
+  } catch (error) {
+    console.error("Error creating trip:", error)
+    throw error
+  }
+}
+
+export async function updateTripStatus(tripId: number, status: string) {
+  try {
+    const result = await sql`
+      UPDATE trips 
+      SET status = ${status}
+      WHERE id = ${tripId}
+      RETURNING *
+    `
+    console.log(`Trip ${tripId} status updated to ${status}`)
+    return result[0] as Trip
+  } catch (error) {
+    console.error("Error updating trip status:", error)
+    throw error
+  }
+}
+
+export async function createTripMessage(
+  tripId: number,
+  phone: string,
+  message: string,
+  telegramId?: number,
+  tripData?: {
+    trip_identifier?: string
+    vehicle_number?: string
+    planned_loading_time?: string
+    driver_comment?: string
+  },
+) {
+  try {
+    const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone
+
+    const result = await sql`
+      INSERT INTO trip_messages (
+        trip_id, phone, message, telegram_id, response_status,
+        trip_identifier, vehicle_number, planned_loading_time, driver_comment
+      )
+      VALUES (
+        ${tripId}, ${normalizedPhone}, ${message}, ${telegramId || null}, 'pending',
+        ${tripData?.trip_identifier || null}, ${tripData?.vehicle_number || null}, 
+        ${tripData?.planned_loading_time || null}, ${tripData?.driver_comment || null}
+      )
+      RETURNING *
+    `
+    return result[0] as TripMessage
+  } catch (error) {
+    console.error("Error creating trip message:", error)
+    throw error
+  }
+}
+
+export async function updateTripMessage(messageId: number, message: string) {
+  try {
+    const result = await sql`
+      UPDATE trip_messages 
+      SET message = ${message}
+      WHERE id = ${messageId}
+      RETURNING *
+    `
+    console.log(`Trip message ${messageId} updated with formatted content`)
+    return result[0] as TripMessage
+  } catch (error) {
+    console.error("Error updating trip message:", error)
+    throw error
+  }
+}
+
+export async function createTripPoint(tripId: number, pointId: string, pointType: "P" | "D", pointNum: number) {
+  try {
+    // Сначала найдем ID пункта по point_id
+    const pointResult = await sql`
+      SELECT id FROM points WHERE point_id = ${pointId}
+    `
+
+    if (pointResult.length === 0) {
+      console.warn(`Point not found for point_id: ${pointId}`)
+      return null
+    }
+
+    const result = await sql`
+      INSERT INTO trip_points (trip_id, point_id, point_type, point_num)
+      VALUES (${tripId}, ${pointResult[0].id}, ${pointType}, ${pointNum})
+      RETURNING *
+    `
+    return result[0] as TripPoint
+  } catch (error) {
+    console.error("Error creating trip point:", error)
+    throw error
+  }
+}
+
+// Функции для работы с пунктами
+export async function getAllPoints() {
+  try {
+    const result = await sql`
+      SELECT * FROM points
+      ORDER BY point_id ASC
+    `
+    return result as Point[]
+  } catch (error) {
+    console.error("Error getting all points:", error)
+    throw error
+  }
+}
+
+export async function createPoint(
+  pointId: string,
+  pointName: string,
+  doorOpen1?: string,
+  doorOpen2?: string,
+  doorOpen3?: string,
+) {
+  try {
+    const result = await sql`
+      INSERT INTO points (point_id, point_name, door_open_1, door_open_2, door_open_3)
+      VALUES (${pointId}, ${pointName}, ${doorOpen1 || null}, ${doorOpen2 || null}, ${doorOpen3 || null})
+      RETURNING *
+    `
+    return result[0] as Point
+  } catch (error) {
+    console.error("Error creating point:", error)
+    throw error
+  }
+}
+
+export async function updatePoint(
+  id: number,
+  pointId: string,
+  pointName: string,
+  doorOpen1?: string,
+  doorOpen2?: string,
+  doorOpen3?: string,
+) {
+  try {
+    const result = await sql`
+      UPDATE points 
+      SET point_id = ${pointId},
+          point_name = ${pointName}, 
+          door_open_1 = ${doorOpen1 || null},
+          door_open_2 = ${doorOpen2 || null},
+          door_open_3 = ${doorOpen3 || null},
+          updated_at = CURRENT_TIMESTAMP
+      WHERE id = ${id}
+      RETURNING *
+    `
+    return result[0] as Point
+  } catch (error) {
+    console.error("Error updating point:", error)
+    throw error
+  }
+}
+
+export async function deletePoint(id: number) {
+  try {
+    await sql`
+      DELETE FROM points WHERE id = ${id}
+    `
+    console.log(`Point ${id} deleted`)
+  } catch (error) {
+    console.error("Error deleting point:", error)
+    throw error
+  }
+}
+
+export async function getTripPoints(tripId: number) {
+  try {
+    const result = await sql`
+      SELECT tp.*, p.point_name, p.point_id as point_short_id, p.door_open_1, p.door_open_2, p.door_open_3
+      FROM trip_points tp
+      JOIN points p ON tp.point_id = p.id
+      WHERE tp.trip_id = ${tripId}
+      ORDER BY tp.point_type, tp.point_num
+    `
+    return result as TripPoint[]
+  } catch (error) {
+    console.error("Error getting trip points:", error)
+    throw error
+  }
+}
+
+export async function updateMessageStatus(messageId: number, status: string, errorMessage?: string) {
+  try {
+    const result = await sql`
+      UPDATE trip_messages 
+      SET status = ${status}, 
+          error_message = ${errorMessage || null},
+          sent_at = ${status === "sent" ? new Date().toISOString() : null}
+      WHERE id = ${messageId}
+      RETURNING *
+    `
+    return result[0] as TripMessage
+  } catch (error) {
+    console.error("Error updating message status:", error)
+    throw error
+  }
+}
+
+export async function updateMessageResponse(messageId: number, responseStatus: string, responseComment?: string) {
+  try {
+    const result = await sql`
+      UPDATE trip_messages 
+      SET response_status = ${responseStatus}, 
+          response_comment = ${responseComment || null},
+          response_at = ${new Date().toISOString()}
+      WHERE id = ${messageId}
+      RETURNING *
+    `
+    return result[0] as TripMessage
+  } catch (error) {
+    console.error("Error updating message response:", error)
+    throw error
+  }
+}
+
+export async function setUserPendingAction(userId: number, actionType: string, relatedMessageId?: number) {
+  try {
+    const result = await sql`
+      INSERT INTO user_pending_actions (user_id, action_type, related_message_id)
+      VALUES (${userId}, ${actionType}, ${relatedMessageId || null})
+      ON CONFLICT (user_id) DO UPDATE SET
+        action_type = EXCLUDED.action_type,
+        related_message_id = EXCLUDED.related_message_id,
+        created_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `
+    console.log(`Pending action set for user ${userId}:`, result[0])
+    return result[0] as UserPendingAction
+  } catch (error) {
+    console.error("Error setting user pending action:", error)
+    throw error
+  }
+}
+
+export async function getUserPendingAction(userId: number): Promise<UserPendingAction | undefined> {
+  try {
+    const result = await sql`
+      SELECT * FROM user_pending_actions WHERE user_id = ${userId}
+    `
+    console.log(`Pending action for user ${userId}:`, result[0] || "not found")
+    return result[0] as UserPendingAction | undefined
+  } catch (error) {
+    console.error("Error getting user pending action:", error)
+    throw error
+  }
+}
+
+export async function deleteUserPendingAction(userId: number) {
+  try {
+    await sql`
+      DELETE FROM user_pending_actions WHERE user_id = ${userId}
+    `
+    console.log(`Pending action deleted for user ${userId}`)
+  } catch (error) {
+    console.error("Error deleting user pending action:", error)
+    throw error
+  }
+}
+
+export async function getTripMessageByTelegramId(telegramUserId: number, tripMessageId: number) {
+  try {
+    const result = await sql`
+      SELECT tm.* 
+      FROM trip_messages tm
+      JOIN users u ON tm.telegram_id = u.telegram_id
+      WHERE u.telegram_id = ${telegramUserId} AND tm.id = ${tripMessageId}
+      LIMIT 1
+    `
+    console.log(
+      `Trip message for telegram_id ${telegramUserId} and message_id ${tripMessageId}:`,
+      result[0] || "not found",
+    )
+    return result[0] as TripMessage | undefined
+  } catch (error) {
+    console.error("Error getting trip message by telegram id:", error)
+    throw error
+  }
+}
+
+export async function getTripMessages(tripId: number) {
+  try {
+    const result = await sql`
+      SELECT tm.*, u.first_name, u.full_name
+      FROM trip_messages tm
+      LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+      WHERE tm.trip_id = ${tripId}
+      ORDER BY tm.created_at DESC
+    `
+    return result as (TripMessage & { first_name?: string; full_name?: string })[]
+  } catch (error) {
+    console.error("Error getting trip messages:", error)
+    throw error
+  }
+}
+
+export async function getTrips() {
+  try {
+    const result = await sql`
+      SELECT t.*, 
+             COUNT(tm.id) as total_messages,
+             COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
+             COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
+             COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
+             COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
+             COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
+             MIN(tm.sent_at) as first_sent_at,
+             MAX(tm.sent_at) as last_sent_at
+      FROM trips t
+      LEFT JOIN trip_messages tm ON t.id = tm.trip_id
+      GROUP BY t.id
+      ORDER BY t.created_at DESC
+    `
+    return result
+  } catch (error) {
+    console.error("Error getting trips:", error)
+    throw error
+  }
+}
+
+export async function getAllUsers() {
+  try {
+    const result = await sql`
+      SELECT id, telegram_id, phone, name, first_name, last_name, full_name, carpark, created_at, registration_state
+      FROM users
+      ORDER BY created_at DESC
+    `
+    return result as User[]
+  } catch (error) {
+    console.error("Error getting all users:", error)
+    throw error
+  }
+}
+
+// Функции для обратной совместимости (старые названия)
+export async function createCampaign() {
+  return createTrip()
+}
+
+export async function createCampaignMessage(
+  tripId: number,
+  phone: string,
+  message: string,
+  telegramId?: number,
+  tripData?: {
+    trip_identifier?: string
+    vehicle_number?: string
+    planned_loading_time?: string
+    driver_comment?: string
+  },
+) {
+  return createTripMessage(tripId, phone, message, telegramId, tripData)
+}
+
+export async function getCampaignMessageByTelegramId(telegramUserId: number, messageId: number) {
+  return getTripMessageByTelegramId(telegramUserId, messageId)
+}
+
+export async function getCampaignMessages(tripId: number) {
+  return getTripMessages(tripId)
+}
+
+export async function getCampaigns() {
+  return getTrips()
+}
