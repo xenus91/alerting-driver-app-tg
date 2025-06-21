@@ -101,7 +101,7 @@ export async function sendTripMessageWithButtons(
     if (loadingPoints.length > 0) {
       message += `📦 <b>Погрузка:</b>\n`
       loadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_id, point.point_name}</b>\n`
+        message += `${index + 1}) <b>${point.point_id}, ${point.point_name}</b>\n`
       })
       message += `\n`
     }
@@ -110,7 +110,7 @@ export async function sendTripMessageWithButtons(
     if (unloadingPoints.length > 0) {
       message += `📤 <b>Разгрузка:</b>\n`
       unloadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_id, point.point_name}</b>\n`
+        message += `${index + 1}) <b>${point.point_id}, ${point.point_name}</b>\n`
 
         // Окна приемки для пункта разгрузки
         const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
