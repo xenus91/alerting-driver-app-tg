@@ -785,6 +785,7 @@ export async function POST(request: NextRequest) {
           const carparkButtons = [
             [
               { text: "🚛 Автопарк 8009", callback_data: "carpark_8009" },
+              { text: "🚚 Автопарк 8012", callback_data: "carpark_8012" },
             ],
           ]
 
@@ -819,7 +820,7 @@ export async function POST(request: NextRequest) {
           `📋 Ваши данные:\n` +
           `👤 ФИО: ${existingUser.full_name}\n` +
           `📱 Телефон: +${existingUser.phone}\n` +
-          `🏢 Автохозяйство: ${existingUser.carpark}\n\n` +
+          `🏢 Автопарк: ${existingUser.carpark}\n\n` +
           `🚛 Ожидайте сообщения о предстоящих рейсах.`
 
         await sendMessage(chatId, registeredMessage)

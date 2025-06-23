@@ -6,7 +6,7 @@ const sql = neon(process.env.DATABASE_URL!)
 export async function GET() {
   try {
     const users = await sql`
-      SELECT id, telegram_id, phone, name, created_at
+      SELECT id, telegram_id, phone, name, created_at, full_name
       FROM users
       ORDER BY created_at DESC
     `

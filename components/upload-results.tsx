@@ -54,7 +54,6 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
   const [showNotFoundPoints, setShowNotFoundPoints] = useState(false)
   const [showReadyTrips, setShowReadyTrips] = useState(false)
   const [showSendDetails, setShowSendDetails] = useState(false)
-  const [showUnverifiedPhones, setShowUnverifiedPhones] = useState(false) // <-- НОВОЕ СОСТОЯНИЕ
 
   const handleSendMessages = async () => {
     if (!result.campaign) return
@@ -188,41 +187,6 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                         </Badge>
                       ))}
                     </div>
-                  </AlertDescription>
-                </Alert>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-          {/* НОВАЯ СЕКЦИЯ: Неверифицированные пользователи */}
-          {result.unverifiedPhones && result.unverifiedPhones.length > 0 && (
-            <Collapsible open={showUnverifiedPhones} onOpenChange={setShowUnverifiedPhones}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="mb-2">
-                  {showUnverifiedPhones ? (
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 mr-2" />
-                  )}
-                  Неверифицированные пользователи ({result.unverifiedPhones.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Alert variant="destructive" className="mb-4">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    <p className="mb-2">
-                      Эти пользователи не имеют доступа к приложению, уведомления отправлены не будут:
-                    </p>
-                    <div className="flex flex-wrap gap-1">
-                      {result.unverifiedPhones.map((phone, index) => (
-                        <Badge key={index} variant="destructive">
-                          {phone}
-                        </Badge>
-                      ))}
-                    </div>
-                    <p className="mt-2 text-sm">
-                      Просьба обратиться к Администратору
-                    </p>
                   </AlertDescription>
                 </Alert>
               </CollapsibleContent>
