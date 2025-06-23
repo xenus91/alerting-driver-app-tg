@@ -474,9 +474,9 @@ export async function POST(request: NextRequest) {
           // Отвечаем на callback query (игнорируем ошибки старых запросов)
           await answerCallbackQuery(callbackQuery.id, "Спасибо! Рейс подтвержден!")
 
-          // Скрываем кнопки
-          if (messageId) {
-            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          // Скрываем кнопки после подтверждения
+          if (callbackQuery.message?.message_id) {
+            await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] })
           }
 
           await sendMessage(chatId, "✅ Спасибо! Рейс подтвержден!")
@@ -520,9 +520,9 @@ export async function POST(request: NextRequest) {
           // Отвечаем на callback query (игнорируем ошибки старых запросов)
           await answerCallbackQuery(callbackQuery.id, "Внесите комментарий")
 
-          // Скрываем кнопки исходного сообщения
-          if (messageId) {
-            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          // Скрываем кнопки исходного сообщения после отклонения
+          if (callbackQuery.message?.message_id) {
+            await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] })
           }
 
           await sendMessage(
