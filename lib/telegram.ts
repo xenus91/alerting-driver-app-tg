@@ -416,6 +416,52 @@ export async function editMessageReplyMarkup(chatId: number, messageId: number, 
   }
 }
 
+export async function sendTelegramMessage(chatId: number, text: string, messageId?: number) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: "HTML",
+        reply_markup: messageId
+          ? {
+              inline_keyboard: [
+                [
+                  {
+                    text: "✅ Подтвердить",
+                    callback_data: `confirm_${messageId}`,
+                  },
+                  {
+                    text: "❌ Отклонить",
+                    callback_data: `reject_${messageId}`,
+                  },
+                ],
+              ],
+            }
+          : undefined,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send message")
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error sending Telegram message:", error)
+    throw error
+  }
+}
+
 export async function setWebhook(webhookUrl: string) {
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/setWebhook`, {

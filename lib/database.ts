@@ -70,9 +70,6 @@ export interface TripMessage {
   planned_loading_time?: string
   driver_comment?: string
   sent_time?: string
-  point_id?: string
-  point_type?: "P" | "D"
-  point_num?: number
 }
 
 export interface UserPendingAction {
@@ -222,9 +219,6 @@ export async function createTripMessage(
     vehicle_number?: string
     planned_loading_time?: string
     driver_comment?: string
-    point_id?: string
-    point_type?: "P" | "D"
-    point_num?: number
   },
 ) {
   try {
@@ -233,14 +227,12 @@ export async function createTripMessage(
     const result = await sql`
       INSERT INTO trip_messages (
         trip_id, phone, message, telegram_id, response_status,
-        trip_identifier, vehicle_number, planned_loading_time, driver_comment,
-        point_id, point_type, point_num
+        trip_identifier, vehicle_number, planned_loading_time, driver_comment
       )
       VALUES (
         ${tripId}, ${normalizedPhone}, ${message}, ${telegramId || null}, 'pending',
         ${tripData?.trip_identifier || null}, ${tripData?.vehicle_number || null}, 
-        ${tripData?.planned_loading_time || null}, ${tripData?.driver_comment || null},
-        ${tripData?.point_id || null}, ${tripData?.point_type || null}, ${tripData?.point_num || null}
+        ${tripData?.planned_loading_time || null}, ${tripData?.driver_comment || null}
       )
       RETURNING *
     `
@@ -562,4 +554,37 @@ export async function getCampaignMessages(tripId: number) {
 
 export async function getCampaigns() {
   return getTrips()
+}
+
+export async function getTripDataForMessages(tripId: number) {
+  try {
+    const result = await sql`
+      SELECT DISTINCT
+        tm.phone,
+        tm.telegram_id,
+        tm.trip_identifier,
+        tm.vehicle_number,
+        tm.planned_loading_time,
+        tm.driver_comment,
+        tp.point_type,
+        tp.point_num,
+        p.point_id,
+        p.point_name,
+        p.door_open_1,
+        p.door_open_2,
+        p.door_open_3,
+        u.first_name,
+        u.full_name
+      FROM trip_messages tm
+      LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id
+      LEFT JOIN points p ON tp.point_id = p.id
+      LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+      WHERE tm.trip_id = ${tripId}
+      ORDER BY tm.phone, tm.trip_identifier, tp.point_type, tp.point_num
+    `
+    return result
+  } catch (error) {
+    console.error("Error getting trip data for messages:", error)
+    throw error
+  }
 }
