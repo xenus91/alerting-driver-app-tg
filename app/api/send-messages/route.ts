@@ -1,6 +1,9 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@vercel/postgres"
+import { getTrips, getTripMessages, updateMessageStatus, getUserByPhone } from "@/lib/database"
 import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
+import { neon } from "@neondatabase/serverless"
+
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest) {
   try {
@@ -15,24 +18,18 @@ export async function POST(request: NextRequest) {
     // Если передан "latest", найдем последний рейс
     let actualTripId = campaignId
     if (campaignId === "latest") {
-      const allTripsResult = await sql`SELECT * FROM trips ORDER BY created_at DESC LIMIT 1`
-      if (allTripsResult.rows.length === 0) {
+      const allTrips = await getTrips()
+      if (allTrips.length === 0) {
         return NextResponse.json({ error: "Нет рейсов для отправки" }, { status: 400 })
       }
-      actualTripId = allTripsResult.rows[0].id
+      actualTripId = allTrips[0].id
       console.log(`Using latest trip ID: ${actualTripId}`)
     }
 
     console.log(`Processing trip ID: ${actualTripId}`)
 
     // Получаем все сообщения рейса
-    const messagesResult = await sql`
-      SELECT tm.*, u.telegram_chat_id, u.first_name, u.name
-      FROM trip_messages tm
-      JOIN users u ON tm.phone = u.phone
-      WHERE tm.trip_id = ${actualTripId}
-    `
-    const messages = messagesResult.rows
+    const messages = await getTripMessages(actualTripId)
     console.log(`Found ${messages.length} total messages for trip ${actualTripId}`)
 
     if (messages.length === 0) {
@@ -40,16 +37,22 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Нет сообщений для данного рейса" }, { status: 400 })
     }
 
-    const pendingMessages = messages.filter((msg) => msg.status === "pending" && msg.telegram_chat_id)
-    console.log(`Found ${pendingMessages.length} pending messages with telegram_chat_id`)
+    const pendingMessages = messages.filter((msg) => msg.status === "pending" && msg.telegram_id)
+    console.log(`Found ${pendingMessages.length} pending messages with telegram_id`)
 
     if (pendingMessages.length === 0) {
-      console.log(`No pending messages with telegram_chat_id found`)
+      console.log(`No pending messages with telegram_id found`)
       return NextResponse.json(
         {
-          error: "Нет сообщений для отправки (все уже отправлены или нет telegram_chat_id)",
+          error: "Нет сообщений для отправки (все уже отправлены или нет telegram_id)",
           total: messages.length,
           pending: pendingMessages.length,
+          details: messages.map((m) => ({
+            id: m.id,
+            phone: m.phone,
+            status: m.status,
+            has_telegram_id: !!m.telegram_id,
+          })),
         },
         { status: 400 },
       )
@@ -79,7 +82,9 @@ export async function POST(request: NextRequest) {
         console.log(`=== PROCESSING PHONE ${phone} ===`)
         console.log(`Messages for this phone: ${phoneMessages.length}`)
 
-        const firstName = phoneMessages[0].first_name || phoneMessages[0].name || "Водитель"
+        // Получаем данные пользователя для имени
+        const user = await getUserByPhone(phone)
+        const firstName = user?.first_name || user?.name || "Водитель"
 
         // Группируем сообщения по trip_identifier
         const tripsByIdentifier = new Map<string, typeof phoneMessages>()
@@ -98,42 +103,44 @@ export async function POST(request: NextRequest) {
 
           console.log(`Getting points for trip_identifier: ${tripIdentifier}`)
 
-          // Получаем пункты погрузки для конкретного trip_identifier
+          // Получаем пункты погрузки для конкретного trip_identifier из trip_points
           const loadingPointsResult = await sql`
             SELECT DISTINCT tp.point_id, tp.point_num, p.point_name, p.door_open_1, p.door_open_2, p.door_open_3
             FROM trip_points tp
             LEFT JOIN points p ON tp.point_id = p.point_id
-            WHERE tp.trip_identifier = ${tripIdentifier} 
+            WHERE tp.trip_id = ${actualTripId}
+            AND tp.trip_identifier = ${tripIdentifier} 
             AND tp.point_type = 'P'
             ORDER BY tp.point_num
           `
 
-          // Получаем пункты разгрузки для конкретного trip_identifier
+          // Получаем пункты разгрузки для конкретного trip_identifier из trip_points
           const unloadingPointsResult = await sql`
             SELECT DISTINCT tp.point_id, tp.point_num, p.point_name, p.door_open_1, p.door_open_2, p.door_open_3
             FROM trip_points tp
             LEFT JOIN points p ON tp.point_id = p.point_id
-            WHERE tp.trip_identifier = ${tripIdentifier} 
+            WHERE tp.trip_id = ${actualTripId}
+            AND tp.trip_identifier = ${tripIdentifier} 
             AND tp.point_type = 'D'
             ORDER BY tp.point_num
           `
 
-          console.log(`Loading points for ${tripIdentifier}:`, loadingPointsResult.rows)
-          console.log(`Unloading points for ${tripIdentifier}:`, unloadingPointsResult.rows)
+          console.log(`Loading points for ${tripIdentifier}:`, loadingPointsResult)
+          console.log(`Unloading points for ${tripIdentifier}:`, unloadingPointsResult)
 
           trips.push({
             trip_identifier: tripIdentifier,
             vehicle_number: firstMessage.vehicle_number || "Не указан",
             planned_loading_time: firstMessage.planned_loading_time || "Не указано",
             driver_comment: firstMessage.driver_comment || "",
-            loading_points: loadingPointsResult.rows.map((p: any) => ({
+            loading_points: loadingPointsResult.map((p: any) => ({
               point_id: p.point_id,
               point_name: p.point_name || `Пункт ${p.point_id}`,
               door_open_1: p.door_open_1,
               door_open_2: p.door_open_2,
               door_open_3: p.door_open_3,
             })),
-            unloading_points: unloadingPointsResult.rows.map((p: any) => ({
+            unloading_points: unloadingPointsResult.map((p: any) => ({
               point_id: p.point_id,
               point_name: p.point_name || `Пункт ${p.point_id}`,
               door_open_1: p.door_open_1,
@@ -147,7 +154,7 @@ export async function POST(request: NextRequest) {
 
         // Отправляем объединенное сообщение
         const telegramResult = await sendMultipleTripMessageWithButtons(
-          phoneMessages[0].telegram_chat_id!,
+          phoneMessages[0].telegram_id!,
           trips,
           firstName,
           phoneMessages[0].id, // Используем ID первого сообщения для callback
@@ -157,7 +164,7 @@ export async function POST(request: NextRequest) {
 
         // Обновляем статус всех сообщений для этого телефона
         for (const message of phoneMessages) {
-          await sql`UPDATE trip_messages SET status = 'sent' WHERE id = ${message.id}`
+          await updateMessageStatus(message.id, "sent")
           results.sent++
         }
 
@@ -176,7 +183,7 @@ export async function POST(request: NextRequest) {
 
         // Обновляем статус всех сообщений для этого телефона как ошибка
         for (const message of phoneMessages) {
-          await sql`UPDATE trip_messages SET status = 'error', error_message = ${errorMessage} WHERE id = ${message.id}`
+          await updateMessageStatus(message.id, "error", errorMessage)
           results.errors++
         }
 
