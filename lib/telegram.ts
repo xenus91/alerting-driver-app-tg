@@ -182,12 +182,14 @@ export async function sendMultipleTripMessageWithButtons(
     planned_loading_time: string
     driver_comment: string
     loading_points: Array<{
+      point_id: string
       point_name: string
       door_open_1?: string
       door_open_2?: string
       door_open_3?: string
     }>
     unloading_points: Array<{
+      point_id: string
       point_name: string
       door_open_1?: string
       door_open_2?: string
@@ -220,7 +222,7 @@ export async function sendMultipleTripMessageWithButtons(
       if (trip.loading_points.length > 0) {
         message += "📦 <b>Погрузка:</b>\n"
         trip.loading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_name}</b>\n`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
         })
         message += "\n"
       }
@@ -229,7 +231,7 @@ export async function sendMultipleTripMessageWithButtons(
       if (trip.unloading_points.length > 0) {
         message += "📤 <b>Разгрузка:</b>\n"
         trip.unloading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_name}</b>\n`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
 
           // Окна приемки для пункта разгрузки
           const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())

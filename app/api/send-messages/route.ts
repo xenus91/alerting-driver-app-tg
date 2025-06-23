@@ -83,32 +83,58 @@ export async function POST(request: NextRequest) {
         const user = await getUserByPhone(phone)
         const firstName = user?.first_name || user?.name || "Водитель"
 
-        // Получаем пункты для всех рейсов этого телефона
-        const trips = []
+        // Группируем сообщения по trip_identifier
+        const tripMap = new Map<string, (typeof phoneMessages)[0][]>()
         for (const message of phoneMessages) {
-          const tripPoints = await getTripPoints(actualTripId)
-          const loadingPoints = tripPoints.filter((p) => p.point_type === "P").sort((a, b) => a.point_num - b.point_num)
-          const unloadingPoints = tripPoints
+          const tripId = message.trip_identifier || "unknown"
+          if (!tripMap.has(tripId)) {
+            tripMap.set(tripId, [])
+          }
+          tripMap.get(tripId)!.push(message)
+        }
+
+        // Создаем данные для каждого рейса
+        const trips = []
+        for (const [tripId, tripMessages] of tripMap) {
+          // Берем первое сообщение для основных данных рейса
+          const firstMessage = tripMessages[0]
+
+          // Получаем пункты из сообщений этого рейса
+          const allTripPoints = await getTripPoints(actualTripId)
+
+          // Фильтруем пункты по point_id из сообщений
+          const messagePointIds = new Set(tripMessages.map((m) => m.point_id || "").filter((id) => id))
+          const relevantPoints = allTripPoints.filter((p) => messagePointIds.has(p.point_short_id || ""))
+
+          const loadingPoints = relevantPoints
+            .filter((p) => p.point_type === "P")
+            .sort((a, b) => a.point_num - b.point_num)
+            .map((p) => ({
+              point_id: p.point_short_id || "",
+              point_name: p.point_name || `Пункт ${p.point_short_id}`,
+              door_open_1: p.door_open_1,
+              door_open_2: p.door_open_2,
+              door_open_3: p.door_open_3,
+            }))
+
+          const unloadingPoints = relevantPoints
             .filter((p) => p.point_type === "D")
             .sort((a, b) => a.point_num - b.point_num)
+            .map((p) => ({
+              point_id: p.point_short_id || "",
+              point_name: p.point_name || `Пункт ${p.point_short_id}`,
+              door_open_1: p.door_open_1,
+              door_open_2: p.door_open_2,
+              door_open_3: p.door_open_3,
+            }))
 
           trips.push({
-            trip_identifier: message.trip_identifier || "Не указан",
-            vehicle_number: message.vehicle_number || "Не указан",
-            planned_loading_time: message.planned_loading_time || "Не указано",
-            driver_comment: message.driver_comment || "",
-            loading_points: loadingPoints.map((p) => ({
-              point_name: p.point_name || `Пункт ${p.point_short_id}`,
-              door_open_1: p.door_open_1,
-              door_open_2: p.door_open_2,
-              door_open_3: p.door_open_3,
-            })),
-            unloading_points: unloadingPoints.map((p) => ({
-              point_name: p.point_name || `Пункт ${p.point_short_id}`,
-              door_open_1: p.door_open_1,
-              door_open_2: p.door_open_2,
-              door_open_3: p.door_open_3,
-            })),
+            trip_identifier: firstMessage.trip_identifier || "Не указан",
+            vehicle_number: firstMessage.vehicle_number || "Не указан",
+            planned_loading_time: firstMessage.planned_loading_time || "Не указано",
+            driver_comment: firstMessage.driver_comment || "",
+            loading_points: loadingPoints,
+            unloading_points: unloadingPoints,
           })
         }
 
