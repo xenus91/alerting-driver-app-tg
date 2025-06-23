@@ -44,6 +44,7 @@ export interface TripPoint {
   point_id: number
   point_type: "P" | "D" // P = погрузка, D = разгрузка
   point_num: number
+  trip_identifier?: string // Добавляем поле
   created_at: string
   point_name?: string // Joined from points table
   point_short_id?: string // Joined point_id from points table
@@ -271,10 +272,16 @@ export async function updateTripMessage(messageId: number, message: string) {
   }
 }
 
-export async function createTripPoint(tripId: number, pointId: string, pointType: "P" | "D", pointNum: number) {
+export async function createTripPoint(
+  tripId: number,
+  pointId: string,
+  pointType: "P" | "D",
+  pointNum: number,
+  tripIdentifier?: string,
+) {
   try {
     console.log(
-      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}`,
+      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}`,
     )
 
     // Сначала найдем ID пункта по point_id
@@ -290,8 +297,8 @@ export async function createTripPoint(tripId: number, pointId: string, pointType
     }
 
     const result = await sql`
-      INSERT INTO trip_points (trip_id, point_id, point_type, point_num)
-      VALUES (${tripId}, ${pointResult[0].id}, ${pointType}, ${pointNum})
+      INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
+      VALUES (${tripId}, ${pointResult[0].id}, ${pointType}, ${pointNum}, ${tripIdentifier || null})
       RETURNING *
     `
 
@@ -656,7 +663,7 @@ export async function getTripDataGroupedByPhone(tripId: number) {
       if (row.trip_identifier && !phoneGroup.trips.has(row.trip_identifier)) {
         console.log(`DEBUG: Getting points for trip_identifier: ${row.trip_identifier}, phone: ${row.phone}`)
 
-        // Получаем пункты для конкретного trip_identifier
+        // ИСПРАВЛЕННЫЙ ЗАПРОС: Теперь фильтруем по trip_identifier
         const tripPointsResult = await sql`
           SELECT DISTINCT
             tp.point_type,
@@ -668,10 +675,7 @@ export async function getTripDataGroupedByPhone(tripId: number) {
             p.door_open_3
           FROM trip_points tp
           JOIN points p ON tp.point_id = p.id
-          JOIN trip_messages tm ON tp.trip_id = tm.trip_id
-          WHERE tm.trip_id = ${tripId} 
-            AND tm.trip_identifier = ${row.trip_identifier}
-            AND tm.phone = ${row.phone}
+          WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${row.trip_identifier}
           ORDER BY tp.point_type DESC, tp.point_num
         `
 
