@@ -1,103 +1,195 @@
-import { sql } from "@vercel/postgres"
-import { NextResponse } from "next/server"
-import { z } from "zod"
-
+import { type NextRequest, NextResponse } from "next/server"
+import { getTrips, getTripMessages, updateMessageStatus, getUserByPhone, getTripPoints } from "@/lib/database"
 import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
 
-const schema = z.object({
-  phone: z.string(),
-})
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const body = await request.json()
-    const { phone } = schema.parse(body)
+    const { campaignId } = await request.json()
+    console.log(`=== SEND MESSAGES API CALLED ===`)
+    console.log(`Received campaignId: ${campaignId}`)
 
-    // Получаем пользователя по номеру телефона
-    const users = await sql`SELECT * FROM users WHERE phone = ${phone}`
-    const user = users.rows[0]
-
-    if (!user) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 })
+    if (!campaignId) {
+      return NextResponse.json({ error: "ID кампании обязателен" }, { status: 400 })
     }
 
-    // Получаем все поездки пользователя, у которых status = 'created'
-    const trips = await sql`SELECT * FROM trips WHERE user_id = ${user.id} AND status = 'created'`
-    const phoneTrips = trips.rows
-
-    if (!phoneTrips || phoneTrips.length === 0) {
-      return NextResponse.json({ message: "No created trips found for this user" }, { status: 200 })
+    // Если передан "latest", найдем последний рейс
+    let actualTripId = campaignId
+    if (campaignId === "latest") {
+      const allTrips = await getTrips()
+      if (allTrips.length === 0) {
+        return NextResponse.json({ error: "Нет рейсов для отправки" }, { status: 400 })
+      }
+      actualTripId = allTrips[0].id
+      console.log(`Using latest trip ID: ${actualTripId}`)
     }
 
-    // Создаем запись в messages
-    const messageRecordResult = await sql`
-      INSERT INTO messages (user_id, type, status)
-      VALUES (${user.id}, 'trip_offer', 'created')
-      RETURNING id
-    `
-    const messageRecord = messageRecordResult.rows[0]
+    console.log(`Processing trip ID: ${actualTripId}`)
 
-    // Получаем данные о пунктах для каждого рейса отдельно
-    const tripsWithPoints = await Promise.all(
-      phoneTrips.map(async (trip) => {
-        // Получаем пункты погрузки для конкретного рейса
-        const loadingPointsResult = await sql`
-          SELECT DISTINCT p.point_name, p.door_open_1, p.door_open_2, p.door_open_3, tp.point_id
-          FROM trip_points tp
-          JOIN points p ON tp.point_id = p.point_id
-          WHERE tp.trip_identifier = ${trip.trip_identifier} 
-          AND tp.point_type = 'P'
-          ORDER BY tp.point_num
-        `
+    // Получаем все сообщения рейса
+    const messages = await getTripMessages(actualTripId)
+    console.log(`Found ${messages.length} total messages for trip ${actualTripId}`)
 
-        // Получаем пункты разгрузки для конкретного рейса
-        const unloadingPointsResult = await sql`
-          SELECT DISTINCT p.point_name, p.door_open_1, p.door_open_2, p.door_open_3, tp.point_id
-          FROM trip_points tp
-          JOIN points p ON tp.point_id = p.point_id
-          WHERE tp.trip_identifier = ${trip.trip_identifier} 
-          AND tp.point_type = 'D'
-          ORDER BY tp.point_num
-        `
+    if (messages.length === 0) {
+      console.log(`No messages found for trip ${actualTripId}`)
+      return NextResponse.json({ error: "Нет сообщений для данного рейса" }, { status: 400 })
+    }
 
-        return {
-          ...trip,
-          loading_points: loadingPointsResult.map((point: any) => ({
-            point_id: point.point_id,
-            point_name: point.point_name,
-            door_open_1: point.door_open_1,
-            door_open_2: point.door_open_2,
-            door_open_3: point.door_open_3,
+    const pendingMessages = messages.filter((msg) => msg.status === "pending" && msg.telegram_id)
+    console.log(`Found ${pendingMessages.length} pending messages with telegram_id`)
+
+    if (pendingMessages.length === 0) {
+      console.log(`No pending messages with telegram_id found`)
+      return NextResponse.json(
+        {
+          error: "Нет сообщений для отправки (все уже отправлены или нет telegram_id)",
+          total: messages.length,
+          pending: pendingMessages.length,
+          details: messages.map((m) => ({
+            id: m.id,
+            phone: m.phone,
+            status: m.status,
+            has_telegram_id: !!m.telegram_id,
           })),
-          unloading_points: unloadingPointsResult.map((point: any) => ({
-            point_id: point.point_id,
-            point_name: point.point_name,
-            door_open_1: point.door_open_1,
-            door_open_2: point.door_open_2,
-            door_open_3: point.door_open_3,
-          })),
+        },
+        { status: 400 },
+      )
+    }
+
+    // Группируем сообщения по телефону
+    const messagesByPhone = new Map<string, typeof pendingMessages>()
+    for (const message of pendingMessages) {
+      if (!messagesByPhone.has(message.phone)) {
+        messagesByPhone.set(message.phone, [])
+      }
+      messagesByPhone.get(message.phone)!.push(message)
+    }
+
+    console.log(`Grouped messages by ${messagesByPhone.size} unique phones`)
+
+    const results = {
+      total: pendingMessages.length,
+      sent: 0,
+      errors: 0,
+      details: [] as any[],
+    }
+
+    // Отправляем сообщения по телефонам
+    for (const [phone, phoneMessages] of messagesByPhone) {
+      try {
+        console.log(`=== PROCESSING PHONE ${phone} ===`)
+        console.log(`Messages for this phone: ${phoneMessages.length}`)
+
+        // Получаем данные пользователя для имени
+        const user = await getUserByPhone(phone)
+        const firstName = user?.first_name || user?.name || "Водитель"
+
+        // Группируем сообщения по trip_identifier
+        const tripsByIdentifier = new Map<string, typeof phoneMessages>()
+        for (const message of phoneMessages) {
+          const tripId = message.trip_identifier || "unknown"
+          if (!tripsByIdentifier.has(tripId)) {
+            tripsByIdentifier.set(tripId, [])
+          }
+          tripsByIdentifier.get(tripId)!.push(message)
         }
-      }),
+
+        // Получаем данные о пунктах для каждого рейса отдельно
+        const trips = []
+        for (const [tripIdentifier, tripMessages] of tripsByIdentifier) {
+          const firstMessage = tripMessages[0]
+
+          // Получаем пункты для конкретного trip_identifier
+          const tripPoints = await getTripPoints(actualTripId)
+          const loadingPoints = tripPoints
+            .filter((p) => p.point_type === "P" && p.trip_identifier === tripIdentifier)
+            .sort((a, b) => a.point_num - b.point_num)
+          const unloadingPoints = tripPoints
+            .filter((p) => p.point_type === "D" && p.trip_identifier === tripIdentifier)
+            .sort((a, b) => a.point_num - b.point_num)
+
+          trips.push({
+            trip_identifier: tripIdentifier,
+            vehicle_number: firstMessage.vehicle_number || "Не указан",
+            planned_loading_time: firstMessage.planned_loading_time || "Не указано",
+            driver_comment: firstMessage.driver_comment || "",
+            loading_points: loadingPoints.map((p) => ({
+              point_id: p.point_short_id || p.point_id,
+              point_name: p.point_name || `Пункт ${p.point_short_id}`,
+              door_open_1: p.door_open_1,
+              door_open_2: p.door_open_2,
+              door_open_3: p.door_open_3,
+            })),
+            unloading_points: unloadingPoints.map((p) => ({
+              point_id: p.point_short_id || p.point_id,
+              point_name: p.point_name || `Пункт ${p.point_short_id}`,
+              door_open_1: p.door_open_1,
+              door_open_2: p.door_open_2,
+              door_open_3: p.door_open_3,
+            })),
+          })
+        }
+
+        // Отправляем объединенное сообщение
+        const telegramResult = await sendMultipleTripMessageWithButtons(
+          phoneMessages[0].telegram_id!,
+          trips,
+          firstName,
+          phoneMessages[0].id, // Используем ID первого сообщения для callback
+        )
+
+        console.log(`Telegram API result:`, telegramResult)
+
+        // Обновляем статус всех сообщений для этого телефона
+        for (const message of phoneMessages) {
+          await updateMessageStatus(message.id, "sent")
+          results.sent++
+        }
+
+        results.details.push({
+          phone: phone,
+          status: "sent",
+          user_name: firstName,
+          trips_count: trips.length,
+          telegram_message_id: telegramResult.message_id,
+        })
+
+        console.log(`Messages sent successfully to ${phone}`)
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка"
+        console.error(`Error sending messages to ${phone}:`, errorMessage)
+
+        // Обновляем статус всех сообщений для этого телефона как ошибка
+        for (const message of phoneMessages) {
+          await updateMessageStatus(message.id, "error", errorMessage)
+          results.errors++
+        }
+
+        results.details.push({
+          phone: phone,
+          status: "error",
+          error: errorMessage,
+        })
+      }
+
+      // Задержка между отправками
+      await new Promise((resolve) => setTimeout(resolve, 100))
+    }
+
+    console.log(`=== MESSAGE SENDING COMPLETE ===`)
+    console.log(`Sent: ${results.sent}, Errors: ${results.errors}`)
+
+    return NextResponse.json({
+      success: true,
+      results: results,
+    })
+  } catch (error) {
+    console.error("Send messages error:", error)
+    return NextResponse.json(
+      {
+        error: "Ошибка при отправке сообщений",
+        details: error instanceof Error ? error.message : "Неизвестная ошибка",
+      },
+      { status: 500 },
     )
-
-    // Отправляем сообщение с правильными данными
-    const telegramResult = await sendMultipleTripMessageWithButtons(
-      user.telegram_chat_id,
-      tripsWithPoints,
-      user.first_name || "Водитель",
-      messageRecord.id,
-    )
-
-    // Обновляем статус сообщения
-    await sql`
-      UPDATE messages
-      SET status = 'sent'
-      WHERE id = ${messageRecord.id}
-    `
-
-    return NextResponse.json({ message: "Messages sent successfully", telegramResult }, { status: 200 })
-  } catch (error: any) {
-    console.error("Error:", error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
   }
 }
