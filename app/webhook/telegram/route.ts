@@ -548,8 +548,8 @@ export async function POST(request: NextRequest) {
 
           const carparkButtons = [
             [
-              { text: "🚛 Автопарк 8009", callback_data: "carpark_8009" },
-              { text: "🚚 Автопарк 8012", callback_data: "carpark_8012" },
+              { text: "🚛 8009", callback_data: "carpark_8009" },
+              //{ text: "🚚 Автопарк 8012", callback_data: "carpark_8012" },
             ],
           ]
 

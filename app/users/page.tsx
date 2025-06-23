@@ -46,7 +46,7 @@ export default function UsersPage() {
     if (searchTerm) {
       const filtered = users.filter(
         (user) =>
-          user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.phone.includes(searchTerm) ||
           user.telegram_id.toString().includes(searchTerm),
       )
