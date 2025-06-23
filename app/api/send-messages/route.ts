@@ -28,7 +28,11 @@ export async function POST(request: NextRequest) {
     // Функция для форматирования даты и времени
     function formatDateTime(dateTimeString: string): string {
       try {
+        if (!dateTimeString) return "Не указано"
+
         const date = new Date(dateTimeString)
+        if (isNaN(date.getTime())) return dateTimeString
+
         const day = date.getDate()
         const monthNames = [
           "января",
@@ -45,9 +49,14 @@ export async function POST(request: NextRequest) {
           "декабря",
         ]
         const month = monthNames[date.getMonth()]
-        const time = date.toLocaleTimeString("ru-RU", { hour: "2-digit", minute: "2-digit" })
+        const time = date.toLocaleTimeString("ru-RU", {
+          hour: "2-digit",
+          minute: "2-digit",
+          timeZone: "Europe/Moscow",
+        })
         return `${day} ${month} ${time}`
       } catch (error) {
+        console.error("Error formatting date:", error)
         return dateTimeString
       }
     }
@@ -82,13 +91,17 @@ export async function POST(request: NextRequest) {
 
         // Сортируем рейсы по trip_identifier
         const sortedTrips = Array.from(phoneData.trips.entries())
-          .sort(([a], [b]) => a.localeCompare(b))
+          .sort(([_, tripA], [__, tripB]) => {
+            const timeA = new Date(tripA.planned_loading_time || "").getTime()
+            const timeB = new Date(tripB.planned_loading_time || "").getTime()
+            return timeA - timeB
+          })
           .map(([_, trip]) => trip)
 
         console.log(`Found ${sortedTrips.length} trips for phone ${phone}`)
 
         // Формируем сообщение
-        let message = `Доброго времени суток!\n\n👤 Уважаемый, ${firstName}\n\n🚛 На Вас запланированы рейсы\n`
+        let message = `🌅 Доброго времени суток!\n\n👤 Уважаемый, ${firstName}\n\n🚛 На Вас запланированы рейсы\n\n`
 
         for (let i = 0; i < sortedTrips.length; i++) {
           const trip = sortedTrips[i]
@@ -97,26 +110,26 @@ export async function POST(request: NextRequest) {
           message += `🚗 Транспорт: ${trip.vehicle_number || "Не указан"}\n`
           message += `⏰ Плановое время погрузки: ${formatDateTime(trip.planned_loading_time || "")}\n`
 
-          // Пункты погрузки
+          // Пункты погрузки для этого конкретного рейса
           if (trip.loading_points.length > 0) {
-            message += `📦 Погрузка:\n`
+            message += `📦 Погрузка:\n\n`
             trip.loading_points
               .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-              .forEach((point, index) => {
-                message += `${index + 1}) ${point.point_name}\n`
+              .forEach((point) => {
+                message += `${point.point_name}\n`
               })
           }
 
-          // Пункты разгрузки
+          // Пункты разгрузки для этого конкретного рейса
           if (trip.unloading_points.length > 0) {
-            message += `\n📤 Разгрузка:\n`
+            message += `📤 Разгрузка:\n\n`
             trip.unloading_points
               .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-              .forEach((point, index) => {
-                message += `${index + 1}) ${point.point_name}`
+              .forEach((point) => {
+                message += `${point.point_name}`
                 const doorTimes = formatDoorTimes(point.door_open_1, point.door_open_2, point.door_open_3)
                 if (doorTimes) {
-                  message += `\n   🕐 Окна приемки: ${doorTimes}`
+                  message += ` 🕐 Окна приемки: ${doorTimes}`
                 }
                 message += `\n`
               })
@@ -124,7 +137,7 @@ export async function POST(request: NextRequest) {
 
           // Комментарий к рейсу
           if (trip.driver_comment) {
-            message += `\n💬 Комментарий по рейсу:\n${trip.driver_comment}\n`
+            message += `💬 Комментарий по рейсу: ${trip.driver_comment}\n`
           }
 
           // Разделитель между рейсами
