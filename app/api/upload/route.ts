@@ -46,7 +46,6 @@ export async function POST(request: NextRequest) {
 
     // Проверяем пользователей и пункты
     const notFoundPhones: string[] = []
-    const unverifiedPhones: string[] = [] // <-- НОВЫЙ МАССИВ
     const notFoundPoints: string[] = []
     const readyTrips: any[] = []
     let readyToSend = 0
@@ -57,20 +56,12 @@ export async function POST(request: NextRequest) {
 
     for (const tripData of trips) {
       try {
+        // Проверяем пользователя
         const user = await getUserByPhone(tripData.phone)
         if (!user) {
           console.log(`User not found for phone: ${tripData.phone}`)
           if (!notFoundPhones.includes(tripData.phone)) {
             notFoundPhones.push(tripData.phone)
-          }
-          continue
-        }
-
-        // ПРОВЕРЯЕМ ВЕРИФИКАЦИЮ <-- НОВАЯ ПРОВЕРКА
-        if (user.verified !== true) {
-          console.log(`User not verified for phone: ${tripData.phone}`)
-          if (!unverifiedPhones.includes(tripData.phone)) {
-            unverifiedPhones.push(tripData.phone)
           }
           continue
         }
@@ -148,7 +139,6 @@ export async function POST(request: NextRequest) {
       validRows: validRows.length,
       readyToSend: readyToSend,
       notFoundPhones: notFoundPhones,
-      unverifiedPhones: unverifiedPhones, // <-- ДОБАВЛЯЕМ В ОТВЕТ
       notFoundPoints: notFoundPoints,
       readyTrips: readyTrips,
       errors: errors,

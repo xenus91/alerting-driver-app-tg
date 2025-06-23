@@ -68,10 +68,18 @@ export default function SimpleLogin({ onSuccess }: SimpleLoginProps) {
           <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
             <Shield className="h-6 w-6 text-blue-600" />
           </div>
-          <CardTitle className="text-2xl">Вход</CardTitle>
+          <CardTitle className="text-2xl">Временный вход</CardTitle>
           <CardDescription>Введите ваш Telegram ID для входа в систему</CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertDescription>
+              Это временное решение для обхода проблем с виджетом Telegram. Введите ваш Telegram ID (числовой
+              идентификатор).
+            </AlertDescription>
+          </Alert>
+
           {error && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
