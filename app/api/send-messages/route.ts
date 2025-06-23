@@ -1,13 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import {
-  getTrips,
-  getTripMessages,
-  updateMessageStatus,
-  getUserByPhone,
-  getTripPoints,
-  updateTripMessage,
-} from "@/lib/database"
-import { sendTripMessageWithButtons } from "@/lib/telegram"
+import { getTrips, getTripMessages, updateMessageStatus, getUserByPhone, getTripPoints } from "@/lib/database"
+import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
 
 export async function POST(request: NextRequest) {
   try {
@@ -41,17 +34,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Нет сообщений для данного рейса" }, { status: 400 })
     }
 
-    // Показываем все сообщения для отладки
-    messages.forEach((msg, index) => {
-      console.log(`Message ${index + 1}:`, {
-        id: msg.id,
-        phone: msg.phone,
-        telegram_id: msg.telegram_id,
-        status: msg.status,
-        trip_identifier: msg.trip_identifier,
-      })
-    })
-
     const pendingMessages = messages.filter((msg) => msg.status === "pending" && msg.telegram_id)
     console.log(`Found ${pendingMessages.length} pending messages with telegram_id`)
 
@@ -73,14 +55,20 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Получаем пункты рейса
+    // Группируем сообщения по телефону
+    const messagesByPhone = new Map<string, typeof pendingMessages>()
+    for (const message of pendingMessages) {
+      if (!messagesByPhone.has(message.phone)) {
+        messagesByPhone.set(message.phone, [])
+      }
+      messagesByPhone.get(message.phone)!.push(message)
+    }
+
+    console.log(`Grouped messages by ${messagesByPhone.size} unique phones`)
+
+    // Получаем все пункты рейса
     const tripPoints = await getTripPoints(actualTripId)
     console.log(`Found ${tripPoints.length} trip points`)
-
-    const loadingPoints = tripPoints.filter((p) => p.point_type === "P").sort((a, b) => a.point_num - b.point_num)
-    const unloadingPoints = tripPoints.filter((p) => p.point_type === "D").sort((a, b) => a.point_num - b.point_num)
-
-    console.log(`Loading points: ${loadingPoints.length}, Unloading points: ${unloadingPoints.length}`)
 
     const results = {
       total: pendingMessages.length,
@@ -89,76 +77,117 @@ export async function POST(request: NextRequest) {
       details: [] as any[],
     }
 
-    // Отправляем сообщения с кнопками и задержкой для избежания лимитов
-    for (const message of pendingMessages) {
+    // Отправляем сообщения по телефонам
+    for (const [phone, phoneMessages] of messagesByPhone) {
       try {
-        console.log(`=== PROCESSING MESSAGE ${message.id} ===`)
-        console.log(`Phone: ${message.phone}, Telegram ID: ${message.telegram_id}`)
+        console.log(`=== PROCESSING PHONE ${phone} ===`)
+        console.log(`Messages for this phone: ${phoneMessages.length}`)
 
         // Получаем данные пользователя для имени
-        const user = await getUserByPhone(message.phone)
+        const user = await getUserByPhone(phone)
         const firstName = user?.first_name || user?.name || "Водитель"
 
-        console.log(`User found: ${firstName}`)
+        // Группируем сообщения по trip_identifier
+        const tripsByIdentifier = new Map<string, typeof phoneMessages>()
+        for (const message of phoneMessages) {
+          const tripId = message.trip_identifier || "unknown"
+          if (!tripsByIdentifier.has(tripId)) {
+            tripsByIdentifier.set(tripId, [])
+          }
+          tripsByIdentifier.get(tripId)!.push(message)
+        }
 
-        // Отправляем красивое сообщение с данными рейса
-        const telegramResult = await sendTripMessageWithButtons(
-          message.telegram_id!,
-          {
-            trip_identifier: message.trip_identifier || "Не указан",
-            vehicle_number: message.vehicle_number || "Не указан",
-            planned_loading_time: message.planned_loading_time || "Не указано",
-            driver_comment: message.driver_comment || "",
-          },
-          loadingPoints.map((p) => ({
-            point_name: p.point_name || `Пункт ${p.point_short_id}`,
-            door_open_1: p.door_open_1,
-            door_open_2: p.door_open_2,
-            door_open_3: p.door_open_3,
-          })),
-          unloadingPoints.map((p) => ({
-            point_name: p.point_name || `Пункт ${p.point_short_id}`,
-            door_open_1: p.door_open_1,
-            door_open_2: p.door_open_2,
-            door_open_3: p.door_open_3,
-          })),
+        console.log(`Found ${tripsByIdentifier.size} unique trip identifiers for phone ${phone}`)
+
+        // Формируем данные для каждого рейса
+        const trips = []
+        for (const [tripIdentifier, tripMessages] of tripsByIdentifier) {
+          const firstMessage = tripMessages[0]
+
+          console.log(`Processing trip_identifier: ${tripIdentifier}`)
+
+          // Получаем пункты погрузки для конкретного trip_identifier
+          const loadingPoints = tripPoints
+            .filter((p) => p.trip_identifier === tripIdentifier && p.point_type === "P")
+            .sort((a, b) => a.point_num - b.point_num)
+
+          // Получаем пункты разгрузки для конкретного trip_identifier
+          const unloadingPoints = tripPoints
+            .filter((p) => p.trip_identifier === tripIdentifier && p.point_type === "D")
+            .sort((a, b) => a.point_num - b.point_num)
+
+          console.log(
+            `Trip ${tripIdentifier}: ${loadingPoints.length} loading, ${unloadingPoints.length} unloading points`,
+          )
+
+          trips.push({
+            trip_identifier: tripIdentifier,
+            vehicle_number: firstMessage.vehicle_number || "Не указан",
+            planned_loading_time: firstMessage.planned_loading_time || "Не указано",
+            driver_comment: firstMessage.driver_comment || "",
+            loading_points: loadingPoints.map((p) => ({
+              point_id: p.point_short_id || p.point_id,
+              point_name: p.point_name || `Пункт ${p.point_short_id || p.point_id}`,
+              door_open_1: p.door_open_1,
+              door_open_2: p.door_open_2,
+              door_open_3: p.door_open_3,
+            })),
+            unloading_points: unloadingPoints.map((p) => ({
+              point_id: p.point_short_id || p.point_id,
+              point_name: p.point_name || `Пункт ${p.point_short_id || p.point_id}`,
+              door_open_1: p.door_open_1,
+              door_open_2: p.door_open_2,
+              door_open_3: p.door_open_3,
+            })),
+          })
+        }
+
+        console.log(`Prepared ${trips.length} trips for phone ${phone}`)
+
+        // Отправляем объединенное сообщение со всеми рейсами
+        const telegramResult = await sendMultipleTripMessageWithButtons(
+          phoneMessages[0].telegram_id!,
+          trips,
           firstName,
-          message.id,
+          phoneMessages[0].id, // Используем ID первого сообщения для callback
         )
 
         console.log(`Telegram API result:`, telegramResult)
 
-        // Сохраняем отформатированное сообщение в базу данных
-        if (telegramResult.formattedMessage) {
-          await updateTripMessage(message.id, telegramResult.formattedMessage)
-          console.log(`Updated message content for message ${message.id}`)
+        // Обновляем статус всех сообщений для этого телефона
+        for (const message of phoneMessages) {
+          await updateMessageStatus(message.id, "sent")
+          results.sent++
         }
 
-        await updateMessageStatus(message.id, "sent")
-        results.sent++
         results.details.push({
-          phone: message.phone,
+          phone: phone,
           status: "sent",
           user_name: firstName,
+          trips_count: trips.length,
           telegram_message_id: telegramResult.message_id,
         })
 
-        console.log(`Message sent successfully to ${message.phone}`)
+        console.log(`Messages sent successfully to ${phone}`)
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : "Неизвестная ошибка"
-        console.error(`Error sending message to ${message.phone}:`, errorMessage)
+        console.error(`Error sending messages to ${phone}:`, errorMessage)
 
-        await updateMessageStatus(message.id, "error", errorMessage)
-        results.errors++
+        // Обновляем статус всех сообщений для этого телефона как ошибка
+        for (const message of phoneMessages) {
+          await updateMessageStatus(message.id, "error", errorMessage)
+          results.errors++
+        }
+
         results.details.push({
-          phone: message.phone,
+          phone: phone,
           status: "error",
           error: errorMessage,
         })
       }
 
-      // Задержка между отправками (30 сообщений в секунду - лимит Telegram)
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      // Задержка между отправками
+      await new Promise((resolve) => setTimeout(resolve, 100))
     }
 
     console.log(`=== MESSAGE SENDING COMPLETE ===`)
