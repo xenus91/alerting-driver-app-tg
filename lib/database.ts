@@ -599,21 +599,12 @@ export async function getTripDataGroupedByPhone(tripId: number) {
         tm.vehicle_number,
         tm.planned_loading_time,
         tm.driver_comment,
-        tp.point_type,
-        tp.point_num,
-        p.point_id,
-        p.point_name,
-        p.door_open_1,
-        p.door_open_2,
-        p.door_open_3,
         u.first_name,
         u.full_name
       FROM trip_messages tm
-      LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id
-      LEFT JOIN points p ON tp.point_id = p.id
       LEFT JOIN users u ON tm.telegram_id = u.telegram_id
       WHERE tm.trip_id = ${tripId} AND tm.status = 'pending' AND tm.telegram_id IS NOT NULL
-      ORDER BY tm.phone, tm.trip_identifier, tp.point_type DESC, tp.point_num
+      ORDER BY tm.phone, tm.trip_identifier
     `
 
     // Группируем данные по телефону и trip_identifier
@@ -633,32 +624,53 @@ export async function getTripDataGroupedByPhone(tripId: number) {
       const phoneGroup = groupedData.get(row.phone)
 
       if (row.trip_identifier && !phoneGroup.trips.has(row.trip_identifier)) {
+        // Получаем пункты для конкретного trip_identifier
+        const tripPointsResult = await sql`
+          SELECT DISTINCT
+            tp.point_type,
+            tp.point_num,
+            p.point_id,
+            p.point_name,
+            p.door_open_1,
+            p.door_open_2,
+            p.door_open_3
+          FROM trip_points tp
+          JOIN points p ON tp.point_id = p.id
+          JOIN trip_messages tm ON tp.trip_id = tm.trip_id
+          WHERE tm.trip_id = ${tripId} 
+            AND tm.trip_identifier = ${row.trip_identifier}
+            AND tm.phone = ${row.phone}
+          ORDER BY tp.point_type DESC, tp.point_num
+        `
+
+        const loading_points = []
+        const unloading_points = []
+
+        for (const point of tripPointsResult) {
+          const pointInfo = {
+            point_id: point.point_id,
+            point_name: point.point_name,
+            point_num: point.point_num,
+            door_open_1: point.door_open_1,
+            door_open_2: point.door_open_2,
+            door_open_3: point.door_open_3,
+          }
+
+          if (point.point_type === "P") {
+            loading_points.push(pointInfo)
+          } else if (point.point_type === "D") {
+            unloading_points.push(pointInfo)
+          }
+        }
+
         phoneGroup.trips.set(row.trip_identifier, {
           trip_identifier: row.trip_identifier,
           vehicle_number: row.vehicle_number,
           planned_loading_time: row.planned_loading_time,
           driver_comment: row.driver_comment,
-          loading_points: [],
-          unloading_points: [],
+          loading_points: loading_points,
+          unloading_points: unloading_points,
         })
-      }
-
-      if (row.trip_identifier && row.point_id) {
-        const trip = phoneGroup.trips.get(row.trip_identifier)
-        const pointInfo = {
-          point_id: row.point_id,
-          point_name: row.point_name,
-          point_num: row.point_num,
-          door_open_1: row.door_open_1,
-          door_open_2: row.door_open_2,
-          door_open_3: row.door_open_3,
-        }
-
-        if (row.point_type === "P") {
-          trip.loading_points.push(pointInfo)
-        } else if (row.point_type === "D") {
-          trip.unloading_points.push(pointInfo)
-        }
       }
     }
 

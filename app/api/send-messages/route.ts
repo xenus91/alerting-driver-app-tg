@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
         console.log(`Found ${sortedTrips.length} trips for phone ${phone}`)
 
         // Формируем сообщение
-        let message = `🌅 Доброго времени суток!\n\n👤 Уважаемый, ${firstName}\n\n🚛 На Вас запланированы рейсы\n\n`
+        let message = `Доброго времени суток!\n\n👤 Уважаемый, ${firstName}\n\n🚛 На Вас запланированы рейсы\n`
 
         for (let i = 0; i < sortedTrips.length; i++) {
           const trip = sortedTrips[i]
@@ -112,24 +112,24 @@ export async function POST(request: NextRequest) {
 
           // Пункты погрузки для этого конкретного рейса
           if (trip.loading_points.length > 0) {
-            message += `📦 Погрузка:\n\n`
+            message += `📦 Погрузка:\n`
             trip.loading_points
               .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-              .forEach((point) => {
-                message += `${point.point_name}\n`
+              .forEach((point, index) => {
+                message += `${index + 1}) ${point.point_name}\n`
               })
           }
 
           // Пункты разгрузки для этого конкретного рейса
           if (trip.unloading_points.length > 0) {
-            message += `📤 Разгрузка:\n\n`
+            message += `\n📤 Разгрузка:\n`
             trip.unloading_points
               .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-              .forEach((point) => {
-                message += `${point.point_name}`
+              .forEach((point, index) => {
+                message += `${index + 1}) ${point.point_name}`
                 const doorTimes = formatDoorTimes(point.door_open_1, point.door_open_2, point.door_open_3)
                 if (doorTimes) {
-                  message += ` 🕐 Окна приемки: ${doorTimes}`
+                  message += `\n   🕐 Окна приемки: ${doorTimes}`
                 }
                 message += `\n`
               })
@@ -137,7 +137,7 @@ export async function POST(request: NextRequest) {
 
           // Комментарий к рейсу
           if (trip.driver_comment) {
-            message += `💬 Комментарий по рейсу: ${trip.driver_comment}\n`
+            message += `\n💬 Комментарий по рейсу:\n${trip.driver_comment}\n`
           }
 
           // Разделитель между рейсами
