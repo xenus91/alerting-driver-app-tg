@@ -70,152 +70,6 @@ function convertExcelDate(excelDate: any): string {
   }
 }
 
-export function parseExcelData(buffer: ArrayBuffer): ExcelRow[] {
-  try {
-    console.log("Parsing Excel file, buffer size:", buffer.byteLength)
-
-    // Читаем Excel файл
-    const workbook = XLSX.read(buffer, { type: "array", cellDates: true })
-
-    // Получаем первый лист
-    const sheetName = workbook.SheetNames[0]
-    if (!sheetName) {
-      throw new Error("Excel файл не содержит листов")
-    }
-
-    const worksheet = workbook.Sheets[sheetName]
-
-    // Конвертируем в JSON с заголовками
-    const jsonData = XLSX.utils.sheet_to_json(worksheet, {
-      header: 1, // Возвращает массив массивов
-      defval: "", // Значение по умолчанию для пустых ячеек
-      raw: false, // Не использовать raw значения для дат
-    }) as string[][]
-
-    console.log("Parsed JSON data:", jsonData)
-
-    if (jsonData.length === 0) {
-      throw new Error("Excel файл пустой")
-    }
-
-    // Получаем заголовки (первая строка)
-    const headers = jsonData[0]
-    console.log("Headers:", headers)
-
-    // Проверяем наличие обязательных колонок
-    const requiredColumns = [
-      "phone",
-      "trip_identifier",
-      "vehicle_number",
-      "planned_loading_time",
-      "point_type",
-      "point_num",
-      "point_id",
-      "driver_comment",
-    ]
-
-    const missingColumns = requiredColumns.filter((col) => !headers.includes(col))
-    if (missingColumns.length > 0) {
-      throw new Error(`Отсутствуют обязательные колонки: ${missingColumns.join(", ")}`)
-    }
-
-    // Получаем индексы колонок
-    const columnIndexes = {
-      phone: headers.indexOf("phone"),
-      trip_identifier: headers.indexOf("trip_identifier"),
-      vehicle_number: headers.indexOf("vehicle_number"),
-      planned_loading_time: headers.indexOf("planned_loading_time"),
-      point_type: headers.indexOf("point_type"),
-      point_num: headers.indexOf("point_num"),
-      point_id: headers.indexOf("point_id"),
-      driver_comment: headers.indexOf("driver_comment"),
-    }
-
-    // Пропускаем заголовок (первую строку)
-    const dataRows = jsonData.slice(1)
-    const rows: ExcelRow[] = []
-
-    for (let i = 0; i < dataRows.length; i++) {
-      const row = dataRows[i]
-
-      // Пропускаем пустые строки
-      if (!row || row.length === 0 || !row.some((cell) => cell && cell.toString().trim())) {
-        continue
-      }
-
-      try {
-        const phone = row[columnIndexes.phone] ? row[columnIndexes.phone].toString().trim() : ""
-        const trip_identifier = row[columnIndexes.trip_identifier]
-          ? row[columnIndexes.trip_identifier].toString().trim()
-          : ""
-        const vehicle_number = row[columnIndexes.vehicle_number]
-          ? row[columnIndexes.vehicle_number].toString().trim()
-          : ""
-
-        // Специальная обработка даты
-        const planned_loading_time = convertExcelDate(row[columnIndexes.planned_loading_time])
-
-        const point_type = row[columnIndexes.point_type]
-          ? (row[columnIndexes.point_type].toString().trim() as "P" | "D")
-          : "P"
-        const point_num = row[columnIndexes.point_num] ? Number.parseInt(row[columnIndexes.point_num].toString()) : 0
-        const point_id = row[columnIndexes.point_id] ? row[columnIndexes.point_id].toString().trim() : ""
-        const driver_comment = row[columnIndexes.driver_comment]
-          ? row[columnIndexes.driver_comment].toString().trim()
-          : ""
-
-        console.log(`Row ${i + 2}:`, {
-          phone,
-          trip_identifier,
-          vehicle_number,
-          planned_loading_time,
-          point_type,
-          point_num,
-          point_id,
-          driver_comment,
-        })
-
-        if (phone && trip_identifier && vehicle_number && planned_loading_time && point_id) {
-          // Нормализуем номер телефона (БЕЗ знака +)
-          const normalizedPhone = normalizePhone(phone)
-          if (normalizedPhone) {
-            rows.push({
-              phone: normalizedPhone,
-              trip_identifier,
-              vehicle_number,
-              planned_loading_time,
-              point_type,
-              point_num,
-              point_id,
-              driver_comment,
-            })
-          } else {
-            console.warn(`Строка ${i + 2}: неверный формат номера - "${phone}"`)
-          }
-        } else {
-          console.warn(`Строка ${i + 2}: пропущена из-за отсутствия обязательных данных`)
-        }
-      } catch (error) {
-        console.error(`Ошибка обработки строки ${i + 2}:`, error)
-      }
-    }
-
-    console.log("Successfully parsed rows:", rows.length)
-    return rows
-  } catch (error) {
-    console.error("Error parsing Excel data:", error)
-
-    // Если это не Excel файл, пробуем как CSV
-    if (error instanceof Error && error.message.includes("Unsupported file")) {
-      return parseCSVData(buffer)
-    }
-
-    throw new Error(
-      `Ошибка при обработке Excel файла: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`,
-    )
-  }
-}
-
 function parseCSVData(buffer: ArrayBuffer): ExcelRow[] {
   try {
     const text = new TextDecoder().decode(buffer)
@@ -403,6 +257,24 @@ export function groupTripsByPhone(rows: ExcelRow[]): TripData[] {
   }
 
   return Array.from(tripMap.values())
+}
+
+// Новая функция для группировки по телефону (без разделения по рейсам)
+export function groupTripsByPhoneOnly(rows: ExcelRow[]): Map<string, TripData[]> {
+  const phoneMap = new Map<string, TripData[]>()
+
+  // Сначала группируем по телефону и рейсу
+  const tripsByPhoneAndTrip = groupTripsByPhone(rows)
+
+  // Затем группируем только по телефону
+  for (const tripData of tripsByPhoneAndTrip) {
+    if (!phoneMap.has(tripData.phone)) {
+      phoneMap.set(tripData.phone, [])
+    }
+    phoneMap.get(tripData.phone)!.push(tripData)
+  }
+
+  return phoneMap
 }
 
 // Функция для создания примера Excel файла с новой структурой
