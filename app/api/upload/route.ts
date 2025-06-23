@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@vercel/postgres"
-import { parseExcelData } from "@/lib/excel"
+import { parseExcelData, validateExcelData, groupTripsByPhone } from "@/lib/excel"
+import { createTrip, createTripMessage, createTripPoint, getUserByPhone, getAllPoints } from "@/lib/database"
 
 export async function POST(request: NextRequest) {
   try {
@@ -8,165 +8,146 @@ export async function POST(request: NextRequest) {
     const file = formData.get("file") as File
 
     if (!file) {
-      return NextResponse.json({ error: "Файл не найден" }, { status: 400 })
+      return NextResponse.json({ error: "Файл не выбран" }, { status: 400 })
     }
 
-    console.log(`Processing file: ${file.name}`)
+    console.log(`Processing file: ${file.name}, size: ${file.size}`)
 
-    // Парсим Excel файл
-    const excelData = await parseExcelData(file)
-    console.log(`Parsed ${excelData.length} rows from Excel`)
+    // Читаем файл
+    const buffer = await file.arrayBuffer()
 
-    if (excelData.length === 0) {
-      return NextResponse.json({ error: "Файл пуст или имеет неправильный формат" }, { status: 400 })
+    // Парсим Excel данные
+    const rawRows = parseExcelData(buffer)
+    console.log(`Parsed ${rawRows.length} raw rows`)
+
+    // Валидируем данные
+    const { valid: validRows, errors } = validateExcelData(rawRows)
+    console.log(`Valid rows: ${validRows.length}, Errors: ${errors.length}`)
+
+    if (validRows.length === 0) {
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Нет валидных данных для обработки",
+          errors: errors,
+        },
+        { status: 400 },
+      )
     }
 
-    // Создаем новый рейс
-    const tripResult = await sql`
-      INSERT INTO trips (status) VALUES ('active')
-      RETURNING id
-    `
-    const tripId = tripResult.rows[0].id
-    console.log(`Created trip with ID: ${tripId}`)
+    // Группируем по рейсам
+    const trips = groupTripsByPhone(validRows)
+    console.log(`Grouped into ${trips.length} trips`)
 
-    const results = {
-      total: 0,
-      processed: 0,
-      errors: 0,
-      unverified_users: 0,
-      missing_points: 0,
-      details: [] as any[],
-    }
+    // Получаем все пункты из базы для проверки
+    const allPoints = await getAllPoints()
+    const pointsMap = new Map(allPoints.map((p) => [p.point_id, p]))
+    console.log(`Found ${allPoints.length} points in database`)
 
-    // Группируем данные по телефону и trip_identifier
-    const groupedData = new Map<string, Map<string, typeof excelData>>()
+    // Проверяем пользователей и пункты
+    const notFoundPhones: string[] = []
+    const notFoundPoints: string[] = []
+    const readyTrips: any[] = []
+    let readyToSend = 0
 
-    for (const row of excelData) {
-      const phone = row.phone?.toString().replace(/^\+/, "") || ""
-      const tripIdentifier = row.trip_identifier?.toString() || ""
+    // Создаем основной рейс для группировки
+    const mainTrip = await createTrip()
+    console.log(`Created main trip with ID: ${mainTrip.id}`)
 
-      if (!groupedData.has(phone)) {
-        groupedData.set(phone, new Map())
-      }
-      if (!groupedData.get(phone)!.has(tripIdentifier)) {
-        groupedData.get(phone)!.set(tripIdentifier, [])
-      }
-      groupedData.get(phone)!.get(tripIdentifier)!.push(row)
-    }
-
-    // Обрабатываем каждый телефон
-    for (const [phone, tripsByIdentifier] of groupedData) {
+    for (const tripData of trips) {
       try {
-        results.total++
-
-        // Проверяем существование пользователя
-        const userResult = await sql`SELECT * FROM users WHERE phone = ${phone}`
-        const user = userResult.rows[0]
-
+        // Проверяем пользователя
+        const user = await getUserByPhone(tripData.phone)
         if (!user) {
-          results.errors++
-          results.details.push({
-            phone,
-            status: "error",
-            error: "Пользователь не найден в системе",
-          })
+          console.log(`User not found for phone: ${tripData.phone}`)
+          if (!notFoundPhones.includes(tripData.phone)) {
+            notFoundPhones.push(tripData.phone)
+          }
           continue
         }
 
-        // ПРОВЕРЯЕМ ВЕРИФИКАЦИЮ ПОЛЬЗОВАТЕЛЯ
-        if (!user.verified) {
-          results.unverified_users++
-          results.details.push({
-            phone,
-            status: "error",
-            error: "Пользователь не верифицирован. Сообщение не будет отправлено.",
-            user_name: user.first_name || user.name,
-          })
+        // Проверяем все пункты для этого рейса
+        const allPointsExist = [...tripData.loading_points, ...tripData.unloading_points].every((point) => {
+          const exists = pointsMap.has(point.point_id)
+          if (!exists && !notFoundPoints.includes(point.point_id)) {
+            notFoundPoints.push(point.point_id)
+          }
+          return exists
+        })
+
+        if (!allPointsExist) {
+          console.log(`Some points not found for trip ${tripData.trip_identifier}`)
           continue
         }
 
-        // Обрабатываем каждый trip_identifier для этого пользователя
-        for (const [tripIdentifier, tripData] of tripsByIdentifier) {
-          const firstRow = tripData[0]
+        // Если все проверки прошли - создаем данные для рейса
+        console.log(`Processing trip for user: ${user.first_name || user.name}`)
 
-          // Проверяем существование всех пунктов для этого рейса
-          const pointIds = [...new Set(tripData.map((row) => row.point_id?.toString()).filter(Boolean))]
-          const pointsResult = await sql`
-            SELECT point_id FROM points WHERE point_id = ANY(${pointIds})
-          `
-          const existingPoints = new Set(pointsResult.rows.map((p) => p.point_id))
-          const missingPoints = pointIds.filter((id) => !existingPoints.has(id))
-
-          if (missingPoints.length > 0) {
-            results.missing_points++
-            results.details.push({
-              phone,
-              trip_identifier: tripIdentifier,
-              status: "error",
-              error: `Пункты не найдены в системе: ${missingPoints.join(", ")}`,
-              user_name: user.first_name || user.name,
-            })
-            continue
-          }
-
-          // Создаем сообщение для рейса
-          const messageResult = await sql`
-            INSERT INTO trip_messages (
-              trip_id, phone, message, telegram_id, response_status,
-              trip_identifier, vehicle_number, planned_loading_time, driver_comment
-            )
-            VALUES (
-              ${tripId}, ${phone}, 'Pending message', ${user.telegram_id || null}, 'pending',
-              ${tripIdentifier}, ${firstRow.vehicle_number || null}, 
-              ${firstRow.planned_loading_time || null}, ${firstRow.driver_comment || null}
-            )
-            RETURNING id
-          `
-          const messageId = messageResult.rows[0].id
-
-          // Создаем записи trip_points для каждого пункта
-          for (const row of tripData) {
-            if (row.point_id) {
-              await sql`
-                INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
-                VALUES (${tripId}, ${row.point_id}, ${row.point_type}, ${row.point_num || 1}, ${tripIdentifier})
-              `
-            }
-          }
-
-          console.log(`Created message ${messageId} for trip ${tripIdentifier}, phone ${phone}`)
+        // Создаем связи с пунктами погрузки
+        for (const loadingPoint of tripData.loading_points) {
+          await createTripPoint(mainTrip.id, loadingPoint.point_id, "P", loadingPoint.point_num)
         }
 
-        results.processed++
-        results.details.push({
-          phone,
-          status: "success",
+        // Создаем связи с пунктами разгрузки
+        for (const unloadingPoint of tripData.unloading_points) {
+          await createTripPoint(mainTrip.id, unloadingPoint.point_id, "D", unloadingPoint.point_num)
+        }
+
+        // Создаем сообщение для рейса
+        const message = await createTripMessage(
+          mainTrip.id,
+          tripData.phone,
+          "Автоматически сгенерированное сообщение о рейсе",
+          user.telegram_id,
+          {
+            trip_identifier: tripData.trip_identifier,
+            vehicle_number: tripData.vehicle_number,
+            planned_loading_time: tripData.planned_loading_time,
+            driver_comment: tripData.driver_comment,
+          },
+        )
+
+        readyTrips.push({
+          phone: tripData.phone,
           user_name: user.first_name || user.name,
-          trips_count: tripsByIdentifier.size,
+          trip_identifier: tripData.trip_identifier,
+          message_id: message.id,
         })
+
+        readyToSend++
+        console.log(`Processed trip for user: ${user.first_name || user.name} (${tripData.phone})`)
       } catch (error) {
-        console.error(`Error processing phone ${phone}:`, error)
-        results.errors++
-        results.details.push({
-          phone,
-          status: "error",
-          error: error instanceof Error ? error.message : "Неизвестная ошибка",
-        })
+        console.error(`Error processing trip for phone ${tripData.phone}:`, error)
+        errors.push(
+          `Ошибка обработки рейса для номера ${tripData.phone}: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`,
+        )
       }
     }
 
-    console.log(`Upload processing complete:`, results)
+    console.log(
+      `Processing complete. Ready to send: ${readyToSend}, Not found phones: ${notFoundPhones.length}, Not found points: ${notFoundPoints.length}`,
+    )
 
     return NextResponse.json({
       success: true,
-      tripId,
-      results,
-      message: `Обработано: ${results.processed}, Ошибок: ${results.errors}, Неверифицированных: ${results.unverified_users}, Отсутствующих пунктов: ${results.missing_points}`,
+      campaign: {
+        id: mainTrip.id,
+        name: `Рейсы ${new Date().toLocaleDateString("ru-RU")}`,
+        created_at: mainTrip.created_at,
+      },
+      totalRows: rawRows.length,
+      validRows: validRows.length,
+      readyToSend: readyToSend,
+      notFoundPhones: notFoundPhones,
+      notFoundPoints: notFoundPoints,
+      readyTrips: readyTrips,
+      errors: errors,
     })
   } catch (error) {
     console.error("Upload error:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Ошибка при обработке файла",
         details: error instanceof Error ? error.message : "Неизвестная ошибка",
       },

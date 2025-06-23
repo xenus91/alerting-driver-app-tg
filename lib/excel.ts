@@ -70,7 +70,6 @@ function convertExcelDate(excelDate: any): string {
   }
 }
 
-// Новая функция для парсинга Excel данных
 export function parseExcelData(buffer: ArrayBuffer): ExcelRow[] {
   try {
     console.log("Parsing Excel file, buffer size:", buffer.byteLength)
@@ -404,24 +403,6 @@ export function groupTripsByPhone(rows: ExcelRow[]): TripData[] {
   }
 
   return Array.from(tripMap.values())
-}
-
-// Новая функция для группировки по телефону (без разделения по рейсам)
-export function groupTripsByPhoneOnly(rows: ExcelRow[]): Map<string, TripData[]> {
-  const phoneMap = new Map<string, TripData[]>()
-
-  // Сначала группируем по телефону и рейсу
-  const tripsByPhoneAndTrip = groupTripsByPhone(rows)
-
-  // Затем группируем только по телефону
-  for (const tripData of tripsByPhoneAndTrip) {
-    if (!phoneMap.has(tripData.phone)) {
-      phoneMap.set(tripData.phone, [])
-    }
-    phoneMap.get(tripData.phone)!.push(tripData)
-  }
-
-  return phoneMap
 }
 
 // Функция для создания примера Excel файла с новой структурой

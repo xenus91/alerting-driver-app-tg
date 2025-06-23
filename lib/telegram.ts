@@ -1,6 +1,3 @@
-import { format } from "date-fns"
-import { ru } from "date-fns/locale"
-
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
 const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
@@ -93,29 +90,25 @@ export async function sendTripMessageWithButtons(
   messageId: number,
 ) {
   try {
-    // Format the planned loading time
-    const parsedDate = new Date(tripData.planned_loading_time)
-    const formattedLoadingTime = format(parsedDate, "d MMMM HH:mm", { locale: ru })
-
     // Генерируем красивое сообщение
-    let message = "🌅 <b>Доброго времени суток!</b>\n\n"
+    let message = `🌅 <b>Доброго времени суток!</b>\n\n`
     message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
     message += `🚛 На Вас запланирован рейс <b>${tripData.trip_identifier}</b>\n`
     message += `🚗 Транспорт: <b>${tripData.vehicle_number}</b>\n`
-    message += `⏰ Плановое время погрузки: <b>${formattedLoadingTime}</b>\n\n`
+    message += `⏰ Плановое время погрузки: <b>${tripData.planned_loading_time}</b>\n\n`
 
     // Пункты погрузки
     if (loadingPoints.length > 0) {
-      message += "📦 <b>Погрузка:</b>\n"
+      message += `📦 <b>Погрузка:</b>\n`
       loadingPoints.forEach((point, index) => {
         message += `${index + 1}) <b>${point.point_name}</b>\n`
       })
-      message += "\n"
+      message += `\n`
     }
 
     // Пункты разгрузки
     if (unloadingPoints.length > 0) {
-      message += "📤 <b>Разгрузка:</b>\n"
+      message += `📤 <b>Разгрузка:</b>\n`
       unloadingPoints.forEach((point, index) => {
         message += `${index + 1}) <b>${point.point_name}</b>\n`
 
@@ -124,7 +117,7 @@ export async function sendTripMessageWithButtons(
         if (windows.length > 0) {
           message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
         }
-        message += "\n"
+        message += `\n`
       })
     }
 
@@ -133,7 +126,7 @@ export async function sendTripMessageWithButtons(
       message += `💬 <b>Комментарий по рейсу:</b>\n<i>${tripData.driver_comment}</i>\n\n`
     }
 
-    message += "🙏 <b>Просьба подтвердить рейс</b>"
+    message += `🙏 <b>Просьба подтвердить рейс</b>`
 
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
@@ -170,126 +163,6 @@ export async function sendTripMessageWithButtons(
     return data.result
   } catch (error) {
     console.error("Error sending trip message with buttons:", error)
-    throw error
-  }
-}
-
-export async function sendMultipleTripMessageWithButtons(
-  chatId: number,
-  trips: Array<{
-    trip_identifier: string
-    vehicle_number: string
-    planned_loading_time: string
-    driver_comment: string
-    loading_points: Array<{
-      point_id: string
-      point_name: string
-      door_open_1?: string
-      door_open_2?: string
-      door_open_3?: string
-    }>
-    unloading_points: Array<{
-      point_id: string
-      point_name: string
-      door_open_1?: string
-      door_open_2?: string
-      door_open_3?: string
-    }>
-  }>,
-  firstName: string,
-  messageId: number,
-) {
-  try {
-    // Генерируем красивое сообщение
-    let message = "🌅 <b>Доброго времени суток!</b>\n\n"
-    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
-
-    // Определяем множественное или единственное число
-    const isMultiple = trips.length > 1
-    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} рейс${isMultiple ? "ы" : ""}\n\n`
-
-    // Перебираем все рейсы
-    trips.forEach((trip, tripIndex) => {
-      // Форматируем дату
-      const parsedDate = new Date(trip.planned_loading_time)
-      const formattedLoadingTime = format(parsedDate, "d MMMM HH:mm", { locale: ru })
-
-      message += `<b>${trip.trip_identifier}</b>\n`
-      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
-      message += `⏰ Плановое время погрузки: <b>${formattedLoadingTime}</b>\n\n`
-
-      // Пункты погрузки
-      if (trip.loading_points.length > 0) {
-        message += "📦 <b>Погрузка:</b>\n"
-        trip.loading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-        })
-        message += "\n"
-      }
-
-      // Пункты разгрузки
-      if (trip.unloading_points.length > 0) {
-        message += "📤 <b>Разгрузка:</b>\n"
-        trip.unloading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-
-          // Окна приемки для пункта разгрузки
-          const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
-          if (windows.length > 0) {
-            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
-          }
-        })
-        message += "\n"
-      }
-
-      // Комментарий
-      if (trip.driver_comment && trip.driver_comment.trim()) {
-        message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
-      }
-
-      // Добавляем разделитель между рейсами (кроме последнего)
-      if (tripIndex < trips.length - 1) {
-        message += "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
-      }
-    })
-
-    message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`
-
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: "HTML",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "✅ Подтвердить",
-                callback_data: `confirm_${messageId}`,
-              },
-              {
-                text: "❌ Отклонить",
-                callback_data: `reject_${messageId}`,
-              },
-            ],
-          ],
-        },
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send multiple trip message with buttons")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error sending multiple trip message with buttons:", error)
     throw error
   }
 }
