@@ -6,11 +6,62 @@ interface ExcelRow {
   phone?: string | number
   trip_identifier?: string | number
   vehicle_number?: string
-  planned_loading_time?: string
+  planned_loading_time?: string | number
   point_type?: string
   point_num?: string | number
   point_id?: string | number
   driver_comment?: string
+}
+
+// Функция для конвертации Excel даты в строку
+function convertExcelDate(excelDate: any): string {
+  try {
+    console.log(`Converting Excel date: ${excelDate} (type: ${typeof excelDate})`)
+
+    // Если это уже строка в правильном формате, возвращаем как есть
+    if (typeof excelDate === "string") {
+      // Проверяем, соответствует ли формату DD.MM.YYYY HH:MM
+      if (excelDate.match(/^\d{2}\.\d{2}\.\d{4} \d{2}:\d{2}$/)) {
+        return excelDate
+      }
+      return excelDate
+    }
+
+    // Если это число (Excel дата)
+    if (typeof excelDate === "number") {
+      // Excel считает дни с 1 января 1900 года (но с ошибкой в 1900 году)
+      const excelEpoch = new Date(1899, 11, 30) // 30 декабря 1899
+      const date = new Date(excelEpoch.getTime() + excelDate * 24 * 60 * 60 * 1000)
+
+      // Форматируем в DD.MM.YYYY HH:MM
+      const day = date.getDate().toString().padStart(2, "0")
+      const month = (date.getMonth() + 1).toString().padStart(2, "0")
+      const year = date.getFullYear()
+      const hours = date.getHours().toString().padStart(2, "0")
+      const minutes = date.getMinutes().toString().padStart(2, "0")
+
+      const formatted = `${day}.${month}.${year} ${hours}:${minutes}`
+      console.log(`Converted Excel date ${excelDate} to ${formatted}`)
+      return formatted
+    }
+
+    // Если это объект Date
+    if (excelDate instanceof Date) {
+      const day = excelDate.getDate().toString().padStart(2, "0")
+      const month = (excelDate.getMonth() + 1).toString().padStart(2, "0")
+      const year = excelDate.getFullYear()
+      const hours = excelDate.getHours().toString().padStart(2, "0")
+      const minutes = excelDate.getMinutes().toString().padStart(2, "0")
+
+      return `${day}.${month}.${year} ${hours}:${minutes}`
+    }
+
+    // Если ничего не подошло, возвращаем как строку
+    return excelDate.toString()
+  } catch (error) {
+    console.error("Error converting Excel date:", error)
+    return excelDate.toString()
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -26,7 +77,7 @@ export async function POST(request: NextRequest) {
 
     // Читаем файл
     const buffer = await file.arrayBuffer()
-    const workbook = XLSX.read(buffer, { type: "array" })
+    const workbook = XLSX.read(buffer, { type: "array", cellDates: false }) // Отключаем автоматическое преобразование дат
     const sheetName = workbook.SheetNames[0]
     const worksheet = workbook.Sheets[sheetName]
     const excelData: ExcelRow[] = XLSX.utils.sheet_to_json(worksheet)
@@ -109,6 +160,10 @@ export async function POST(request: NextRequest) {
         for (const [tripIdentifier, tripData] of tripsByIdentifier) {
           const firstRow = tripData[0]
 
+          // Конвертируем дату
+          const plannedLoadingTime = convertExcelDate(firstRow.planned_loading_time)
+          console.log(`Converted planned loading time: ${plannedLoadingTime}`)
+
           // Проверяем существование всех пунктов для этого рейса
           const pointIds = [...new Set(tripData.map((row) => row.point_id?.toString()).filter(Boolean))]
 
@@ -151,7 +206,7 @@ export async function POST(request: NextRequest) {
             VALUES (
               ${tripId}, ${phone}, 'Pending message', ${user.telegram_id || null}, 'pending',
               ${tripIdentifier}, ${firstRow.vehicle_number || null}, 
-              ${firstRow.planned_loading_time || null}, ${firstRow.driver_comment || null}
+              ${plannedLoadingTime}, ${firstRow.driver_comment || null}
             )
             RETURNING id
           `
