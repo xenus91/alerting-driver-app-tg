@@ -1,6 +1,17 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { sql } from "@vercel/postgres"
-import { parseExcelData } from "@/lib/excel"
+import * as XLSX from "xlsx"
+
+interface ExcelRow {
+  phone?: string | number
+  trip_identifier?: string | number
+  vehicle_number?: string
+  planned_loading_time?: string
+  point_type?: string
+  point_num?: string | number
+  point_id?: string | number
+  driver_comment?: string
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -13,8 +24,13 @@ export async function POST(request: NextRequest) {
 
     console.log(`Processing file: ${file.name}`)
 
-    // Парсим Excel файл
-    const excelData = await parseExcelData(file)
+    // Читаем файл
+    const buffer = await file.arrayBuffer()
+    const workbook = XLSX.read(buffer, { type: "array" })
+    const sheetName = workbook.SheetNames[0]
+    const worksheet = workbook.Sheets[sheetName]
+    const excelData: ExcelRow[] = XLSX.utils.sheet_to_json(worksheet)
+
     console.log(`Parsed ${excelData.length} rows from Excel`)
 
     if (excelData.length === 0) {
@@ -39,11 +55,15 @@ export async function POST(request: NextRequest) {
     }
 
     // Группируем данные по телефону и trip_identifier
-    const groupedData = new Map<string, Map<string, typeof excelData>>()
+    const groupedData = new Map<string, Map<string, ExcelRow[]>>()
 
     for (const row of excelData) {
       const phone = row.phone?.toString().replace(/^\+/, "") || ""
       const tripIdentifier = row.trip_identifier?.toString() || ""
+
+      if (!phone || !tripIdentifier) {
+        continue
+      }
 
       if (!groupedData.has(phone)) {
         groupedData.set(phone, new Map())
@@ -91,6 +111,19 @@ export async function POST(request: NextRequest) {
 
           // Проверяем существование всех пунктов для этого рейса
           const pointIds = [...new Set(tripData.map((row) => row.point_id?.toString()).filter(Boolean))]
+
+          if (pointIds.length === 0) {
+            results.errors++
+            results.details.push({
+              phone,
+              trip_identifier: tripIdentifier,
+              status: "error",
+              error: "Не указаны пункты для рейса",
+              user_name: user.first_name || user.name,
+            })
+            continue
+          }
+
           const pointsResult = await sql`
             SELECT point_id FROM points WHERE point_id = ANY(${pointIds})
           `
@@ -167,6 +200,7 @@ export async function POST(request: NextRequest) {
     console.error("Upload error:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Ошибка при обработке файла",
         details: error instanceof Error ? error.message : "Неизвестная ошибка",
       },
