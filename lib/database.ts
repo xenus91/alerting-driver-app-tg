@@ -588,3 +588,83 @@ export async function getTripDataForMessages(tripId: number) {
     throw error
   }
 }
+
+export async function getTripDataGroupedByPhone(tripId: number) {
+  try {
+    const result = await sql`
+      SELECT DISTINCT
+        tm.phone,
+        tm.telegram_id,
+        tm.trip_identifier,
+        tm.vehicle_number,
+        tm.planned_loading_time,
+        tm.driver_comment,
+        tp.point_type,
+        tp.point_num,
+        p.point_id,
+        p.point_name,
+        p.door_open_1,
+        p.door_open_2,
+        p.door_open_3,
+        u.first_name,
+        u.full_name
+      FROM trip_messages tm
+      LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id
+      LEFT JOIN points p ON tp.point_id = p.id
+      LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+      WHERE tm.trip_id = ${tripId} AND tm.status = 'pending' AND tm.telegram_id IS NOT NULL
+      ORDER BY tm.phone, tm.trip_identifier, tp.point_type DESC, tp.point_num
+    `
+
+    // Группируем данные по телефону и trip_identifier
+    const groupedData = new Map()
+
+    for (const row of result) {
+      if (!groupedData.has(row.phone)) {
+        groupedData.set(row.phone, {
+          phone: row.phone,
+          telegram_id: row.telegram_id,
+          first_name: row.first_name,
+          full_name: row.full_name,
+          trips: new Map(),
+        })
+      }
+
+      const phoneGroup = groupedData.get(row.phone)
+
+      if (row.trip_identifier && !phoneGroup.trips.has(row.trip_identifier)) {
+        phoneGroup.trips.set(row.trip_identifier, {
+          trip_identifier: row.trip_identifier,
+          vehicle_number: row.vehicle_number,
+          planned_loading_time: row.planned_loading_time,
+          driver_comment: row.driver_comment,
+          loading_points: [],
+          unloading_points: [],
+        })
+      }
+
+      if (row.trip_identifier && row.point_id) {
+        const trip = phoneGroup.trips.get(row.trip_identifier)
+        const pointInfo = {
+          point_id: row.point_id,
+          point_name: row.point_name,
+          point_num: row.point_num,
+          door_open_1: row.door_open_1,
+          door_open_2: row.door_open_2,
+          door_open_3: row.door_open_3,
+        }
+
+        if (row.point_type === "P") {
+          trip.loading_points.push(pointInfo)
+        } else if (row.point_type === "D") {
+          trip.unloading_points.push(pointInfo)
+        }
+      }
+    }
+
+    return groupedData
+  } catch (error) {
+    console.error("Error getting grouped trip data:", error)
+    throw error
+  }
+}
