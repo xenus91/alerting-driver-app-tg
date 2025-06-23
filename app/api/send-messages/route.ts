@@ -106,15 +106,35 @@ export async function POST(request: NextRequest) {
 
           console.log(`Processing trip_identifier: ${tripIdentifier}`)
 
-          // Получаем пункты погрузки для конкретного trip_identifier
-          const loadingPoints = tripPoints
-            .filter((p) => p.trip_identifier === tripIdentifier && p.point_type === "P")
-            .sort((a, b) => a.point_num - b.point_num)
+          // Получаем пункты для конкретного trip_identifier из сообщений
+          // Поскольку каждое сообщение содержит информацию о пункте
+          const loadingPoints = []
+          const unloadingPoints = []
 
-          // Получаем пункты разгрузки для конкретного trip_identifier
-          const unloadingPoints = tripPoints
-            .filter((p) => p.trip_identifier === tripIdentifier && p.point_type === "D")
-            .sort((a, b) => a.point_num - b.point_num)
+          // Группируем сообщения по типу пункта
+          for (const msg of tripMessages) {
+            // Ищем соответствующий пункт в tripPoints
+            const matchingPoint = tripPoints.find(
+              (p) => p.point_short_id === msg.point_id || p.point_id === msg.point_id,
+            )
+
+            const pointData = {
+              point_id: msg.point_id || "unknown",
+              point_name: matchingPoint?.point_name || `Пункт ${msg.point_id}`,
+              door_open_1: matchingPoint?.door_open_1,
+              door_open_2: matchingPoint?.door_open_2,
+              door_open_3: matchingPoint?.door_open_3,
+            }
+
+            // Определяем тип пункта из данных сообщения или tripPoints
+            const pointType = matchingPoint?.point_type || (msg.point_id?.startsWith("8") ? "P" : "D")
+
+            if (pointType === "P") {
+              loadingPoints.push(pointData)
+            } else {
+              unloadingPoints.push(pointData)
+            }
+          }
 
           console.log(
             `Trip ${tripIdentifier}: ${loadingPoints.length} loading, ${unloadingPoints.length} unloading points`,
@@ -125,20 +145,8 @@ export async function POST(request: NextRequest) {
             vehicle_number: firstMessage.vehicle_number || "Не указан",
             planned_loading_time: firstMessage.planned_loading_time || "Не указано",
             driver_comment: firstMessage.driver_comment || "",
-            loading_points: loadingPoints.map((p) => ({
-              point_id: p.point_short_id || p.point_id,
-              point_name: p.point_name || `Пункт ${p.point_short_id || p.point_id}`,
-              door_open_1: p.door_open_1,
-              door_open_2: p.door_open_2,
-              door_open_3: p.door_open_3,
-            })),
-            unloading_points: unloadingPoints.map((p) => ({
-              point_id: p.point_short_id || p.point_id,
-              point_name: p.point_name || `Пункт ${p.point_short_id || p.point_id}`,
-              door_open_1: p.door_open_1,
-              door_open_2: p.door_open_2,
-              door_open_3: p.door_open_3,
-            })),
+            loading_points: loadingPoints,
+            unloading_points: unloadingPoints,
           })
         }
 

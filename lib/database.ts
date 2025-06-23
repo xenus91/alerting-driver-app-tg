@@ -70,6 +70,9 @@ export interface TripMessage {
   planned_loading_time?: string
   driver_comment?: string
   sent_time?: string
+  point_id?: string
+  point_type?: "P" | "D"
+  point_num?: number
 }
 
 export interface UserPendingAction {
@@ -219,6 +222,9 @@ export async function createTripMessage(
     vehicle_number?: string
     planned_loading_time?: string
     driver_comment?: string
+    point_id?: string
+    point_type?: "P" | "D"
+    point_num?: number
   },
 ) {
   try {
@@ -227,12 +233,14 @@ export async function createTripMessage(
     const result = await sql`
       INSERT INTO trip_messages (
         trip_id, phone, message, telegram_id, response_status,
-        trip_identifier, vehicle_number, planned_loading_time, driver_comment
+        trip_identifier, vehicle_number, planned_loading_time, driver_comment,
+        point_id, point_type, point_num
       )
       VALUES (
         ${tripId}, ${normalizedPhone}, ${message}, ${telegramId || null}, 'pending',
         ${tripData?.trip_identifier || null}, ${tripData?.vehicle_number || null}, 
-        ${tripData?.planned_loading_time || null}, ${tripData?.driver_comment || null}
+        ${tripData?.planned_loading_time || null}, ${tripData?.driver_comment || null},
+        ${tripData?.point_id || null}, ${tripData?.point_type || null}, ${tripData?.point_num || null}
       )
       RETURNING *
     `
