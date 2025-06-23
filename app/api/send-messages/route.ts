@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
 
     console.log(`Processing trip ID: ${actualTripId}`)
 
-    // Функция для форматирования даты и времени
+    // Функция для форматирования даты и времени БЕЗ смещения часового пояса
     function formatDateTime(dateTimeString: string): string {
       try {
         if (!dateTimeString) return "Не указано"
@@ -49,11 +49,12 @@ export async function POST(request: NextRequest) {
           "декабря",
         ]
         const month = monthNames[date.getMonth()]
-        const time = date.toLocaleTimeString("ru-RU", {
-          hour: "2-digit",
-          minute: "2-digit",
-          timeZone: "Europe/Moscow",
-        })
+
+        // Убираем timeZone: "Europe/Moscow" чтобы не было смещения
+        const hours = date.getHours().toString().padStart(2, "0")
+        const minutes = date.getMinutes().toString().padStart(2, "0")
+        const time = `${hours}:${minutes}`
+
         return `${day} ${month} ${time}`
       } catch (error) {
         console.error("Error formatting date:", error)

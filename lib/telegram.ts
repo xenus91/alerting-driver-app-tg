@@ -214,7 +214,7 @@ export async function sendMultipleTripMessageWithButtons(
       message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
       message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
 
-      // Форматируем дату и время
+      // Форматируем дату и время БЕЗ смещения часового пояса
       const formatDateTime = (dateTimeString: string): string => {
         try {
           if (!dateTimeString) return "Не указано"
@@ -238,11 +238,12 @@ export async function sendMultipleTripMessageWithButtons(
             "декабря",
           ]
           const month = monthNames[date.getMonth()]
-          const time = date.toLocaleTimeString("ru-RU", {
-            hour: "2-digit",
-            minute: "2-digit",
-            timeZone: "Europe/Moscow",
-          })
+
+          // Убираем timeZone: "Europe/Moscow" чтобы не было смещения
+          const hours = date.getHours().toString().padStart(2, "0")
+          const minutes = date.getMinutes().toString().padStart(2, "0")
+          const time = `${hours}:${minutes}`
+
           return `${day} ${month} ${time}`
         } catch (error) {
           console.error("Error formatting date:", error)
