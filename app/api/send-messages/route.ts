@@ -102,7 +102,7 @@ export async function POST(request: NextRequest) {
 
         const firstName = phoneData.first_name || phoneData.full_name || "Водитель"
 
-        // Сортируем рейсы по trip_identifier
+        // Сортируем рейсы по времени погрузки (по возрастанию)
         const sortedTrips = Array.from(phoneData.trips.entries())
           .sort(([_, tripA], [__, tripB]) => {
             const timeA = new Date(tripA.planned_loading_time || "").getTime()
@@ -126,15 +126,16 @@ export async function POST(request: NextRequest) {
 
         console.log(`Found ${sortedTrips.length} trips for phone ${phone}`)
 
-        // Формируем сообщение
-        let message = `Доброго времени суток!\n\n👤 Уважаемый, ${firstName}\n\n🚛 На Вас запланированы рейсы\n`
+        // Формируем сообщение для логов
+        let message = `🌅 Доброго времени суток!\n\n👤 Уважаемый, ${firstName}\n\n🚛 На Вас запланированы ${sortedTrips.length} рейса:\n\n`
 
         for (let i = 0; i < sortedTrips.length; i++) {
           const trip = sortedTrips[i]
 
-          message += `${trip.trip_identifier}\n`
+          message += `Рейс ${i + 1}:\n`
+          message += `Транспортировка: ${trip.trip_identifier}\n`
           message += `🚗 Транспорт: ${trip.vehicle_number || "Не указан"}\n`
-          message += `⏰ Плановое время погрузки: ${formatDateTime(trip.planned_loading_time || "")}\n`
+          message += `⏰ Плановое время погрузки: ${formatDateTime(trip.planned_loading_time || "")}\n\n`
 
           // Пункты погрузки для этого конкретного рейса
           if (trip.loading_points.length > 0) {
@@ -142,28 +143,30 @@ export async function POST(request: NextRequest) {
             trip.loading_points
               .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
               .forEach((point, index) => {
-                message += `${index + 1}) ${point.point_name}\n`
+                message += `${index + 1}) ${point.point_id} ${point.point_name}\n`
               })
+            message += `\n`
           }
 
           // Пункты разгрузки для этого конкретного рейса
           if (trip.unloading_points.length > 0) {
-            message += `\n📤 Разгрузка:\n`
+            message += `📤 Разгрузка:\n`
             trip.unloading_points
               .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
               .forEach((point, index) => {
-                message += `${index + 1}) ${point.point_name}`
+                message += `${index + 1}) ${point.point_id} ${point.point_name}`
                 const doorTimes = formatDoorTimes(point.door_open_1, point.door_open_2, point.door_open_3)
                 if (doorTimes) {
                   message += `\n   🕐 Окна приемки: ${doorTimes}`
                 }
                 message += `\n`
               })
+            message += `\n`
           }
 
           // Комментарий к рейсу
           if (trip.driver_comment) {
-            message += `\n💬 Комментарий по рейсу:\n${trip.driver_comment}\n`
+            message += `💬 Комментарий по рейсу:\n${trip.driver_comment}\n\n`
           }
 
           // Разделитель между рейсами
@@ -172,7 +175,7 @@ export async function POST(request: NextRequest) {
           }
         }
 
-        message += `\n🙏 Просьба подтвердить рейсы`
+        message += `🙏 Просьба подтвердить рейсы`
 
         console.log(`Sending message to ${phone}`)
         console.log(`Message preview: ${message.substring(0, 300)}...`)

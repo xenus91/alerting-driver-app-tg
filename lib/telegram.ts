@@ -199,13 +199,58 @@ export async function sendMultipleTripMessageWithButtons(
 
     // Определяем множественное или единственное число
     const isMultiple = trips.length > 1
-    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} рейс${isMultiple ? "ы" : ""}\n\n`
+    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
+
+    // Сортируем рейсы по времени погрузки
+    const sortedTrips = [...trips].sort((a, b) => {
+      const timeA = new Date(a.planned_loading_time || "").getTime()
+      const timeB = new Date(b.planned_loading_time || "").getTime()
+      return timeA - timeB
+    })
 
     // Перебираем все рейсы
-    trips.forEach((trip, tripIndex) => {
-      message += `<b>${trip.trip_identifier}</b>\n`
+    sortedTrips.forEach((trip, tripIndex) => {
+      message += `<b>Рейс ${tripIndex + 1}:</b>\n`
+      message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
       message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
-      message += `⏰ Плановое время погрузки: <b>${trip.planned_loading_time}</b>\n\n`
+
+      // Форматируем дату и время
+      const formatDateTime = (dateTimeString: string): string => {
+        try {
+          if (!dateTimeString) return "Не указано"
+
+          const date = new Date(dateTimeString)
+          if (isNaN(date.getTime())) return dateTimeString
+
+          const day = date.getDate()
+          const monthNames = [
+            "января",
+            "февраля",
+            "марта",
+            "апреля",
+            "мая",
+            "июня",
+            "июля",
+            "августа",
+            "сентября",
+            "октября",
+            "ноября",
+            "декабря",
+          ]
+          const month = monthNames[date.getMonth()]
+          const time = date.toLocaleTimeString("ru-RU", {
+            hour: "2-digit",
+            minute: "2-digit",
+            timeZone: "Europe/Moscow",
+          })
+          return `${day} ${month} ${time}`
+        } catch (error) {
+          console.error("Error formatting date:", error)
+          return dateTimeString
+        }
+      }
+
+      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
 
       // Пункты погрузки
       if (trip.loading_points.length > 0) {
@@ -237,8 +282,8 @@ export async function sendMultipleTripMessageWithButtons(
       }
 
       // Добавляем разделитель между рейсами (кроме последнего)
-      if (tripIndex < trips.length - 1) {
-        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n`
+      if (tripIndex < sortedTrips.length - 1) {
+        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
       }
     })
 
