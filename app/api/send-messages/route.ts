@@ -86,6 +86,19 @@ export async function POST(request: NextRequest) {
     for (const [phone, phoneData] of groupedData) {
       try {
         console.log(`=== PROCESSING PHONE ${phone} ===`)
+        console.log(
+          `DEBUG: Phone data:`,
+          JSON.stringify(
+            {
+              phone: phoneData.phone,
+              telegram_id: phoneData.telegram_id,
+              first_name: phoneData.first_name,
+              trips_count: phoneData.trips.size,
+            },
+            null,
+            2,
+          ),
+        )
 
         const firstName = phoneData.first_name || phoneData.full_name || "Водитель"
 
@@ -97,6 +110,19 @@ export async function POST(request: NextRequest) {
             return timeA - timeB
           })
           .map(([_, trip]) => trip)
+
+        console.log(`DEBUG: Sorted trips for ${phone}:`)
+        sortedTrips.forEach((trip, index) => {
+          console.log(`  ${index + 1}. Trip: ${trip.trip_identifier}`)
+          console.log(`     Loading points: ${trip.loading_points.length}`)
+          trip.loading_points.forEach((point, i) => {
+            console.log(`       ${i + 1}. ${point.point_name}`)
+          })
+          console.log(`     Unloading points: ${trip.unloading_points.length}`)
+          trip.unloading_points.forEach((point, i) => {
+            console.log(`       ${i + 1}. ${point.point_name}`)
+          })
+        })
 
         console.log(`Found ${sortedTrips.length} trips for phone ${phone}`)
 

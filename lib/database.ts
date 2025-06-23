@@ -224,6 +224,16 @@ export async function createTripMessage(
   try {
     const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone
 
+    console.log(`DEBUG: Creating trip message:`, {
+      tripId,
+      phone: normalizedPhone,
+      telegramId,
+      trip_identifier: tripData?.trip_identifier,
+      vehicle_number: tripData?.vehicle_number,
+      planned_loading_time: tripData?.planned_loading_time,
+      driver_comment: tripData?.driver_comment,
+    })
+
     const result = await sql`
       INSERT INTO trip_messages (
         trip_id, phone, message, telegram_id, response_status,
@@ -236,6 +246,8 @@ export async function createTripMessage(
       )
       RETURNING *
     `
+
+    console.log(`DEBUG: Created trip message:`, result[0])
     return result[0] as TripMessage
   } catch (error) {
     console.error("Error creating trip message:", error)
@@ -261,10 +273,16 @@ export async function updateTripMessage(messageId: number, message: string) {
 
 export async function createTripPoint(tripId: number, pointId: string, pointType: "P" | "D", pointNum: number) {
   try {
+    console.log(
+      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}`,
+    )
+
     // Сначала найдем ID пункта по point_id
     const pointResult = await sql`
       SELECT id FROM points WHERE point_id = ${pointId}
     `
+
+    console.log(`DEBUG: Found point with ID ${pointId}:`, pointResult)
 
     if (pointResult.length === 0) {
       console.warn(`Point not found for point_id: ${pointId}`)
@@ -276,6 +294,8 @@ export async function createTripPoint(tripId: number, pointId: string, pointType
       VALUES (${tripId}, ${pointResult[0].id}, ${pointType}, ${pointNum})
       RETURNING *
     `
+
+    console.log(`DEBUG: Created trip point:`, result[0])
     return result[0] as TripPoint
   } catch (error) {
     console.error("Error creating trip point:", error)
@@ -591,6 +611,8 @@ export async function getTripDataForMessages(tripId: number) {
 
 export async function getTripDataGroupedByPhone(tripId: number) {
   try {
+    console.log(`=== DEBUG: getTripDataGroupedByPhone for tripId: ${tripId} ===`)
+
     const result = await sql`
       SELECT DISTINCT
         tm.phone,
@@ -607,10 +629,17 @@ export async function getTripDataGroupedByPhone(tripId: number) {
       ORDER BY tm.phone, tm.trip_identifier
     `
 
+    console.log(`DEBUG: Found ${result.length} trip messages:`)
+    result.forEach((row, index) => {
+      console.log(`  ${index + 1}. Phone: ${row.phone}, Trip: ${row.trip_identifier}, Vehicle: ${row.vehicle_number}`)
+    })
+
     // Группируем данные по телефону и trip_identifier
     const groupedData = new Map()
 
     for (const row of result) {
+      console.log(`DEBUG: Processing row - Phone: ${row.phone}, Trip: ${row.trip_identifier}`)
+
       if (!groupedData.has(row.phone)) {
         groupedData.set(row.phone, {
           phone: row.phone,
@@ -619,11 +648,14 @@ export async function getTripDataGroupedByPhone(tripId: number) {
           full_name: row.full_name,
           trips: new Map(),
         })
+        console.log(`DEBUG: Created new phone group for ${row.phone}`)
       }
 
       const phoneGroup = groupedData.get(row.phone)
 
       if (row.trip_identifier && !phoneGroup.trips.has(row.trip_identifier)) {
+        console.log(`DEBUG: Getting points for trip_identifier: ${row.trip_identifier}, phone: ${row.phone}`)
+
         // Получаем пункты для конкретного trip_identifier
         const tripPointsResult = await sql`
           SELECT DISTINCT
@@ -643,6 +675,13 @@ export async function getTripDataGroupedByPhone(tripId: number) {
           ORDER BY tp.point_type DESC, tp.point_num
         `
 
+        console.log(`DEBUG: Found ${tripPointsResult.length} points for trip ${row.trip_identifier}:`)
+        tripPointsResult.forEach((point, index) => {
+          console.log(
+            `  ${index + 1}. Type: ${point.point_type}, Num: ${point.point_num}, ID: ${point.point_id}, Name: ${point.point_name}`,
+          )
+        })
+
         const loading_points = []
         const unloading_points = []
 
@@ -658,8 +697,10 @@ export async function getTripDataGroupedByPhone(tripId: number) {
 
           if (point.point_type === "P") {
             loading_points.push(pointInfo)
+            console.log(`DEBUG: Added loading point: ${point.point_name}`)
           } else if (point.point_type === "D") {
             unloading_points.push(pointInfo)
+            console.log(`DEBUG: Added unloading point: ${point.point_name}`)
           }
         }
 
@@ -671,6 +712,20 @@ export async function getTripDataGroupedByPhone(tripId: number) {
           loading_points: loading_points,
           unloading_points: unloading_points,
         })
+
+        console.log(
+          `DEBUG: Created trip ${row.trip_identifier} with ${loading_points.length} loading and ${unloading_points.length} unloading points`,
+        )
+      }
+    }
+
+    console.log(`DEBUG: Final grouped data has ${groupedData.size} phone groups`)
+    for (const [phone, phoneData] of groupedData) {
+      console.log(`DEBUG: Phone ${phone} has ${phoneData.trips.size} trips`)
+      for (const [tripId, trip] of phoneData.trips) {
+        console.log(
+          `  Trip ${tripId}: ${trip.loading_points.length} loading, ${trip.unloading_points.length} unloading`,
+        )
       }
     }
 
