@@ -85,6 +85,9 @@ export async function POST(request: NextRequest) {
         }
 
         console.log(`Processing trip for user: ${user.first_name || user.name}`)
+        console.log(
+          `DEBUG: Processing trip ${tripData.trip_identifier} with ${tripData.loading_points.length} loading points and ${tripData.unloading_points.length} unloading points`,
+        )
 
         // Создаем пункты для этого рейса
         for (const loadingPoint of tripData.loading_points) {
@@ -102,6 +105,9 @@ export async function POST(request: NextRequest) {
             loadingPoint.point_num,
             tripData.trip_identifier, // Передаем trip_identifier
           )
+          console.log(
+            `DEBUG: Created trip point for trip ${tripData.trip_identifier}: ${loadingPoint.point_id} (${point.point_name})`,
+          )
         }
 
         for (const unloadingPoint of tripData.unloading_points) {
@@ -118,6 +124,9 @@ export async function POST(request: NextRequest) {
             "D",
             unloadingPoint.point_num,
             tripData.trip_identifier, // Передаем trip_identifier
+          )
+          console.log(
+            `DEBUG: Created trip point for trip ${tripData.trip_identifier}: ${unloadingPoint.point_id} (${point.point_name})`,
           )
         }
 
@@ -152,16 +161,22 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      tripId: mainTrip.id,
-      results: results,
-      summary: {
-        totalRows: rawRows.length,
-        validRows: validRows.length,
-        groupedTrips: groupedTrips.length,
-        processed: results.processed,
-        phoneNotFound: results.phoneNotFound,
-        pointNotFound: results.pointNotFound,
+      campaign: {
+        id: mainTrip.id,
+        name: `Рейсы ${new Date().toLocaleDateString("ru-RU")}`,
+        created_at: mainTrip.created_at,
       },
+      totalRows: rawRows.length,
+      validRows: validRows.length,
+      readyToSend: results.processed,
+      notFoundPhones: results.phoneNotFound,
+      notFoundPoints: results.pointNotFound,
+      readyTrips: groupedTrips.slice(0, results.processed).map((trip) => ({
+        phone: trip.phone,
+        trip_identifier: trip.trip_identifier,
+        vehicle_number: trip.vehicle_number,
+      })),
+      errors: errors,
     })
   } catch (error) {
     console.error("Upload error:", error)
