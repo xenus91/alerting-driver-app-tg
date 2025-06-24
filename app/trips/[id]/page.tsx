@@ -654,19 +654,57 @@ export default function TripDetailPage() {
     )
   }
 
-  // Добавить эту функцию после других функций форматирования
+  // Исправленная функция форматирования времени без таймзоны
   const formatTimeRussian = (dateString: string) => {
     if (!dateString) return "—"
 
     try {
+      // Парсим строку даты напрямую без конвертации в локальную таймзону
+      const parts = dateString.match(/(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2})/)
+      if (parts) {
+        const [, day, month, year, hour, minute] = parts
+        const monthNames = [
+          "января",
+          "февраля",
+          "марта",
+          "апреля",
+          "мая",
+          "июня",
+          "июля",
+          "августа",
+          "сентября",
+          "октября",
+          "ноября",
+          "декабря",
+        ]
+        const monthName = monthNames[Number.parseInt(month) - 1]
+        return `${Number.parseInt(day)} ${monthName} ${year}, ${hour}:${minute}`
+      }
+
+      // Если формат не DD.MM.YYYY HH:MM, пробуем стандартный парсинг
       const date = new Date(dateString)
-      return date.toLocaleDateString("ru-RU", {
-        day: "numeric",
-        month: "long",
-        year: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-      })
+      const day = date.getDate()
+      const month = date.getMonth()
+      const year = date.getFullYear()
+      const hour = date.getHours().toString().padStart(2, "0")
+      const minute = date.getMinutes().toString().padStart(2, "0")
+
+      const monthNames = [
+        "января",
+        "февраля",
+        "марта",
+        "апреля",
+        "мая",
+        "июня",
+        "июля",
+        "августа",
+        "сентября",
+        "октября",
+        "ноября",
+        "декабря",
+      ]
+
+      return `${day} ${monthNames[month]} ${year}, ${hour}:${minute}`
     } catch (error) {
       return dateString
     }

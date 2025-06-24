@@ -1,13 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { parseExcelData, validateExcelData, groupTripsByPhone, createExampleExcelFile } from "@/lib/excel"
-import {
-  createTrip,
-  createTripMessage,
-  createTripPoint,
-  getUserByPhone,
-  getAllPoints,
-  type Point,
-} from "@/lib/database"
+import { parseExcelData, validateExcelData, groupTripsByPhone } from "@/lib/excel"
+import { getUserByPhone, getAllPoints, type Point } from "@/lib/database"
 
 export async function POST(request: NextRequest) {
   try {
@@ -61,19 +54,17 @@ export async function POST(request: NextRequest) {
       pointsMap.set(point.point_id, point)
     }
 
-    // Создаем основной trip
-    const mainTrip = await createTrip()
-    console.log(`Created main trip with ID: ${mainTrip.id}`)
-
     const results = {
-      tripId: mainTrip.id,
       processed: 0,
       phoneNotFound: 0,
+      phoneNotVerified: 0,
       pointNotFound: 0,
       details: [] as any[],
+      notFoundPhones: [] as string[],
+      notVerifiedPhones: [] as string[],
     }
 
-    // Обрабатываем каждый сгруппированный рейс
+    // Проверяем каждый сгруппированный рейс БЕЗ создания trip
     for (const tripData of groupedTrips) {
       try {
         // Ищем пользователя по номеру телефона
@@ -81,33 +72,29 @@ export async function POST(request: NextRequest) {
         if (!user) {
           console.log(`User not found for phone: ${tripData.phone}`)
           results.phoneNotFound++
+          results.notFoundPhones.push(tripData.phone)
+          continue
+        }
+
+        // Проверяем верификацию пользователя
+        if (!user.verified) {
+          console.log(`User not verified for phone: ${tripData.phone}`)
+          results.phoneNotVerified++
+          results.notVerifiedPhones.push(tripData.phone)
           continue
         }
 
         console.log(`Processing trip for user: ${user.first_name || user.name}`)
-        console.log(
-          `DEBUG: Processing trip ${tripData.trip_identifier} with ${tripData.loading_points.length} loading points and ${tripData.unloading_points.length} unloading points`,
-        )
 
-        // Создаем пункты для этого рейса
+        // Проверяем наличие всех пунктов
+        let allPointsExist = true
         for (const loadingPoint of tripData.loading_points) {
           const point = pointsMap.get(loadingPoint.point_id)
           if (!point) {
             console.warn(`Point not found: ${loadingPoint.point_id}`)
             results.pointNotFound++
-            continue
+            allPointsExist = false
           }
-
-          await createTripPoint(
-            mainTrip.id,
-            loadingPoint.point_id,
-            "P",
-            loadingPoint.point_num,
-            tripData.trip_identifier, // Передаем trip_identifier
-          )
-          console.log(
-            `DEBUG: Created trip point for trip ${tripData.trip_identifier}: ${loadingPoint.point_id} (${point.point_name})`,
-          )
         }
 
         for (const unloadingPoint of tripData.unloading_points) {
@@ -115,37 +102,14 @@ export async function POST(request: NextRequest) {
           if (!point) {
             console.warn(`Point not found: ${unloadingPoint.point_id}`)
             results.pointNotFound++
-            continue
+            allPointsExist = false
           }
-
-          await createTripPoint(
-            mainTrip.id,
-            unloadingPoint.point_id,
-            "D",
-            unloadingPoint.point_num,
-            tripData.trip_identifier, // Передаем trip_identifier
-          )
-          console.log(
-            `DEBUG: Created trip point for trip ${tripData.trip_identifier}: ${unloadingPoint.point_id} (${point.point_name})`,
-          )
         }
 
-        // Создаем сообщение для этого рейса
-        await createTripMessage(
-          mainTrip.id,
-          tripData.phone,
-          "Автоматически сгенерированное сообщение о рейсе",
-          user.telegram_id,
-          {
-            trip_identifier: tripData.trip_identifier,
-            vehicle_number: tripData.vehicle_number,
-            planned_loading_time: tripData.planned_loading_time,
-            driver_comment: tripData.driver_comment,
-          },
-        )
-
-        results.processed++
-        console.log(`Processed trip for user: ${user.first_name || user.name} (${tripData.phone})`)
+        if (allPointsExist) {
+          results.processed++
+          console.log(`Validated trip for user: ${user.first_name || user.name} (${tripData.phone})`)
+        }
       } catch (error) {
         console.error(`Error processing trip for phone ${tripData.phone}:`, error)
         results.details.push({
@@ -156,26 +120,27 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-      `Processing complete. Ready to send: ${results.processed}, Not found phones: ${results.phoneNotFound}, Not found points: ${results.pointNotFound}`,
+      `Processing complete. Ready to send: ${results.processed}, Not found phones: ${results.phoneNotFound}, Not verified phones: ${results.phoneNotVerified}, Not found points: ${results.pointNotFound}`,
     )
 
     return NextResponse.json({
       success: true,
-      campaign: {
-        id: mainTrip.id,
-        name: `Рейсы ${new Date().toLocaleDateString("ru-RU")}`,
-        created_at: mainTrip.created_at,
-      },
+      // НЕ создаем campaign здесь, только возвращаем данные для валидации
       totalRows: rawRows.length,
       validRows: validRows.length,
       readyToSend: results.processed,
       notFoundPhones: results.phoneNotFound,
+      notVerifiedPhones: results.phoneNotVerified,
       notFoundPoints: results.pointNotFound,
+      notFoundPhonesList: results.notFoundPhones,
+      notVerifiedPhonesList: results.notVerifiedPhones,
       readyTrips: groupedTrips.slice(0, results.processed).map((trip) => ({
         phone: trip.phone,
         trip_identifier: trip.trip_identifier,
         vehicle_number: trip.vehicle_number,
       })),
+      // Сохраняем данные для последующей отправки
+      tripData: groupedTrips,
       errors: errors,
     })
   } catch (error) {
@@ -193,6 +158,7 @@ export async function POST(request: NextRequest) {
 export async function GET() {
   try {
     // Создаем пример Excel файла
+    const { createExampleExcelFile } = await import("@/lib/excel")
     const exampleBuffer = createExampleExcelFile()
 
     return new NextResponse(exampleBuffer, {

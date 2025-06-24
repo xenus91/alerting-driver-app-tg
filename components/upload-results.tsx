@@ -1,29 +1,32 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
-import { CheckCircle, AlertCircle, Send, ChevronDown, ChevronRight, Users, AlertTriangle, MapPin } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Separator } from "@/components/ui/separator"
+import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from "lucide-react"
 
 interface UploadResult {
   success: boolean
-  campaign?: any
   totalRows?: number
   validRows?: number
   readyToSend?: number
-  notFoundPhones?: string[]
-  notFoundPoints?: string[]
+  notFoundPhones?: number
+  notVerifiedPhones?: number
+  notFoundPoints?: number
+  notFoundPhonesList?: string[]
+  notVerifiedPhonesList?: string[]
   readyTrips?: Array<{
     phone: string
-    user_name: string
     trip_identifier: string
-    message_id: number
+    vehicle_number: string
   }>
+  tripData?: any[]
   errors?: string[]
   error?: string
+  details?: string
 }
 
 interface SendResult {
@@ -43,25 +46,23 @@ interface SendResult {
 
 interface UploadResultsProps {
   result: UploadResult
-  onSendMessages: (campaignId: number) => Promise<SendResult>
+  onSendMessages: (tripData: any[]) => Promise<SendResult>
 }
 
 export default function UploadResults({ result, onSendMessages }: UploadResultsProps) {
   const [isSending, setIsSending] = useState(false)
   const [sendResult, setSendResult] = useState<SendResult | null>(null)
-  const [showErrors, setShowErrors] = useState(false)
-  const [showNotFoundPhones, setShowNotFoundPhones] = useState(false)
-  const [showNotFoundPoints, setShowNotFoundPoints] = useState(false)
-  const [showReadyTrips, setShowReadyTrips] = useState(false)
-  const [showSendDetails, setShowSendDetails] = useState(false)
 
   const handleSendMessages = async () => {
-    if (!result.campaign) return
+    if (!result.tripData) {
+      console.error("No trip data available")
+      return
+    }
 
     setIsSending(true)
     try {
-      const sendRes = await onSendMessages(result.campaign.id)
-      setSendResult(sendRes)
+      const response = await onSendMessages(result.tripData)
+      setSendResult(response)
     } catch (error) {
       setSendResult({
         success: false,
@@ -72,221 +73,238 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
     }
   }
 
+  const formatPhone = (phone: string) => {
+    if (phone.startsWith("7") && phone.length === 11) {
+      return `+7 (${phone.slice(1, 4)}) ${phone.slice(4, 7)}-${phone.slice(7, 9)}-${phone.slice(9, 11)}`
+    }
+    return phone
+  }
+
   if (!result.success) {
     return (
-      <Alert variant="destructive">
-        <AlertCircle className="h-4 w-4" />
-        <AlertDescription>
-          {result.error}
+      <Card className="border-red-200">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-red-600">
+            <XCircle className="h-5 w-5" />
+            Ошибка обработки файла
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant="destructive">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              {result.error || "Неизвестная ошибка"}
+              {result.details && (
+                <div className="mt-2">
+                  <strong>Детали:</strong> {result.details}
+                </div>
+              )}
+            </AlertDescription>
+          </Alert>
           {result.errors && result.errors.length > 0 && (
-            <div className="mt-2">
-              <p className="font-medium">Детали ошибок:</p>
-              <ul className="list-disc list-inside">
+            <div className="mt-4">
+              <h4 className="font-medium mb-2">Ошибки валидации:</h4>
+              <ul className="list-disc list-inside space-y-1 text-sm">
                 {result.errors.map((error, index) => (
-                  <li key={index} className="text-sm">
+                  <li key={index} className="text-red-600">
                     {error}
                   </li>
                 ))}
               </ul>
             </div>
           )}
-        </AlertDescription>
-      </Alert>
+        </CardContent>
+      </Card>
     )
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-6">
+      {/* Статистика обработки */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <CheckCircle className="h-5 w-5 text-green-500" />
+          <CardTitle className="flex items-center gap-2 text-green-600">
+            <CheckCircle className="h-5 w-5" />
             Файл успешно обработан
           </CardTitle>
-          <CardDescription>Кампания: {result.campaign?.name}</CardDescription>
+          <CardDescription>Результаты анализа данных из файла</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             <div className="text-center">
-              <div className="text-2xl font-bold text-blue-600">{result.totalRows}</div>
+              <div className="text-2xl font-bold text-blue-600">{result.totalRows || 0}</div>
               <div className="text-sm text-muted-foreground">Всего строк</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-green-600">{result.validRows}</div>
+              <div className="text-2xl font-bold text-green-600">{result.validRows || 0}</div>
               <div className="text-sm text-muted-foreground">Валидных</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-purple-600">{result.readyToSend}</div>
+              <div className="text-2xl font-bold text-emerald-600">{result.readyToSend || 0}</div>
               <div className="text-sm text-muted-foreground">Готово к отправке</div>
             </div>
             <div className="text-center">
-              <div className="text-2xl font-bold text-orange-600">
-                {(result.notFoundPhones?.length || 0) + (result.notFoundPoints?.length || 0)}
+              <div className="text-2xl font-bold text-red-600">
+                {(result.notFoundPhones || 0) + (result.notVerifiedPhones || 0) + (result.notFoundPoints || 0)}
               </div>
               <div className="text-sm text-muted-foreground">Проблем</div>
             </div>
           </div>
 
-          {/* Готовые к отправке рейсы */}
-          {result.readyTrips && result.readyTrips.length > 0 && (
-            <Collapsible open={showReadyTrips} onOpenChange={setShowReadyTrips}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="mb-2">
-                  {showReadyTrips ? (
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 mr-2" />
-                  )}
-                  Готовые рейсы ({result.readyTrips.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Alert className="mb-4">
-                  <CheckCircle className="h-4 w-4" />
-                  <AlertDescription>
-                    <p className="mb-2">Рейсы готовые к отправке:</p>
-                    <div className="space-y-2">
-                      {result.readyTrips.map((trip, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 border rounded">
-                          <div>
-                            <span className="font-medium">{trip.user_name}</span>
-                            <span className="text-sm text-muted-foreground ml-2">({trip.phone})</span>
-                          </div>
-                          <Badge variant="secondary">Рейс {trip.trip_identifier}</Badge>
-                        </div>
-                      ))}
-                    </div>
-                  </AlertDescription>
-                </Alert>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+          {/* Детали проблем */}
+          {((result.notFoundPhones || 0) > 0 ||
+            (result.notVerifiedPhones || 0) > 0 ||
+            (result.notFoundPoints || 0) > 0) && (
+            <div className="space-y-4">
+              <Separator />
+              <h4 className="font-medium text-orange-600">Обнаружены проблемы:</h4>
 
-          {/* Не найденные номера телефонов */}
-          {result.notFoundPhones && result.notFoundPhones.length > 0 && (
-            <Collapsible open={showNotFoundPhones} onOpenChange={setShowNotFoundPhones}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="mb-2">
-                  {showNotFoundPhones ? (
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 mr-2" />
-                  )}
-                  Номера не найдены в БД ({result.notFoundPhones.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Alert variant="destructive" className="mb-4">
+              {(result.notFoundPhones || 0) > 0 && (
+                <Alert>
                   <Users className="h-4 w-4" />
                   <AlertDescription>
-                    <p className="mb-2">Эти номера не зарегистрированы в боте:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {result.notFoundPhones.map((phone, index) => (
-                        <Badge key={index} variant="destructive">
-                          {phone}
-                        </Badge>
-                      ))}
+                    <div className="flex items-center justify-between">
+                      <span>
+                        <strong>{result.notFoundPhones} пользователей не найдено</strong> - эти номера не
+                        зарегистрированы в системе
+                      </span>
+                      <Badge variant="secondary">{result.notFoundPhones}</Badge>
                     </div>
+                    {result.notFoundPhonesList && result.notFoundPhonesList.length > 0 && (
+                      <div className="mt-2">
+                        <details className="cursor-pointer">
+                          <summary className="text-sm font-medium">Показать номера</summary>
+                          <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {result.notFoundPhonesList.map((phone, index) => (
+                              <div key={index} className="text-sm font-mono bg-gray-100 p-1 rounded">
+                                {formatPhone(phone)}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
                   </AlertDescription>
                 </Alert>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
+              )}
 
-          {/* Не найденные пункты */}
-          {result.notFoundPoints && result.notFoundPoints.length > 0 && (
-            <Collapsible open={showNotFoundPoints} onOpenChange={setShowNotFoundPoints}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="mb-2">
-                  {showNotFoundPoints ? (
-                    <ChevronDown className="h-4 w-4 mr-2" />
-                  ) : (
-                    <ChevronRight className="h-4 w-4 mr-2" />
-                  )}
-                  Пункты не найдены в БД ({result.notFoundPoints.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Alert variant="destructive" className="mb-4">
+              {(result.notVerifiedPhones || 0) > 0 && (
+                <Alert>
+                  <UserX className="h-4 w-4" />
+                  <AlertDescription>
+                    <div className="flex items-center justify-between">
+                      <span>
+                        <strong>{result.notVerifiedPhones} пользователей не верифицировано</strong> - эти пользователи
+                        не подтвердили свой номер
+                      </span>
+                      <Badge variant="destructive">{result.notVerifiedPhones}</Badge>
+                    </div>
+                    {result.notVerifiedPhonesList && result.notVerifiedPhonesList.length > 0 && (
+                      <div className="mt-2">
+                        <details className="cursor-pointer">
+                          <summary className="text-sm font-medium">Показать номера</summary>
+                          <div className="mt-2 grid grid-cols-2 md:grid-cols-3 gap-2">
+                            {result.notVerifiedPhonesList.map((phone, index) => (
+                              <div
+                                key={index}
+                                className="text-sm font-mono bg-red-50 p-1 rounded border border-red-200"
+                              >
+                                {formatPhone(phone)}
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {(result.notFoundPoints || 0) > 0 && (
+                <Alert>
                   <MapPin className="h-4 w-4" />
                   <AlertDescription>
-                    <p className="mb-2">Эти пункты отсутствуют в базе данных:</p>
-                    <div className="flex flex-wrap gap-1">
-                      {result.notFoundPoints.map((pointId, index) => (
-                        <Badge key={index} variant="destructive">
-                          {pointId}
-                        </Badge>
-                      ))}
+                    <div className="flex items-center justify-between">
+                      <span>
+                        <strong>{result.notFoundPoints} пунктов не найдено</strong> - эти пункты отсутствуют в базе
+                        данных
+                      </span>
+                      <Badge variant="destructive">{result.notFoundPoints}</Badge>
                     </div>
-                    <p className="mt-2 text-sm">Добавьте эти пункты в базу данных или исправьте файл.</p>
                   </AlertDescription>
                 </Alert>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-
-          {/* Ошибки валидации */}
-          {result.errors && result.errors.length > 0 && (
-            <Collapsible open={showErrors} onOpenChange={setShowErrors}>
-              <CollapsibleTrigger asChild>
-                <Button variant="outline" size="sm" className="mb-2">
-                  {showErrors ? <ChevronDown className="h-4 w-4 mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
-                  Ошибки обработки ({result.errors.length})
-                </Button>
-              </CollapsibleTrigger>
-              <CollapsibleContent>
-                <Alert variant="destructive" className="mb-4">
-                  <AlertTriangle className="h-4 w-4" />
-                  <AlertDescription>
-                    <ul className="list-disc list-inside space-y-1">
-                      {result.errors.map((error, index) => (
-                        <li key={index} className="text-sm">
-                          {error}
-                        </li>
-                      ))}
-                    </ul>
-                  </AlertDescription>
-                </Alert>
-              </CollapsibleContent>
-            </Collapsible>
-          )}
-
-          {/* Кнопка отправки */}
-          {result.readyToSend! > 0 && !sendResult && (
-            <Button onClick={handleSendMessages} disabled={isSending} className="w-full" size="lg">
-              {isSending ? (
-                <>
-                  <Send className="mr-2 h-4 w-4 animate-pulse" />
-                  Отправка сообщений...
-                </>
-              ) : (
-                <>
-                  <Send className="mr-2 h-4 w-4" />
-                  Отправить сообщения ({result.readyToSend})
-                </>
               )}
-            </Button>
+            </div>
+          )}
+
+          {/* Готовые к отправке рейсы */}
+          {result.readyTrips && result.readyTrips.length > 0 && (
+            <div className="mt-6">
+              <Separator />
+              <h4 className="font-medium text-green-600 mt-4 mb-3">
+                Готово к отправке ({result.readyTrips.length} рейсов):
+              </h4>
+              <div className="grid gap-2 max-h-40 overflow-y-auto">
+                {result.readyTrips.map((trip, index) => (
+                  <div
+                    key={index}
+                    className="flex items-center justify-between p-2 bg-green-50 rounded border border-green-200"
+                  >
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className="bg-green-100 text-green-800">
+                        {trip.trip_identifier}
+                      </Badge>
+                      <span className="text-sm font-medium">{trip.vehicle_number}</span>
+                    </div>
+                    <span className="text-sm font-mono text-green-700">{formatPhone(trip.phone)}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
           )}
         </CardContent>
       </Card>
 
+      {/* Кнопка отправки */}
+      {(result.readyToSend || 0) > 0 && !sendResult && (
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <h3 className="font-medium">Готово к отправке</h3>
+                <p className="text-sm text-muted-foreground">{result.readyToSend} рейсов будут отправлены водителям</p>
+              </div>
+              <Button onClick={handleSendMessages} disabled={isSending} size="lg">
+                {isSending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    Отправка...
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    Отправить сообщения
+                  </>
+                )}
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Результат отправки */}
       {sendResult && (
-        <Card>
+        <Card className={sendResult.success ? "border-green-200" : "border-red-200"}>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              {sendResult.success ? (
-                <CheckCircle className="h-5 w-5 text-green-500" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-red-500" />
-              )}
-              Результат отправки
+            <CardTitle className={`flex items-center gap-2 ${sendResult.success ? "text-green-600" : "text-red-600"}`}>
+              {sendResult.success ? <CheckCircle className="h-5 w-5" /> : <XCircle className="h-5 w-5" />}
+              {sendResult.success ? "Сообщения отправлены" : "Ошибка отправки"}
             </CardTitle>
           </CardHeader>
           <CardContent>
             {sendResult.success && sendResult.results ? (
-              <div>
-                <div className="grid grid-cols-3 gap-4 mb-4">
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4">
                   <div className="text-center">
                     <div className="text-2xl font-bold text-blue-600">{sendResult.results.total}</div>
                     <div className="text-sm text-muted-foreground">Всего</div>
@@ -300,41 +318,19 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                     <div className="text-sm text-muted-foreground">Ошибок</div>
                   </div>
                 </div>
-
-                <Collapsible open={showSendDetails} onOpenChange={setShowSendDetails}>
-                  <CollapsibleTrigger asChild>
-                    <Button variant="outline" size="sm">
-                      {showSendDetails ? (
-                        <ChevronDown className="h-4 w-4 mr-2" />
-                      ) : (
-                        <ChevronRight className="h-4 w-4 mr-2" />
-                      )}
-                      Показать детали отправки
-                    </Button>
-                  </CollapsibleTrigger>
-                  <CollapsibleContent>
-                    <div className="mt-4 space-y-2 max-h-60 overflow-y-auto">
-                      {sendResult.results.details.map((detail, index) => (
-                        <div key={index} className="flex items-center justify-between p-2 border rounded">
-                          <span className="font-mono text-sm">{detail.phone}</span>
-                          <div className="flex items-center gap-2">
-                            {detail.status === "sent" ? (
-                              <Badge variant="default">Отправлено</Badge>
-                            ) : (
-                              <Badge variant="destructive">Ошибка</Badge>
-                            )}
-                            {detail.error && <span className="text-xs text-red-600">{detail.error}</span>}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </CollapsibleContent>
-                </Collapsible>
+                {sendResult.results.errors > 0 && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription>
+                      Некоторые сообщения не удалось отправить. Проверьте детали ниже.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             ) : (
               <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>{sendResult.error}</AlertDescription>
+                <XCircle className="h-4 w-4" />
+                <AlertDescription>{sendResult.error || "Неизвестная ошибка при отправке"}</AlertDescription>
               </Alert>
             )}
           </CardContent>

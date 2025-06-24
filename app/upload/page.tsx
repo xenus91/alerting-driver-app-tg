@@ -6,11 +6,20 @@ import UploadResults from "@/components/upload-results"
 
 interface UploadResult {
   success: boolean
-  campaign?: any
   totalRows?: number
   validRows?: number
   readyToSend?: number
-  notFoundPhones?: string[]
+  notFoundPhones?: number
+  notVerifiedPhones?: number
+  notFoundPoints?: number
+  notFoundPhonesList?: string[]
+  notVerifiedPhonesList?: string[]
+  readyTrips?: Array<{
+    phone: string
+    trip_identifier: string
+    vehicle_number: string
+  }>
+  tripData?: any[]
   errors?: string[]
   error?: string
   details?: string
@@ -18,6 +27,7 @@ interface UploadResult {
 
 interface SendResult {
   success: boolean
+  tripId?: number
   results?: {
     total: number
     sent: number
@@ -38,14 +48,14 @@ export default function UploadPage() {
     setUploadResult(result)
   }
 
-  const handleSendMessages = async (campaignId: number): Promise<SendResult> => {
+  const handleSendMessages = async (tripData: any[]): Promise<SendResult> => {
     try {
       const response = await fetch("/api/send-messages", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ campaignId }),
+        body: JSON.stringify({ tripData }),
       })
 
       const result = await response.json()
