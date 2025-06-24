@@ -155,6 +155,13 @@ export async function POST(request: NextRequest) {
             for (const loadingPoint of tripDataItem.loading_points || []) {
               const point = pointsMap.get(loadingPoint.point_id)
               if (point) {
+                console.log(`DEBUG: Loading point ${point.point_id} coordinates:`, {
+                  latitude: point.latitude, // Теперь без пробела!
+                  longitude: point.longitude,
+                  latitude_type: typeof point.latitude,
+                  longitude_type: typeof point.longitude,
+                })
+
                 loadingPointsData.push({
                   point_id: point.point_id,
                   point_name: point.point_name,
@@ -162,8 +169,8 @@ export async function POST(request: NextRequest) {
                   door_open_1: point.door_open_1,
                   door_open_2: point.door_open_2,
                   door_open_3: point.door_open_3,
-                  latitude: point.latitude ? Number.parseFloat(point.latitude.toString()) : undefined,
-                  longitude: point.longitude ? Number.parseFloat(point.longitude.toString()) : undefined,
+                  latitude: point.latitude, // Теперь без пробела!
+                  longitude: point.longitude,
                 })
               }
             }
@@ -171,6 +178,13 @@ export async function POST(request: NextRequest) {
             for (const unloadingPoint of tripDataItem.unloading_points || []) {
               const point = pointsMap.get(unloadingPoint.point_id)
               if (point) {
+                console.log(`DEBUG: Unloading point ${point.point_id} coordinates:`, {
+                  latitude: point.latitude, // Теперь без пробела!
+                  longitude: point.longitude,
+                  latitude_type: typeof point.latitude,
+                  longitude_type: typeof point.longitude,
+                })
+
                 unloadingPointsData.push({
                   point_id: point.point_id,
                   point_name: point.point_name,
@@ -178,8 +192,8 @@ export async function POST(request: NextRequest) {
                   door_open_1: point.door_open_1,
                   door_open_2: point.door_open_2,
                   door_open_3: point.door_open_3,
-                  latitude: point.latitude ? Number.parseFloat(point.latitude.toString()) : undefined,
-                  longitude: point.longitude ? Number.parseFloat(point.longitude.toString()) : undefined,
+                  latitude: point.latitude, // Теперь без пробела!
+                  longitude: point.longitude,
                 })
               }
             }

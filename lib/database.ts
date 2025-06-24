@@ -35,7 +35,7 @@ export interface Point {
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
-  "latitude "?: string // Обратите внимание на пробел!
+  latitude?: string // Теперь без пробела!
   longitude?: string
   adress?: string // Поле адреса (с одной 'd' как в БД)
   created_at: string
@@ -366,7 +366,7 @@ export async function createPoint(
 ) {
   try {
     const result = await sql`
-      INSERT INTO points (point_id, point_name, door_open_1, door_open_2, door_open_3, "latitude ", longitude, adress)
+      INSERT INTO points (point_id, point_name, door_open_1, door_open_2, door_open_3, latitude, longitude, adress)
       VALUES (${pointId}, ${pointName}, ${doorOpen1 || null}, ${doorOpen2 || null}, ${doorOpen3 || null}, ${latitude || null}, ${longitude || null}, ${adress || null})
       RETURNING *
     `
@@ -396,7 +396,7 @@ export async function updatePoint(
           door_open_1 = ${doorOpen1 || null},
           door_open_2 = ${doorOpen2 || null},
           door_open_3 = ${doorOpen3 || null},
-          "latitude " = ${latitude || null},
+          latitude = ${latitude || null},
           longitude = ${longitude || null},
           adress = ${adress || null},
           updated_at = CURRENT_TIMESTAMP

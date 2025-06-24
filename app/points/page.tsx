@@ -41,7 +41,7 @@ interface Point {
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
-  "latitude "?: string
+  latitude?: string // Теперь без пробела!
   longitude?: string
   adress?: string
   created_at: string
@@ -105,8 +105,8 @@ export default function PointsPage() {
 
       const matchesCoordinates =
         hasCoordinatesFilter === "all" ||
-        (hasCoordinatesFilter === "with" && point["latitude "] && point.longitude) ||
-        (hasCoordinatesFilter === "without" && (!point["latitude "] || !point.longitude))
+        (hasCoordinatesFilter === "with" && point.latitude && point.longitude) ||
+        (hasCoordinatesFilter === "without" && (!point.latitude || !point.longitude))
 
       return matchesSearch && matchesCoordinates
     })
@@ -159,7 +159,7 @@ export default function PointsPage() {
         door_open_1: point.door_open_1 || "",
         door_open_2: point.door_open_2 || "",
         door_open_3: point.door_open_3 || "",
-        latitude: point["latitude "] || "",
+        latitude: point.latitude || "", // Теперь без пробела!
         longitude: point.longitude || "",
         adress: point.adress || "",
       })
@@ -279,7 +279,7 @@ export default function PointsPage() {
   }
 
   const hasCoordinates = (point: Point) => {
-    return point["latitude "] && point.longitude
+    return point.latitude && point.longitude
   }
 
   return (
@@ -580,7 +580,7 @@ export default function PointsPage() {
                           <div className="flex items-center gap-1">
                             <Navigation className="h-3 w-3 text-blue-600" />
                             <div className="text-xs font-mono">
-                              <div>{Number.parseFloat(point["latitude "]!).toFixed(4)}</div>
+                              <div>{Number.parseFloat(point.latitude!).toFixed(4)}</div>
                               <div>{Number.parseFloat(point.longitude!).toFixed(4)}</div>
                             </div>
                           </div>
