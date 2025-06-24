@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect, useMemo } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -7,6 +9,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Checkbox } from "@/components/ui/checkbox"
 import {
   Dialog,
   DialogContent,
@@ -16,7 +19,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import {
   RefreshCw,
@@ -27,10 +30,12 @@ import {
   Clock,
   AlertCircle,
   Hash,
-  Search,
   Filter,
+  ArrowUp,
+  ArrowDown,
   ArrowUpDown,
   Navigation,
+  X,
 } from "lucide-react"
 import { YandexMap } from "@/components/yandex-map"
 
@@ -41,15 +46,33 @@ interface Point {
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
-  latitude?: string // Теперь без пробела!
+  latitude?: string
   longitude?: string
   adress?: string
   created_at: string
   updated_at: string
 }
 
-type SortField = "point_id" | "point_name" | "created_at" | "updated_at"
-type SortDirection = "asc" | "desc"
+type SortField = "point_id" | "point_name" | "adress" | "coordinates" | "time_windows" | "created_at"
+type SortDirection = "asc" | "desc" | null
+
+interface ColumnFilters {
+  point_id: string[]
+  point_name: string[]
+  adress: string[]
+  coordinates: string[]
+  time_windows: string[]
+  created_at: string[]
+}
+
+interface FilterSearches {
+  point_id: string
+  point_name: string
+  adress: string
+  coordinates: string
+  time_windows: string
+  created_at: string
+}
 
 export default function PointsPage() {
   const [points, setPoints] = useState<Point[]>([])
@@ -69,11 +92,25 @@ export default function PointsPage() {
   const [error, setError] = useState<string | null>(null)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
-  // Фильтрация и сортировка
-  const [searchQuery, setSearchQuery] = useState("")
-  const [sortField, setSortField] = useState<SortField>("point_id")
-  const [sortDirection, setSortDirection] = useState<SortDirection>("asc")
-  const [hasCoordinatesFilter, setHasCoordinatesFilter] = useState<string>("all")
+  // Состояние для сортировки и фильтрации
+  const [sortField, setSortField] = useState<SortField | null>(null)
+  const [sortDirection, setSortDirection] = useState<SortDirection>(null)
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
+    point_id: [],
+    point_name: [],
+    adress: [],
+    coordinates: [],
+    time_windows: [],
+    created_at: [],
+  })
+  const [filterSearches, setFilterSearches] = useState<FilterSearches>({
+    point_id: "",
+    point_name: "",
+    adress: "",
+    coordinates: "",
+    time_windows: "",
+    created_at: "",
+  })
 
   const fetchPoints = async () => {
     setIsLoading(true)
@@ -95,60 +132,116 @@ export default function PointsPage() {
     fetchPoints()
   }, [])
 
+  // Подготовка данных для фильтров
+  const filterOptions = useMemo(() => {
+    const options = {
+      point_id: Array.from(new Set(points.map((p) => p.point_id))).sort(),
+      point_name: Array.from(new Set(points.map((p) => p.point_name))).sort(),
+      adress: Array.from(new Set(points.map((p) => p.adress || "Не указан"))).sort(),
+      coordinates: ["С координатами", "Без координат"],
+      time_windows: ["С временными окнами", "Без временных окон"],
+      created_at: Array.from(new Set(points.map((p) => new Date(p.created_at).toLocaleDateString("ru-RU")))).sort(),
+    }
+    return options
+  }, [points])
+
+  // Функция сортировки
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      if (sortDirection === "asc") {
+        setSortDirection("desc")
+      } else if (sortDirection === "desc") {
+        setSortField(null)
+        setSortDirection(null)
+      }
+    } else {
+      setSortField(field)
+      setSortDirection("asc")
+    }
+  }
+
+  // Функции фильтрации
+  const handleFilterChange = (field: keyof ColumnFilters, value: string, checked: boolean) => {
+    setColumnFilters((prev) => ({
+      ...prev,
+      [field]: checked ? [...prev[field], value] : prev[field].filter((v) => v !== value),
+    }))
+  }
+
+  const handleFilterSearchChange = (field: keyof FilterSearches, value: string) => {
+    setFilterSearches((prev) => ({
+      ...prev,
+      [field]: value,
+    }))
+  }
+
+  const clearFilter = (field: keyof ColumnFilters) => {
+    setColumnFilters((prev) => ({
+      ...prev,
+      [field]: [],
+    }))
+    setFilterSearches((prev) => ({
+      ...prev,
+      [field]: "",
+    }))
+  }
+
+  // Получение значения для фильтрации/сортировки
+  const getFieldValue = (point: Point, field: SortField): string => {
+    switch (field) {
+      case "point_id":
+        return point.point_id
+      case "point_name":
+        return point.point_name
+      case "adress":
+        return point.adress || "Не указан"
+      case "coordinates":
+        return point.latitude && point.longitude ? "С координатами" : "Без координат"
+      case "time_windows":
+        const hasWindows = point.door_open_1 || point.door_open_2 || point.door_open_3
+        return hasWindows ? "С временными окнами" : "Без временных окон"
+      case "created_at":
+        return new Date(point.created_at).toLocaleDateString("ru-RU")
+      default:
+        return ""
+    }
+  }
+
   // Фильтрованные и отсортированные пункты
   const filteredAndSortedPoints = useMemo(() => {
-    const filtered = points.filter((point) => {
-      const matchesSearch =
-        point.point_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        point.point_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (point.adress && point.adress.toLowerCase().includes(searchQuery.toLowerCase()))
+    let filtered = points
 
-      const matchesCoordinates =
-        hasCoordinatesFilter === "all" ||
-        (hasCoordinatesFilter === "with" && point.latitude && point.longitude) ||
-        (hasCoordinatesFilter === "without" && (!point.latitude || !point.longitude))
-
-      return matchesSearch && matchesCoordinates
+    // Применяем фильтры
+    Object.entries(columnFilters).forEach(([field, values]) => {
+      if (values.length > 0) {
+        filtered = filtered.filter((point) => {
+          const fieldValue = getFieldValue(point, field as SortField)
+          return values.includes(fieldValue)
+        })
+      }
     })
 
     // Сортировка
-    filtered.sort((a, b) => {
-      let aValue: string | number
-      let bValue: string | number
+    if (sortField && sortDirection) {
+      filtered.sort((a, b) => {
+        const aValue = getFieldValue(a, sortField)
+        const bValue = getFieldValue(b, sortField)
 
-      switch (sortField) {
-        case "point_id":
-          aValue = a.point_id
-          bValue = b.point_id
-          break
-        case "point_name":
-          aValue = a.point_name
-          bValue = b.point_name
-          break
-        case "created_at":
-          aValue = new Date(a.created_at).getTime()
-          bValue = new Date(b.created_at).getTime()
-          break
-        case "updated_at":
-          aValue = new Date(a.updated_at).getTime()
-          bValue = new Date(b.updated_at).getTime()
-          break
-        default:
-          aValue = a.point_id
-          bValue = b.point_id
-      }
+        let comparison = 0
+        if (sortField === "created_at") {
+          const aDate = new Date(a.created_at).getTime()
+          const bDate = new Date(b.created_at).getTime()
+          comparison = aDate - bDate
+        } else {
+          comparison = aValue.localeCompare(bValue)
+        }
 
-      if (typeof aValue === "string" && typeof bValue === "string") {
-        const comparison = aValue.localeCompare(bValue)
         return sortDirection === "asc" ? comparison : -comparison
-      } else {
-        const comparison = (aValue as number) - (bValue as number)
-        return sortDirection === "asc" ? comparison : -comparison
-      }
-    })
+      })
+    }
 
     return filtered
-  }, [points, searchQuery, sortField, sortDirection, hasCoordinatesFilter])
+  }, [points, columnFilters, sortField, sortDirection])
 
   const handleOpenDialog = (point?: Point) => {
     if (point) {
@@ -159,7 +252,7 @@ export default function PointsPage() {
         door_open_1: point.door_open_1 || "",
         door_open_2: point.door_open_2 || "",
         door_open_3: point.door_open_3 || "",
-        latitude: point.latitude || "", // Теперь без пробела!
+        latitude: point.latitude || "",
         longitude: point.longitude || "",
         adress: point.adress || "",
       })
@@ -280,6 +373,95 @@ export default function PointsPage() {
 
   const hasCoordinates = (point: Point) => {
     return point.latitude && point.longitude
+  }
+
+  // Компонент заголовка колонки с сортировкой и фильтрацией
+  const ColumnHeader = ({
+    field,
+    children,
+    className = "",
+  }: {
+    field: SortField
+    children: React.ReactNode
+    className?: string
+  }) => {
+    const isActive = sortField === field
+    const hasActiveFilter = columnFilters[field].length > 0
+
+    const getSortIcon = () => {
+      if (!isActive) return <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />
+      if (sortDirection === "asc") return <ArrowUp className="h-3 w-3" />
+      if (sortDirection === "desc") return <ArrowDown className="h-3 w-3" />
+      return <ArrowUpDown className="h-3 w-3 opacity-50" />
+    }
+
+    const getFilteredOptions = () => {
+      const options = filterOptions[field] || []
+      const search = filterSearches[field].toLowerCase()
+      return search ? options.filter((option) => option.toLowerCase().includes(search)) : options
+    }
+
+    return (
+      <div className={`flex items-center justify-between group ${className}`}>
+        <button
+          className="flex items-center gap-1 hover:text-foreground text-left flex-1"
+          onClick={() => handleSort(field)}
+        >
+          <span>{children}</span>
+          {getSortIcon()}
+        </button>
+
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              className={`ml-2 p-1 rounded hover:bg-muted ${hasActiveFilter ? "text-blue-600" : "opacity-0 group-hover:opacity-100"}`}
+            >
+              <Filter className="h-3 w-3" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64" align="start">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">Фильтр</h4>
+                <Button variant="ghost" size="sm" onClick={() => clearFilter(field)} className="h-6 px-2 text-xs">
+                  <X className="h-3 w-3 mr-1" />
+                  Сбросить
+                </Button>
+              </div>
+
+              <Input
+                placeholder="Поиск..."
+                value={filterSearches[field]}
+                onChange={(e) => handleFilterSearchChange(field, e.target.value)}
+                className="h-8"
+              />
+
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {getFilteredOptions().map((option) => (
+                  <div key={option} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`${field}-${option}`}
+                      checked={columnFilters[field].includes(option)}
+                      onCheckedChange={(checked) => handleFilterChange(field, option, checked as boolean)}
+                    />
+                    <label
+                      htmlFor={`${field}-${option}`}
+                      className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                    >
+                      {option}
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              {getFilteredOptions().length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">Ничего не найдено</p>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    )
   }
 
   return (
@@ -437,66 +619,6 @@ export default function PointsPage() {
         </div>
       </div>
 
-      {/* Фильтры и поиск */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Filter className="h-5 w-5" />
-            Фильтры и поиск
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-4">
-            <div className="flex-1 min-w-[200px]">
-              <div className="relative">
-                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  placeholder="Поиск по номеру, названию или адресу..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10"
-                />
-              </div>
-            </div>
-            <Select value={hasCoordinatesFilter} onValueChange={setHasCoordinatesFilter}>
-              <SelectTrigger className="w-[200px]">
-                <SelectValue placeholder="Координаты" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Все пункты</SelectItem>
-                <SelectItem value="with">С координатами</SelectItem>
-                <SelectItem value="without">Без координат</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={`${sortField}-${sortDirection}`}
-              onValueChange={(value) => {
-                const [field, direction] = value.split("-")
-                setSortField(field as SortField)
-                setSortDirection(direction as SortDirection)
-              }}
-            >
-              <SelectTrigger className="w-[200px]">
-                <ArrowUpDown className="h-4 w-4 mr-2" />
-                <SelectValue placeholder="Сортировка" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="point_id-asc">Номер ↑</SelectItem>
-                <SelectItem value="point_id-desc">Номер ↓</SelectItem>
-                <SelectItem value="point_name-asc">Название ↑</SelectItem>
-                <SelectItem value="point_name-desc">Название ↓</SelectItem>
-                <SelectItem value="created_at-desc">Новые первые</SelectItem>
-                <SelectItem value="created_at-asc">Старые первые</SelectItem>
-                <SelectItem value="updated_at-desc">Обновленные первые</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="mt-2 text-sm text-muted-foreground">
-            Найдено: {filteredAndSortedPoints.length} из {points.length} пунктов
-          </div>
-        </CardContent>
-      </Card>
-
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
@@ -519,7 +641,7 @@ export default function PointsPage() {
             <p className="text-muted-foreground text-center mb-4">
               {points.length === 0
                 ? "Создайте первый пункт для использования в рейсах"
-                : "Попробуйте изменить параметры поиска или фильтры"}
+                : "Попробуйте изменить параметры фильтрации"}
             </p>
             {points.length === 0 && (
               <Button onClick={() => handleOpenDialog()}>
@@ -532,19 +654,33 @@ export default function PointsPage() {
       ) : (
         <Card>
           <CardHeader>
-            <CardTitle>Список пунктов ({filteredAndSortedPoints.length})</CardTitle>
+            <CardTitle>
+              Список пунктов ({filteredAndSortedPoints.length} из {points.length})
+            </CardTitle>
             <CardDescription>Все доступные пункты погрузки и разгрузки</CardDescription>
           </CardHeader>
           <CardContent>
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Номер</TableHead>
-                  <TableHead>Название</TableHead>
-                  <TableHead>Адрес</TableHead>
-                  <TableHead>Координаты</TableHead>
-                  <TableHead>Временные окна</TableHead>
-                  <TableHead>Создан</TableHead>
+                  <TableHead>
+                    <ColumnHeader field="point_id">Номер</ColumnHeader>
+                  </TableHead>
+                  <TableHead>
+                    <ColumnHeader field="point_name">Название</ColumnHeader>
+                  </TableHead>
+                  <TableHead>
+                    <ColumnHeader field="adress">Адрес</ColumnHeader>
+                  </TableHead>
+                  <TableHead>
+                    <ColumnHeader field="coordinates">Координаты</ColumnHeader>
+                  </TableHead>
+                  <TableHead>
+                    <ColumnHeader field="time_windows">Временные окна</ColumnHeader>
+                  </TableHead>
+                  <TableHead>
+                    <ColumnHeader field="created_at">Создан</ColumnHeader>
+                  </TableHead>
                   <TableHead className="text-right">Действия</TableHead>
                 </TableRow>
               </TableHeader>
