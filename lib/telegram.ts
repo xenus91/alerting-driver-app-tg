@@ -66,19 +66,16 @@ export async function sendMessage(chatId: number, text: string) {
   }
 }
 
-// Функция для построения ссылки на Яндекс.Карты
+// Функция для построения URL маршрута в Яндекс.Картах
 function buildRouteUrl(points: Array<{ latitude?: number; longitude?: number }>) {
-  // Фильтруем точки с координатами
   const validPoints = points.filter((p) => p.latitude && p.longitude)
 
-  if (validPoints.length === 0) {
-    return null
+  if (validPoints.length < 2) {
+    return null // Нужно минимум 2 точки для маршрута
   }
 
-  // Формируем строку координат для URL
-  const rtext = validPoints.map((p) => `${p.latitude},${p.longitude}`).join("~")
-
-  return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${rtext}&utm_source=ymaps_app_redirect`
+  const coordinates = validPoints.map((p) => `${p.latitude},${p.longitude}`).join("~")
+  return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
 }
 
 export async function sendTripMessageWithButtons(
@@ -145,12 +142,12 @@ export async function sendTripMessageWithButtons(
       message += `💬 <b>Комментарий по рейсу:</b>\n<i>${tripData.driver_comment}</i>\n\n`
     }
 
-    // Строим ссылку на маршрут
-    const allPoints = [...loadingPoints, ...unloadingPoints]
-    const routeUrl = buildRouteUrl(allPoints)
+    // Строим маршрут: сначала все точки погрузки, потом все точки разгрузки
+    const routePoints = [...loadingPoints, ...unloadingPoints]
+    const routeUrl = buildRouteUrl(routePoints)
 
     if (routeUrl) {
-      message += `🗺️ <a href="${routeUrl}">Построить маршрут в Яндекс.Картах</a>\n\n`
+      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
     }
 
     message += `🙏 <b>Просьба подтвердить рейс</b>`
@@ -313,30 +310,12 @@ export async function sendMultipleTripMessageWithButtons(
         message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
       }
 
-      // Строим ссылку на маршрут для этого рейса
-      const routePoints = []
-
-      // Сначала добавляем точки погрузки по порядку
-      trip.loading_points
-        .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-        .forEach((point) => {
-          if (point.latitude && point.longitude) {
-            routePoints.push({ latitude: point.latitude, longitude: point.longitude })
-          }
-        })
-
-      // Затем добавляем точки разгрузки по порядку
-      trip.unloading_points
-        .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-        .forEach((point) => {
-          if (point.latitude && point.longitude) {
-            routePoints.push({ latitude: point.latitude, longitude: point.longitude })
-          }
-        })
-
+      // Строим маршрут для этого рейса: сначала все точки погрузки, потом все точки разгрузки
+      const routePoints = [...trip.loading_points, ...trip.unloading_points]
       const routeUrl = buildRouteUrl(routePoints)
+
       if (routeUrl) {
-        message += `🗺️ <a href="${routeUrl}">Построить маршрут в Яндекс.Картах</a>\n\n`
+        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
       }
 
       // Добавляем разделитель между рейсами (кроме последнего)
