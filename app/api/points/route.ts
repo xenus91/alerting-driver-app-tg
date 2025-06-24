@@ -19,7 +19,8 @@ export async function GET() {
 
 export async function POST(request: Request) {
   try {
-    const { point_id, point_name, door_open_1, door_open_2, door_open_3 } = await request.json()
+    const { point_id, point_name, door_open_1, door_open_2, door_open_3, latitude, longitude, adress } =
+      await request.json()
 
     if (!point_id?.trim()) {
       return NextResponse.json(
@@ -47,6 +48,9 @@ export async function POST(request: Request) {
       door_open_1?.trim() || undefined,
       door_open_2?.trim() || undefined,
       door_open_3?.trim() || undefined,
+      latitude?.trim() || undefined,
+      longitude?.trim() || undefined,
+      adress?.trim() || undefined,
     )
 
     return NextResponse.json({ success: true, point })
