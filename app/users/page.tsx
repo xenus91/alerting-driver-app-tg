@@ -13,6 +13,13 @@ interface UserInterface {
   telegram_id: number
   phone: string
   name: string
+  first_name:string
+  las_name:string
+  carpark:string
+  role:string
+  verified: boolean
+  registration_state:string 
+  full_name: string
   created_at: string
 }
 
@@ -46,7 +53,7 @@ export default function UsersPage() {
     if (searchTerm) {
       const filtered = users.filter(
         (user) =>
-          user.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+          user.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
           user.phone.includes(searchTerm) ||
           user.telegram_id.toString().includes(searchTerm),
       )
@@ -199,7 +206,7 @@ export default function UsersPage() {
                       <Users className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
-                      <div className="font-medium">{user.name}</div>
+                      <div className="font-medium">{user.full_name}</div>
                       <div className="flex items-center space-x-4 text-sm text-muted-foreground">
                         <div className="flex items-center">
                           <Phone className="h-3 w-3 mr-1" />
