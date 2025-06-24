@@ -626,7 +626,68 @@ export async function POST(request: NextRequest) {
     // Получаем информацию о пользователе
     const existingUser = await getUserByTelegramId(userId)
 
-    // Проверяем, есть ли pending action для пользователя
+    // Обработка команды /start - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
+    if (messageText === "/start") {
+      console.log("=== PROCESSING /START COMMAND ===")
+
+      try {
+        // Очищаем любые pending actions при старте
+        if (existingUser) {
+          await deleteUserPendingAction(existingUser.id)
+          console.log("Cleared pending actions for user on /start")
+        }
+
+        // Проверяем, зарегистрирован ли пользователь
+        if (existingUser && existingUser.registration_state === "completed") {
+          const registeredMessage =
+            `👋 Здравствуйте, ${existingUser.first_name}!\n\n` +
+            `✅ Вы уже зарегистрированы в системе уведомлений.\n\n` +
+            `📋 Ваши данные:\n` +
+            `👤 ФИО: ${existingUser.full_name}\n` +
+            `📱 Телефон: +${existingUser.phone}\n` +
+            `🏢 Автопарк: ${existingUser.carpark}\n\n` +
+            `🚛 Ожидайте сообщения о предстоящих рейсах.`
+
+          await sendMessage(chatId, registeredMessage)
+
+          return NextResponse.json({
+            ok: true,
+            status: "user_already_registered",
+            timestamp: timestamp,
+          })
+        }
+
+        // Если пользователь не зарегистрирован или регистрация не завершена
+        const welcomeMessage =
+          "🤖 Добро пожаловать в систему уведомлений!\n\n" +
+          "Этот бот используется для получения важных сообщений о рейсах и логистических операциях.\n\n" +
+          "📱 Для регистрации в системе необходимо поделиться номером телефона.\n\n" +
+          "🔒 Ваши данные будут использованы только для отправки рабочих уведомлений."
+
+        await sendMessage(chatId, welcomeMessage)
+        await sendContactRequest(chatId)
+
+        console.log("=== /START COMMAND PROCESSED SUCCESSFULLY ===")
+
+        return NextResponse.json({
+          ok: true,
+          status: "start_processed",
+          timestamp: timestamp,
+          user_id: userId,
+          chat_id: chatId,
+        })
+      } catch (error) {
+        console.error("=== ERROR PROCESSING /START ===", error)
+        return NextResponse.json({
+          ok: true, // Возвращаем ok: true чтобы не блокировать webhook
+          status: "start_error",
+          error: error instanceof Error ? error.message : "Unknown error",
+          timestamp: timestamp,
+        })
+      }
+    }
+
+    // Проверяем, есть ли pending action для пользователя (ПОСЛЕ обработки /start)
     if (existingUser) {
       const pendingAction = await getUserPendingAction(existingUser.id)
 
@@ -688,40 +749,6 @@ export async function POST(request: NextRequest) {
             timestamp: timestamp,
           })
         }
-      }
-    }
-
-    // Обработка команды /start
-    if (messageText === "/start") {
-      console.log("=== PROCESSING /START COMMAND ===")
-
-      try {
-        const welcomeMessage =
-          "🤖 Добро пожаловать в систему уведомлений!\n\n" +
-          "Этот бот используется для получения важных сообщений о рейсах и логистических операциях.\n\n" +
-          "📱 Для регистрации в системе необходимо поделиться номером телефона.\n\n" +
-          "🔒 Ваши данные будут использованы только для отправки рабочих уведомлений."
-
-        await sendMessage(chatId, welcomeMessage)
-        await sendContactRequest(chatId)
-
-        console.log("=== /START COMMAND PROCESSED SUCCESSFULLY ===")
-
-        return NextResponse.json({
-          ok: true,
-          status: "start_processed",
-          timestamp: timestamp,
-          user_id: userId,
-          chat_id: chatId,
-        })
-      } catch (error) {
-        console.error("=== ERROR PROCESSING /START ===", error)
-        return NextResponse.json({
-          ok: true, // Возвращаем ok: true чтобы не блокировать webhook
-          status: "start_error",
-          error: error instanceof Error ? error.message : "Unknown error",
-          timestamp: timestamp,
-        })
       }
     }
 
