@@ -432,3 +432,6 @@ export function createExampleExcelFile(): ArrayBuffer {
 
   return XLSX.write(workbook, { type: "array", bookType: "xlsx" })
 }
+
+// Алиас для обратной совместимости
+export const parseExcelFile = parseExcelData

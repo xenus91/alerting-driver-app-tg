@@ -14,6 +14,7 @@ export interface User {
   registration_state?: string
   temp_first_name?: string
   temp_last_name?: string
+  verified?: boolean // добавляем поле verified
   created_at: string
 }
 
@@ -177,6 +178,29 @@ export async function getUserByPhone(phone: string) {
     return result[0] as User | undefined
   } catch (error) {
     console.error("Error getting user by phone:", error)
+    throw error
+  }
+}
+
+// Добавляем функцию для получения всех пользователей с проверкой верификации
+export async function getUsersWithVerificationByPhones(phones: string[]) {
+  try {
+    const normalizedPhones = phones.map((phone) => (phone.startsWith("+") ? phone.slice(1) : phone))
+
+    console.log(`Looking for users by phones:`, normalizedPhones)
+
+    const result = await sql`
+      SELECT phone, verified, first_name, last_name, full_name, name, telegram_id
+      FROM users 
+      WHERE phone = ANY(${normalizedPhones})
+    `
+
+    console.log(`Found ${result.length} users`)
+    return result as Array<
+      Pick<User, "phone" | "verified" | "first_name" | "last_name" | "full_name" | "name" | "telegram_id">
+    >
+  } catch (error) {
+    console.error("Error getting users with verification:", error)
     throw error
   }
 }

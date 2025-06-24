@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from "lucide-react"
+import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from 'lucide-react'
 
 interface UploadResult {
   success: boolean
@@ -54,11 +54,17 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
   const [sendResult, setSendResult] = useState<SendResult | null>(null)
 
   const handleSendMessages = async () => {
-    if (!result.tripData) {
-      console.error("No trip data available")
+    if (!result.tripData || result.tripData.length === 0) {
+      console.error("No trip data available for sending")
+      setSendResult({
+        success: false,
+        error: "Нет данных для отправки"
+      })
       return
     }
 
+    console.log("Sending trip data:", result.tripData)
+    
     setIsSending(true)
     try {
       const response = await onSendMessages(result.tripData)
