@@ -8,6 +8,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Dialog,
   DialogContent,
@@ -17,7 +18,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { RefreshCw, Users, Search, Phone, Calendar, ExternalLink, Edit, Save, X, Filter } from "lucide-react"
+import { RefreshCw, Users, Phone, Calendar, ExternalLink, Edit, Save, X, ChevronDown } from "lucide-react"
 
 interface UserInterface {
   id: number
@@ -43,18 +44,36 @@ interface EditingUser {
   role: string
 }
 
+interface ColumnFilters {
+  name: string
+  phone: string
+  telegram_id: string
+  carpark: string
+  role: string
+  verified: string
+  registration_state: string
+}
+
 export default function UsersPage() {
   const [users, setUsers] = useState<UserInterface[]>([])
   const [filteredUsers, setFilteredUsers] = useState<UserInterface[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [searchTerm, setSearchTerm] = useState("")
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
 
-  // Фильтры
-  const [verifiedFilter, setVerifiedFilter] = useState<string>("all")
-  const [registrationStateFilter, setRegistrationStateFilter] = useState<string>("all")
-  const [carparkFilter, setCarparkFilter] = useState<string>("all")
+  // Фильтры для колонок
+  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
+    name: "",
+    phone: "",
+    telegram_id: "",
+    carpark: "",
+    role: "",
+    verified: "",
+    registration_state: "",
+  })
+
+  // Состояния открытых поповеров
+  const [openPopovers, setOpenPopovers] = useState<Record<string, boolean>>({})
 
   const fetchUsers = async () => {
     setIsLoading(true)
@@ -79,34 +98,47 @@ export default function UsersPage() {
   useEffect(() => {
     let filtered = users
 
-    // Поиск по тексту
-    if (searchTerm) {
-      filtered = filtered.filter(
-        (user) =>
-          user.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-          user.phone.includes(searchTerm) ||
-          user.telegram_id.toString().includes(searchTerm) ||
-          user.carpark?.toLowerCase().includes(searchTerm.toLowerCase()),
+    // Фильтр по имени
+    if (columnFilters.name) {
+      filtered = filtered.filter((user) =>
+        (user.full_name || user.name || "").toLowerCase().includes(columnFilters.name.toLowerCase()),
       )
     }
 
-    // Фильтр по верификации
-    if (verifiedFilter !== "all") {
-      filtered = filtered.filter((user) => (verifiedFilter === "verified" ? user.verified : !user.verified))
+    // Фильтр по телефону
+    if (columnFilters.phone) {
+      filtered = filtered.filter((user) => user.phone.includes(columnFilters.phone))
     }
 
-    // Фильтр по состоянию регистрации
-    if (registrationStateFilter !== "all") {
-      filtered = filtered.filter((user) => user.registration_state === registrationStateFilter)
+    // Фильтр по Telegram ID
+    if (columnFilters.telegram_id) {
+      filtered = filtered.filter((user) => user.telegram_id.toString().includes(columnFilters.telegram_id))
     }
 
     // Фильтр по автопарку
-    if (carparkFilter !== "all") {
-      filtered = filtered.filter((user) => user.carpark === carparkFilter)
+    if (columnFilters.carpark) {
+      filtered = filtered.filter((user) =>
+        (user.carpark || "").toLowerCase().includes(columnFilters.carpark.toLowerCase()),
+      )
+    }
+
+    // Фильтр по роли
+    if (columnFilters.role) {
+      filtered = filtered.filter((user) => (user.role || "").toLowerCase().includes(columnFilters.role.toLowerCase()))
+    }
+
+    // Фильтр по верификации
+    if (columnFilters.verified) {
+      filtered = filtered.filter((user) => (columnFilters.verified === "verified" ? user.verified : !user.verified))
+    }
+
+    // Фильтр по состоянию регистрации
+    if (columnFilters.registration_state) {
+      filtered = filtered.filter((user) => user.registration_state === columnFilters.registration_state)
     }
 
     setFilteredUsers(filtered)
-  }, [users, searchTerm, verifiedFilter, registrationStateFilter, carparkFilter])
+  }, [users, columnFilters])
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("ru-RU")
@@ -117,6 +149,20 @@ export default function UsersPage() {
       return `+7 (${phone.slice(1, 4)}) ${phone.slice(4, 7)}-${phone.slice(7, 9)}-${phone.slice(9, 11)}`
     }
     return phone
+  }
+
+  const translateRegistrationState = (state: string) => {
+    const translations: Record<string, string> = {
+      pending: "Ожидает",
+      completed: "Завершена",
+      verified: "Верифицирован",
+      active: "Активен",
+      inactive: "Неактивен",
+      blocked: "Заблокирован",
+      new: "Новый",
+      registered: "Зарегистрирован",
+    }
+    return translations[state] || state
   }
 
   const getUniqueValues = (field: keyof UserInterface) => {
@@ -162,15 +208,27 @@ export default function UsersPage() {
     }
   }
 
-  const clearFilters = () => {
-    setSearchTerm("")
-    setVerifiedFilter("all")
-    setRegistrationStateFilter("all")
-    setCarparkFilter("all")
+  const updateColumnFilter = (column: keyof ColumnFilters, value: string) => {
+    setColumnFilters((prev) => ({ ...prev, [column]: value }))
   }
 
-  const hasActiveFilters =
-    searchTerm || verifiedFilter !== "all" || registrationStateFilter !== "all" || carparkFilter !== "all"
+  const clearAllFilters = () => {
+    setColumnFilters({
+      name: "",
+      phone: "",
+      telegram_id: "",
+      carpark: "",
+      role: "",
+      verified: "",
+      registration_state: "",
+    })
+  }
+
+  const hasActiveFilters = Object.values(columnFilters).some((filter) => filter !== "")
+
+  const togglePopover = (column: string) => {
+    setOpenPopovers((prev) => ({ ...prev, [column]: !prev[column] }))
+  }
 
   return (
     <div className="space-y-6">
@@ -179,10 +237,18 @@ export default function UsersPage() {
           <h1 className="text-2xl font-bold">Зарегистрированные пользователи</h1>
           <p className="text-muted-foreground">Пользователи, которые зарегистрировались в Telegram боте</p>
         </div>
-        <Button onClick={fetchUsers} disabled={isLoading} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Обновить
-        </Button>
+        <div className="flex gap-2">
+          {hasActiveFilters && (
+            <Button variant="outline" size="sm" onClick={clearAllFilters}>
+              <X className="h-4 w-4 mr-1" />
+              Очистить фильтры
+            </Button>
+          )}
+          <Button onClick={fetchUsers} disabled={isLoading} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Обновить
+          </Button>
+        </div>
       </div>
 
       {/* Статистика */}
@@ -242,93 +308,6 @@ export default function UsersPage() {
         </Card>
       </div>
 
-      {/* Фильтры */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle className="text-lg">Фильтры и поиск</CardTitle>
-            {hasActiveFilters && (
-              <Button variant="ghost" size="sm" onClick={clearFilters}>
-                <X className="h-4 w-4 mr-1" />
-                Очистить фильтры
-              </Button>
-            )}
-          </div>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Поиск */}
-          <div className="flex items-center space-x-2">
-            <Search className="h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Поиск по имени, номеру телефона, Telegram ID или автопарку..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="flex-1"
-            />
-          </div>
-
-          {/* Фильтры */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="verified-filter">Верификация</Label>
-              <Select value={verifiedFilter} onValueChange={setVerifiedFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Все" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все</SelectItem>
-                  <SelectItem value="verified">Верифицированные</SelectItem>
-                  <SelectItem value="not_verified">Не верифицированные</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="state-filter">Состояние регистрации</Label>
-              <Select value={registrationStateFilter} onValueChange={setRegistrationStateFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Все" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все</SelectItem>
-                  {getUniqueValues("registration_state").map((state) => (
-                    <SelectItem key={state} value={state}>
-                      {state}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="carpark-filter">Автопарк</Label>
-              <Select value={carparkFilter} onValueChange={setCarparkFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Все" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">Все</SelectItem>
-                  {getUniqueValues("carpark").map((carpark) => (
-                    <SelectItem key={carpark} value={carpark}>
-                      {carpark}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {hasActiveFilters && (
-            <div className="flex items-center gap-2">
-              <Filter className="h-4 w-4 text-blue-600" />
-              <span className="text-sm text-blue-800">
-                Показано {filteredUsers.length} из {users.length} пользователей
-              </span>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
       {/* Таблица пользователей */}
       <Card>
         <CardHeader>
@@ -350,9 +329,9 @@ export default function UsersPage() {
             <div className="text-center py-8">
               {hasActiveFilters ? (
                 <div>
-                  <Search className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
+                  <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">Пользователи не найдены</p>
-                  <p className="text-sm text-muted-foreground">Попробуйте изменить фильтры или поисковый запрос</p>
+                  <p className="text-sm text-muted-foreground">Попробуйте изменить фильтры</p>
                 </div>
               ) : (
                 <div>
@@ -379,13 +358,204 @@ export default function UsersPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Пользователь</TableHead>
-                    <TableHead>Телефон</TableHead>
-                    <TableHead>Telegram ID</TableHead>
-                    <TableHead>Автопарк</TableHead>
-                    <TableHead>Роль</TableHead>
-                    <TableHead>Верификация</TableHead>
-                    <TableHead>Состояние</TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        Пользователь
+                        <Popover open={openPopovers.name} onOpenChange={() => togglePopover("name")}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64" align="start">
+                            <div className="space-y-2">
+                              <Label>Поиск по имени</Label>
+                              <Input
+                                placeholder="Введите имя..."
+                                value={columnFilters.name}
+                                onChange={(e) => updateColumnFilter("name", e.target.value)}
+                              />
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        Телефон
+                        <Popover open={openPopovers.phone} onOpenChange={() => togglePopover("phone")}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64" align="start">
+                            <div className="space-y-2">
+                              <Label>Поиск по телефону</Label>
+                              <Input
+                                placeholder="Введите номер..."
+                                value={columnFilters.phone}
+                                onChange={(e) => updateColumnFilter("phone", e.target.value)}
+                              />
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        Telegram ID
+                        <Popover open={openPopovers.telegram_id} onOpenChange={() => togglePopover("telegram_id")}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64" align="start">
+                            <div className="space-y-2">
+                              <Label>Поиск по ID</Label>
+                              <Input
+                                placeholder="Введите ID..."
+                                value={columnFilters.telegram_id}
+                                onChange={(e) => updateColumnFilter("telegram_id", e.target.value)}
+                              />
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        Автопарк
+                        <Popover open={openPopovers.carpark} onOpenChange={() => togglePopover("carpark")}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64" align="start">
+                            <div className="space-y-2">
+                              <Label>Фильтр по автопарку</Label>
+                              <Select
+                                value={columnFilters.carpark}
+                                onValueChange={(value) => updateColumnFilter("carpark", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Выберите автопарк" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">Все</SelectItem>
+                                  {getUniqueValues("carpark").map((carpark) => (
+                                    <SelectItem key={carpark} value={carpark}>
+                                      {carpark}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        Роль
+                        <Popover open={openPopovers.role} onOpenChange={() => togglePopover("role")}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64" align="start">
+                            <div className="space-y-2">
+                              <Label>Фильтр по роли</Label>
+                              <Select
+                                value={columnFilters.role}
+                                onValueChange={(value) => updateColumnFilter("role", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Выберите роль" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">Все</SelectItem>
+                                  {getUniqueValues("role").map((role) => (
+                                    <SelectItem key={role} value={role}>
+                                      {role}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        Верификация
+                        <Popover open={openPopovers.verified} onOpenChange={() => togglePopover("verified")}>
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64" align="start">
+                            <div className="space-y-2">
+                              <Label>Фильтр по верификации</Label>
+                              <Select
+                                value={columnFilters.verified}
+                                onValueChange={(value) => updateColumnFilter("verified", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Все" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">Все</SelectItem>
+                                  <SelectItem value="verified">Верифицированные</SelectItem>
+                                  <SelectItem value="not_verified">Не верифицированные</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </TableHead>
+                    <TableHead>
+                      <div className="flex items-center gap-2">
+                        Состояние
+                        <Popover
+                          open={openPopovers.registration_state}
+                          onOpenChange={() => togglePopover("registration_state")}
+                        >
+                          <PopoverTrigger asChild>
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                              <ChevronDown className="h-3 w-3" />
+                            </Button>
+                          </PopoverTrigger>
+                          <PopoverContent className="w-64" align="start">
+                            <div className="space-y-2">
+                              <Label>Фильтр по состоянию</Label>
+                              <Select
+                                value={columnFilters.registration_state}
+                                onValueChange={(value) => updateColumnFilter("registration_state", value)}
+                              >
+                                <SelectTrigger>
+                                  <SelectValue placeholder="Все" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="all">Все</SelectItem>
+                                  {getUniqueValues("registration_state").map((state) => (
+                                    <SelectItem key={state} value={state}>
+                                      {translateRegistrationState(state)}
+                                    </SelectItem>
+                                  ))}
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </PopoverContent>
+                        </Popover>
+                      </div>
+                    </TableHead>
                     <TableHead>Регистрация</TableHead>
                     <TableHead>Действия</TableHead>
                   </TableRow>
@@ -418,7 +588,7 @@ export default function UsersPage() {
                         </Badge>
                       </TableCell>
                       <TableCell>
-                        <Badge variant="outline">{user.registration_state}</Badge>
+                        <Badge variant="outline">{translateRegistrationState(user.registration_state)}</Badge>
                       </TableCell>
                       <TableCell className="text-xs text-muted-foreground">{formatDate(user.created_at)}</TableCell>
                       <TableCell>
