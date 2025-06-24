@@ -36,6 +36,7 @@ import {
   ArrowUpDown,
   Navigation,
   X,
+  Search,
 } from "lucide-react"
 import { YandexMap } from "@/components/yandex-map"
 
@@ -207,6 +208,13 @@ export default function PointsPage() {
       ...prev,
       [field]: [],
     }))
+    setFilterSearches((prev) => ({
+      ...prev,
+      [field]: "",
+    }))
+  }
+
+  const clearSearchOnly = (field: keyof FilterSearches) => {
     setFilterSearches((prev) => ({
       ...prev,
       [field]: "",
@@ -402,6 +410,45 @@ export default function PointsPage() {
     return point.latitude && point.longitude
   }
 
+  // Компонент поля поиска с кнопкой очистки внутри
+  const SearchInput = ({ field, placeholder = "Поиск..." }: { field: keyof FilterSearches; placeholder?: string }) => {
+    const value = filterSearches[field]
+    const hasValue = value.length > 0
+
+    return (
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+        <Input
+          placeholder={placeholder}
+          value={value}
+          onChange={(e) => {
+            e.stopPropagation()
+            handleFilterSearchChange(field, e.target.value)
+          }}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+          }}
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
+          className="h-8 pl-9 pr-8"
+        />
+        {hasValue && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              clearSearchOnly(field)
+            }}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    )
+  }
+
   // Компонент заголовка колонки с сортировкой и фильтрацией
   const ColumnHeader = ({
     field,
@@ -453,34 +500,21 @@ export default function PointsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-sm">Фильтр</h4>
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  onClick={() => {
-                    clearFilter(field)
-                  }}
-                  className="h-6 px-2 text-xs"
-                >
-                  <X className="h-3 w-3 mr-1" />
-                  Сбросить
-                </Button>
+                {(columnFilters[field].length > 0 || filterSearches[field]) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      clearFilter(field)
+                    }}
+                    className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                  >
+                    Сбросить всё
+                  </Button>
+                )}
               </div>
 
-              <Input
-                placeholder="Поиск..."
-                value={filterSearches[field]}
-                onChange={(e) => {
-                  e.stopPropagation()
-                  handleFilterSearchChange(field, e.target.value)
-                }}
-                onKeyDown={(e) => {
-                  e.stopPropagation()
-                }}
-                onClick={(e) => {
-                  e.stopPropagation()
-                }}
-                className="h-8"
-              />
+              <SearchInput field={field} />
 
               <div className="max-h-48 overflow-y-auto space-y-2">
                 {getFilteredOptions().map((option) => (
