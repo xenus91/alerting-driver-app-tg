@@ -45,7 +45,21 @@ export default function FileUpload() {
         body: formData,
       })
 
-      const data = await response.json()
+      // Проверяем, что ответ не пустой
+      const text = await response.text()
+      console.log("Response text:", text)
+
+      if (!text) {
+        throw new Error("Сервер вернул пустой ответ")
+      }
+
+      let data
+      try {
+        data = JSON.parse(text)
+      } catch (parseError) {
+        console.error("JSON parse error:", parseError)
+        throw new Error("Ошибка парсинга ответа сервера")
+      }
 
       if (!response.ok) {
         throw new Error(data.error || "Ошибка при загрузке файла")

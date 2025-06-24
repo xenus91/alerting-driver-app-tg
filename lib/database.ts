@@ -14,7 +14,7 @@ export interface User {
   registration_state?: string
   temp_first_name?: string
   temp_last_name?: string
-  verified?: boolean // добавляем поле verified
+  verified?: boolean
   created_at: string
 }
 
@@ -30,7 +30,7 @@ export interface Trip {
 
 export interface Point {
   id: number
-  point_id: string // Краткий номер пункта
+  point_id: string
   point_name: string
   door_open_1?: string
   door_open_2?: string
@@ -43,12 +43,12 @@ export interface TripPoint {
   id: number
   trip_id: number
   point_id: number
-  point_type: "P" | "D" // P = погрузка, D = разгрузка
+  point_type: "P" | "D"
   point_num: number
-  trip_identifier?: string // Добавляем поле
+  trip_identifier?: string
   created_at: string
-  point_name?: string // Joined from points table
-  point_short_id?: string // Joined point_id from points table
+  point_name?: string
+  point_short_id?: string
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
@@ -182,9 +182,12 @@ export async function getUserByPhone(phone: string) {
   }
 }
 
-// Добавляем функцию для получения всех пользователей с проверкой верификации
 export async function getUsersWithVerificationByPhones(phones: string[]) {
   try {
+    if (phones.length === 0) {
+      return []
+    }
+
     const normalizedPhones = phones.map((phone) => (phone.startsWith("+") ? phone.slice(1) : phone))
 
     console.log(`Looking for users by phones:`, normalizedPhones)
@@ -308,7 +311,6 @@ export async function createTripPoint(
       `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}`,
     )
 
-    // Сначала найдем ID пункта по point_id
     const pointResult = await sql`
       SELECT id FROM points WHERE point_id = ${pointId}
     `
@@ -334,7 +336,6 @@ export async function createTripPoint(
   }
 }
 
-// Функции для работы с пунктами
 export async function getAllPoints() {
   try {
     const result = await sql`
@@ -564,7 +565,7 @@ export async function getTrips() {
 export async function getAllUsers() {
   try {
     const result = await sql`
-      SELECT id, telegram_id, phone, name, first_name, last_name, full_name, carpark, created_at, registration_state
+      SELECT id, telegram_id, phone, name, first_name, last_name, full_name, carpark, created_at, registration_state, verified
       FROM users
       ORDER BY created_at DESC
     `
@@ -665,7 +666,6 @@ export async function getTripDataGroupedByPhone(tripId: number) {
       console.log(`  ${index + 1}. Phone: ${row.phone}, Trip: ${row.trip_identifier}, Vehicle: ${row.vehicle_number}`)
     })
 
-    // Группируем данные по телефону и trip_identifier
     const groupedData = new Map()
 
     for (const row of result) {
@@ -687,7 +687,6 @@ export async function getTripDataGroupedByPhone(tripId: number) {
       if (row.trip_identifier && !phoneGroup.trips.has(row.trip_identifier)) {
         console.log(`DEBUG: Getting points for trip_identifier: ${row.trip_identifier}, phone: ${row.phone}`)
 
-        // ИСПРАВЛЕННЫЙ ЗАПРОС: Теперь фильтруем по trip_identifier
         const tripPointsResult = await sql`
           SELECT DISTINCT
             tp.point_type,
@@ -760,6 +759,20 @@ export async function getTripDataGroupedByPhone(tripId: number) {
     return groupedData
   } catch (error) {
     console.error("Error getting grouped trip data:", error)
+    throw error
+  }
+}
+
+export async function deleteTrip(tripId: number) {
+  try {
+    // Удаляем связанные записи в правильном порядке
+    await sql`DELETE FROM trip_messages WHERE trip_id = ${tripId}`
+    await sql`DELETE FROM trip_points WHERE trip_id = ${tripId}`
+    await sql`DELETE FROM trips WHERE id = ${tripId}`
+
+    console.log(`Trip ${tripId} and related records deleted`)
+  } catch (error) {
+    console.error("Error deleting trip:", error)
     throw error
   }
 }
