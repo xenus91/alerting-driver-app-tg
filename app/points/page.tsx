@@ -74,6 +74,15 @@ interface FilterSearches {
   created_at: string
 }
 
+interface PopoverStates {
+  point_id: boolean
+  point_name: boolean
+  adress: boolean
+  coordinates: boolean
+  time_windows: boolean
+  created_at: boolean
+}
+
 export default function PointsPage() {
   const [points, setPoints] = useState<Point[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -110,6 +119,16 @@ export default function PointsPage() {
     coordinates: "",
     time_windows: "",
     created_at: "",
+  })
+
+  // Состояние для контроля открытия popover'ов
+  const [popoverStates, setPopoverStates] = useState<PopoverStates>({
+    point_id: false,
+    point_name: false,
+    adress: false,
+    coordinates: false,
+    time_windows: false,
+    created_at: false,
   })
 
   const fetchPoints = async () => {
@@ -158,6 +177,14 @@ export default function PointsPage() {
       setSortField(field)
       setSortDirection("asc")
     }
+  }
+
+  // Функции управления popover'ами
+  const handlePopoverOpen = (field: keyof PopoverStates, open: boolean) => {
+    setPopoverStates((prev) => ({
+      ...prev,
+      [field]: open,
+    }))
   }
 
   // Функции фильтрации
@@ -387,6 +414,7 @@ export default function PointsPage() {
   }) => {
     const isActive = sortField === field
     const hasActiveFilter = columnFilters[field].length > 0
+    const isPopoverOpen = popoverStates[field]
 
     const getSortIcon = () => {
       if (!isActive) return <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />
@@ -411,10 +439,12 @@ export default function PointsPage() {
           {getSortIcon()}
         </button>
 
-        <Popover>
+        <Popover open={isPopoverOpen} onOpenChange={(open) => handlePopoverOpen(field, open)}>
           <PopoverTrigger asChild>
             <button
-              className={`ml-2 p-1 rounded hover:bg-muted ${hasActiveFilter ? "text-blue-600" : "opacity-0 group-hover:opacity-100"}`}
+              className={`ml-2 p-1 rounded hover:bg-muted ${
+                hasActiveFilter ? "text-blue-600" : "opacity-0 group-hover:opacity-100"
+              }`}
             >
               <Filter className="h-3 w-3" />
             </button>
@@ -423,7 +453,14 @@ export default function PointsPage() {
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h4 className="font-medium text-sm">Фильтр</h4>
-                <Button variant="ghost" size="sm" onClick={() => clearFilter(field)} className="h-6 px-2 text-xs">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    clearFilter(field)
+                  }}
+                  className="h-6 px-2 text-xs"
+                >
                   <X className="h-3 w-3 mr-1" />
                   Сбросить
                 </Button>
@@ -432,7 +469,16 @@ export default function PointsPage() {
               <Input
                 placeholder="Поиск..."
                 value={filterSearches[field]}
-                onChange={(e) => handleFilterSearchChange(field, e.target.value)}
+                onChange={(e) => {
+                  e.stopPropagation()
+                  handleFilterSearchChange(field, e.target.value)
+                }}
+                onKeyDown={(e) => {
+                  e.stopPropagation()
+                }}
+                onClick={(e) => {
+                  e.stopPropagation()
+                }}
                 className="h-8"
               />
 
@@ -442,7 +488,9 @@ export default function PointsPage() {
                     <Checkbox
                       id={`${field}-${option}`}
                       checked={columnFilters[field].includes(option)}
-                      onCheckedChange={(checked) => handleFilterChange(field, option, checked as boolean)}
+                      onCheckedChange={(checked) => {
+                        handleFilterChange(field, option, checked as boolean)
+                      }}
                     />
                     <label
                       htmlFor={`${field}-${option}`}
