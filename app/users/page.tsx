@@ -217,7 +217,7 @@ export default function UsersPage() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <Badge variant="outline">Активен</Badge>
+                    <Badge variant="outline">{user.registration_state}</Badge>
                     <div className="text-xs text-muted-foreground mt-1">Регистрация: {formatDate(user.created_at)}</div>
                   </div>
                 </div>
