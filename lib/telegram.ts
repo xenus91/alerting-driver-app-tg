@@ -67,15 +67,29 @@ export async function sendMessage(chatId: number, text: string) {
 }
 
 // Функция для построения URL маршрута в Яндекс.Картах
-function buildRouteUrl(points: Array<{ latitude?: number; longitude?: number }>) {
-  const validPoints = points.filter((p) => p.latitude && p.longitude)
+function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: number | string }>) {
+  const validPoints = points.filter((p) => {
+    const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+    const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+    return lat && lng && !isNaN(lat) && !isNaN(lng)
+  })
 
   if (validPoints.length < 2) {
+    console.log(`Not enough valid points for route: ${validPoints.length}`)
     return null // Нужно минимум 2 точки для маршрута
   }
 
-  const coordinates = validPoints.map((p) => `${p.latitude},${p.longitude}`).join("~")
-  return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
+  const coordinates = validPoints
+    .map((p) => {
+      const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+      const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+      return `${lat},${lng}`
+    })
+    .join("~")
+
+  const url = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
+  console.log(`Built route URL: ${url}`)
+  return url
 }
 
 export async function sendTripMessageWithButtons(
@@ -91,16 +105,16 @@ export async function sendTripMessageWithButtons(
     door_open_1?: string
     door_open_2?: string
     door_open_3?: string
-    latitude?: number
-    longitude?: number
+    latitude?: number | string
+    longitude?: number | string
   }>,
   unloadingPoints: Array<{
     point_name: string
     door_open_1?: string
     door_open_2?: string
     door_open_3?: string
-    latitude?: number
-    longitude?: number
+    latitude?: number | string
+    longitude?: number | string
   }>,
   firstName: string,
   messageId: number,
@@ -204,8 +218,8 @@ export async function sendMultipleTripMessageWithButtons(
       door_open_1?: string
       door_open_2?: string
       door_open_3?: string
-      latitude?: number
-      longitude?: number
+      latitude?: number | string
+      longitude?: number | string
     }>
     unloading_points: Array<{
       point_id: string
@@ -213,14 +227,17 @@ export async function sendMultipleTripMessageWithButtons(
       door_open_1?: string
       door_open_2?: string
       door_open_3?: string
-      latitude?: number
-      longitude?: number
+      latitude?: number | string
+      longitude?: number | string
     }>
   }>,
   firstName: string,
   messageId: number,
 ) {
   try {
+    console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`)
+    console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}`)
+
     // Генерируем красивое сообщение
     let message = `🌅 <b>Доброго времени суток!</b>\n\n`
     message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
@@ -238,6 +255,8 @@ export async function sendMultipleTripMessageWithButtons(
 
     // Перебираем все рейсы
     sortedTrips.forEach((trip, tripIndex) => {
+      console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
+
       message += `<b>Рейс ${tripIndex + 1}:</b>\n`
       message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
       message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
@@ -312,10 +331,18 @@ export async function sendMultipleTripMessageWithButtons(
 
       // Строим маршрут для этого рейса: сначала все точки погрузки, потом все точки разгрузки
       const routePoints = [...trip.loading_points, ...trip.unloading_points]
+      console.log(
+        `Route points for trip ${trip.trip_identifier}:`,
+        routePoints.map((p) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
+      )
+
       const routeUrl = buildRouteUrl(routePoints)
 
       if (routeUrl) {
         message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
+        console.log(`Added route URL for trip ${trip.trip_identifier}`)
+      } else {
+        console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
       }
 
       // Добавляем разделитель между рейсами (кроме последнего)
@@ -325,6 +352,9 @@ export async function sendMultipleTripMessageWithButtons(
     })
 
     message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`
+
+    console.log(`Final message length: ${message.length}`)
+    console.log(`Message preview: ${message.substring(0, 200)}...`)
 
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
@@ -358,6 +388,7 @@ export async function sendMultipleTripMessageWithButtons(
       throw new Error(data.description || "Failed to send multiple trip message with buttons")
     }
 
+    console.log(`Message sent successfully, message_id: ${data.result.message_id}`)
     return data.result
   } catch (error) {
     console.error("Error sending multiple trip message with buttons:", error)

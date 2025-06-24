@@ -39,6 +39,19 @@ export async function POST(request: NextRequest) {
       pointsMap.set(point.point_id, point)
     }
 
+    // Группируем рейсы по телефонам
+    const phoneGroups = new Map<string, any[]>()
+
+    for (const tripDataItem of tripData) {
+      const phone = tripDataItem.phone
+      if (!phoneGroups.has(phone)) {
+        phoneGroups.set(phone, [])
+      }
+      phoneGroups.get(phone)!.push(tripDataItem)
+    }
+
+    console.log(`Grouped trips into ${phoneGroups.size} phone groups`)
+
     const results = {
       total: 0,
       sent: 0,
@@ -46,20 +59,20 @@ export async function POST(request: NextRequest) {
       details: [] as any[],
     }
 
-    // Обрабатываем каждый рейс
-    for (const tripDataItem of tripData) {
+    // Обрабатываем каждую группу телефонов
+    for (const [phone, phoneTrips] of phoneGroups) {
       try {
         results.total++
 
-        console.log(`Processing trip for phone: ${tripDataItem.phone}`)
+        console.log(`Processing ${phoneTrips.length} trips for phone: ${phone}`)
 
         // Ищем пользователя по номеру телефона
-        const user = await getUserByPhone(tripDataItem.phone)
+        const user = await getUserByPhone(phone)
         if (!user) {
-          console.log(`User not found for phone: ${tripDataItem.phone}`)
+          console.log(`User not found for phone: ${phone}`)
           results.errors++
           results.details.push({
-            phone: tripDataItem.phone,
+            phone: phone,
             status: "error",
             error: "Пользователь не найден",
           })
@@ -68,162 +81,132 @@ export async function POST(request: NextRequest) {
 
         // Проверяем верификацию пользователя
         if (user.verified === false) {
-          console.log(`User not verified for phone: ${tripDataItem.phone}`)
+          console.log(`User not verified for phone: ${phone}`)
           results.errors++
           results.details.push({
-            phone: tripDataItem.phone,
+            phone: phone,
             status: "error",
             error: "Пользователь не верифицирован",
           })
           continue
         }
 
-        console.log(`Processing trip for user: ${user.first_name || user.name}`)
+        console.log(`Processing trips for user: ${user.first_name || user.name}`)
 
-        // Создаем пункты для этого рейса
-        for (const loadingPoint of tripDataItem.loading_points || []) {
-          const point = pointsMap.get(loadingPoint.point_id)
-          if (!point) {
-            console.warn(`Point not found: ${loadingPoint.point_id}`)
-            continue
-          }
-
-          await createTripPoint(
-            mainTrip.id,
-            loadingPoint.point_id,
-            "P",
-            loadingPoint.point_num,
-            tripDataItem.trip_identifier,
-          )
-          console.log(`Created loading point: ${loadingPoint.point_id}`)
-        }
-
-        for (const unloadingPoint of tripDataItem.unloading_points || []) {
-          const point = pointsMap.get(unloadingPoint.point_id)
-          if (!point) {
-            console.warn(`Point not found: ${unloadingPoint.point_id}`)
-            continue
-          }
-
-          await createTripPoint(
-            mainTrip.id,
-            unloadingPoint.point_id,
-            "D",
-            unloadingPoint.point_num,
-            tripDataItem.trip_identifier,
-          )
-          console.log(`Created unloading point: ${unloadingPoint.point_id}`)
-        }
-
-        // Создаем сообщение для этого рейса
-        const message = await createTripMessage(
-          mainTrip.id,
-          tripDataItem.phone,
-          "Автоматически сгенерированное сообщение о рейсе",
-          user.telegram_id,
-          {
-            trip_identifier: tripDataItem.trip_identifier,
-            vehicle_number: tripDataItem.vehicle_number,
-            planned_loading_time: tripDataItem.planned_loading_time,
-            driver_comment: tripDataItem.driver_comment,
-          },
-        )
-
-        console.log(`Created trip message with ID: ${message.id}`)
-
-        // Теперь отправляем сообщение через Telegram
-        try {
-          // Функция для форматирования времени БЕЗ смещения часового пояса
-          function formatDateTime(dateTimeString: string): string {
-            try {
-              if (!dateTimeString) return "Не указано"
-
-              const date = new Date(dateTimeString)
-              if (isNaN(date.getTime())) return dateTimeString
-
-              const day = date.getDate()
-              const monthNames = [
-                "января",
-                "февраля",
-                "марта",
-                "апреля",
-                "мая",
-                "июня",
-                "июля",
-                "августа",
-                "сентября",
-                "октября",
-                "ноября",
-                "декабря",
-              ]
-              const month = monthNames[date.getMonth()]
-
-              const hours = date.getHours().toString().padStart(2, "0")
-              const minutes = date.getMinutes().toString().padStart(2, "0")
-              const time = `${hours}:${minutes}`
-
-              return `${day} ${month}, ${time}`
-            } catch (error) {
-              console.error("Error formatting date:", error)
-              return dateTimeString
-            }
-          }
-
-          // Получаем данные о пунктах для этого рейса
-          const loadingPointsData = []
-          const unloadingPointsData = []
-
+        // Создаем записи в БД для всех рейсов этого пользователя
+        for (const tripDataItem of phoneTrips) {
+          // Создаем пункты для этого рейса
           for (const loadingPoint of tripDataItem.loading_points || []) {
             const point = pointsMap.get(loadingPoint.point_id)
-            if (point) {
-              loadingPointsData.push({
-                point_id: point.point_id,
-                point_name: point.point_name,
-                point_num: loadingPoint.point_num,
-                door_open_1: point.door_open_1,
-                door_open_2: point.door_open_2,
-                door_open_3: point.door_open_3,
-              })
+            if (!point) {
+              console.warn(`Point not found: ${loadingPoint.point_id}`)
+              continue
             }
+
+            await createTripPoint(
+              mainTrip.id,
+              loadingPoint.point_id,
+              "P",
+              loadingPoint.point_num,
+              tripDataItem.trip_identifier,
+            )
+            console.log(`Created loading point: ${loadingPoint.point_id}`)
           }
 
           for (const unloadingPoint of tripDataItem.unloading_points || []) {
             const point = pointsMap.get(unloadingPoint.point_id)
-            if (point) {
-              unloadingPointsData.push({
-                point_id: point.point_id,
-                point_name: point.point_name,
-                point_num: unloadingPoint.point_num,
-                door_open_1: point.door_open_1,
-                door_open_2: point.door_open_2,
-                door_open_3: point.door_open_3,
-              })
+            if (!point) {
+              console.warn(`Point not found: ${unloadingPoint.point_id}`)
+              continue
             }
+
+            await createTripPoint(
+              mainTrip.id,
+              unloadingPoint.point_id,
+              "D",
+              unloadingPoint.point_num,
+              tripDataItem.trip_identifier,
+            )
+            console.log(`Created unloading point: ${unloadingPoint.point_id}`)
           }
 
-          // Формируем данные для отправки
-          const tripForSending = {
-            trip_identifier: tripDataItem.trip_identifier,
-            vehicle_number: tripDataItem.vehicle_number,
-            planned_loading_time: tripDataItem.planned_loading_time,
-            driver_comment: tripDataItem.driver_comment,
-            loading_points: loadingPointsData,
-            unloading_points: unloadingPointsData,
-          }
+          // Создаем сообщение для этого рейса
+          await createTripMessage(
+            mainTrip.id,
+            tripDataItem.phone,
+            "Автоматически сгенерированное сообщение о рейсе",
+            user.telegram_id,
+            {
+              trip_identifier: tripDataItem.trip_identifier,
+              vehicle_number: tripDataItem.vehicle_number,
+              planned_loading_time: tripDataItem.planned_loading_time,
+              driver_comment: tripDataItem.driver_comment,
+            },
+          )
+        }
+
+        // Теперь отправляем ОДНО сообщение со всеми рейсами для этого пользователя
+        try {
+          // Подготавливаем данные для отправки
+          const tripsForSending = phoneTrips.map((tripDataItem) => {
+            const loadingPointsData = []
+            const unloadingPointsData = []
+
+            for (const loadingPoint of tripDataItem.loading_points || []) {
+              const point = pointsMap.get(loadingPoint.point_id)
+              if (point) {
+                loadingPointsData.push({
+                  point_id: point.point_id,
+                  point_name: point.point_name,
+                  point_num: loadingPoint.point_num,
+                  door_open_1: point.door_open_1,
+                  door_open_2: point.door_open_2,
+                  door_open_3: point.door_open_3,
+                  latitude: point.latitude ? Number.parseFloat(point.latitude.toString()) : undefined,
+                  longitude: point.longitude ? Number.parseFloat(point.longitude.toString()) : undefined,
+                })
+              }
+            }
+
+            for (const unloadingPoint of tripDataItem.unloading_points || []) {
+              const point = pointsMap.get(unloadingPoint.point_id)
+              if (point) {
+                unloadingPointsData.push({
+                  point_id: point.point_id,
+                  point_name: point.point_name,
+                  point_num: unloadingPoint.point_num,
+                  door_open_1: point.door_open_1,
+                  door_open_2: point.door_open_2,
+                  door_open_3: point.door_open_3,
+                  latitude: point.latitude ? Number.parseFloat(point.latitude.toString()) : undefined,
+                  longitude: point.longitude ? Number.parseFloat(point.longitude.toString()) : undefined,
+                })
+              }
+            }
+
+            return {
+              trip_identifier: tripDataItem.trip_identifier,
+              vehicle_number: tripDataItem.vehicle_number,
+              planned_loading_time: tripDataItem.planned_loading_time,
+              driver_comment: tripDataItem.driver_comment,
+              loading_points: loadingPointsData,
+              unloading_points: unloadingPointsData,
+            }
+          })
 
           const firstName = user.first_name || user.full_name || "Водитель"
 
-          // Отправляем сообщение в Telegram
+          // Отправляем ОДНО сообщение со всеми рейсами
           const telegramResult = await sendMultipleTripMessageWithButtons(
             user.telegram_id,
-            [tripForSending],
+            tripsForSending,
             firstName,
-            message.id,
+            mainTrip.id, // Используем ID основного trip как messageId
           )
 
           console.log(`Telegram API result:`, telegramResult)
 
-          // Обновляем статус сообщения на "sent"
+          // Обновляем статус ВСЕХ сообщений для этого пользователя на "sent"
           const { neon } = await import("@neondatabase/serverless")
           const sql = neon(process.env.DATABASE_URL!)
 
@@ -231,23 +214,24 @@ export async function POST(request: NextRequest) {
             UPDATE trip_messages 
             SET status = 'sent', 
                 sent_at = ${new Date().toISOString()}
-            WHERE id = ${message.id}
+            WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
           `
 
-          console.log(`Updated message status to 'sent' for message ID: ${message.id}`)
+          console.log(`Updated message status to 'sent' for phone: ${phone}`)
 
           results.sent++
           results.details.push({
-            phone: tripDataItem.phone,
+            phone: phone,
             status: "sent",
             user_name: firstName,
+            trips_count: phoneTrips.length,
             telegram_message_id: telegramResult.message_id,
           })
 
-          console.log(`Message sent successfully to ${tripDataItem.phone}`)
+          console.log(`Messages sent successfully to ${phone}`)
         } catch (sendError) {
           const errorMessage = sendError instanceof Error ? sendError.message : "Ошибка отправки"
-          console.error(`Failed to send message to ${tripDataItem.phone}:`, sendError)
+          console.error(`Failed to send message to ${phone}:`, sendError)
 
           // Обновляем статус на "error" при ошибке
           try {
@@ -258,7 +242,7 @@ export async function POST(request: NextRequest) {
               UPDATE trip_messages 
               SET status = 'error', 
                   error_message = ${errorMessage}
-              WHERE id = ${message.id}
+              WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
             `
           } catch (updateError) {
             console.error("Error updating message status to error:", updateError)
@@ -266,16 +250,16 @@ export async function POST(request: NextRequest) {
 
           results.errors++
           results.details.push({
-            phone: tripDataItem.phone,
+            phone: phone,
             status: "error",
             error: errorMessage,
           })
         }
       } catch (error) {
-        console.error(`Error processing trip for phone ${tripDataItem.phone}:`, error)
+        console.error(`Error processing trips for phone ${phone}:`, error)
         results.errors++
         results.details.push({
-          phone: tripDataItem.phone,
+          phone: phone,
           status: "error",
           error: error instanceof Error ? error.message : "Unknown error",
         })
