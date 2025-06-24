@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
-import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from 'lucide-react'
+import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from "lucide-react"
 
 interface UploadResult {
   success: boolean
@@ -58,21 +58,38 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
       console.error("No trip data available for sending")
       setSendResult({
         success: false,
-        error: "Нет данных для отправки"
+        error: "Нет данных для отправки",
       })
       return
     }
 
     console.log("Sending trip data:", result.tripData)
-    
+
     setIsSending(true)
     try {
-      const response = await onSendMessages(result.tripData)
-      setSendResult(response)
+      // Отправляем POST запрос с правильной структурой данных
+      const response = await fetch("/api/send-messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          tripData: result.tripData, // Используем tripData, а не campaignId
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json()
+        throw new Error(errorData.error || "Ошибка сервера")
+      }
+
+      const responseData = await response.json()
+      setSendResult(responseData)
     } catch (error) {
+      console.error("Error sending messages:", error)
       setSendResult({
         success: false,
-        error: "Ошибка при отправке сообщений",
+        error: error instanceof Error ? error.message : "Ошибка при отправке сообщений",
       })
     } finally {
       setIsSending(false)
