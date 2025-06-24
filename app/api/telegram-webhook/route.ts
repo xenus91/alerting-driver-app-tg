@@ -463,13 +463,32 @@ export async function POST(request: NextRequest) {
         console.log(`Processing confirmation for message ${messageId}`)
 
         try {
-          await sql`
+          // Получаем информацию о сообщении и пользователе
+          const messageResult = await sql`
+            SELECT tm.phone, tm.trip_id, u.telegram_id
+            FROM trip_messages tm
+            JOIN users u ON tm.phone = u.phone
+            WHERE tm.id = ${messageId}
+            LIMIT 1
+          `
+
+          if (messageResult.length === 0) {
+            throw new Error("Message not found")
+          }
+
+          const { phone, trip_id } = messageResult[0]
+
+          // Обновляем ВСЕ сообщения этого водителя в этой рассылке
+          const updateResult = await sql`
             UPDATE trip_messages 
             SET response_status = 'confirmed', 
                 response_comment = NULL,
                 response_at = ${new Date().toISOString()}
-            WHERE id = ${messageId}
+            WHERE phone = ${phone} AND trip_id = ${trip_id}
+            RETURNING id
           `
+
+          console.log(`Updated ${updateResult.length} messages for phone ${phone}`)
 
           // Отвечаем на callback query (игнорируем ошибки старых запросов)
           await answerCallbackQuery(callbackQuery.id, "Спасибо! Рейс подтвержден!")
@@ -487,6 +506,7 @@ export async function POST(request: NextRequest) {
             ok: true,
             status: "confirmed_processed",
             message_id: messageId,
+            updated_messages: updateResult.length,
             timestamp: timestamp,
           })
         } catch (error) {
@@ -583,14 +603,31 @@ export async function POST(request: NextRequest) {
         console.log(`Processing rejection reason: "${messageText}"`)
 
         try {
-          // Обновляем сообщение с причиной отклонения
-          await sql`
+          // Получаем информацию о сообщении
+          const messageResult = await sql`
+            SELECT tm.phone, tm.trip_id
+            FROM trip_messages tm
+            WHERE tm.id = ${pendingAction.related_message_id}
+            LIMIT 1
+          `
+
+          if (messageResult.length === 0) {
+            throw new Error("Message not found")
+          }
+
+          const { phone, trip_id } = messageResult[0]
+
+          // Обновляем ВСЕ сообщения этого водителя в этой рассылке
+          const updateResult = await sql`
             UPDATE trip_messages 
             SET response_status = 'rejected', 
                 response_comment = ${messageText},
                 response_at = ${new Date().toISOString()}
-            WHERE id = ${pendingAction.related_message_id}
+            WHERE phone = ${phone} AND trip_id = ${trip_id}
+            RETURNING id
           `
+
+          console.log(`Updated ${updateResult.length} messages for phone ${phone}`)
 
           // Удаляем pending action
           await deleteUserPendingAction(existingUser.id)
@@ -603,6 +640,7 @@ export async function POST(request: NextRequest) {
             ok: true,
             status: "rejection_reason_processed",
             message_id: pendingAction.related_message_id,
+            updated_messages: updateResult.length,
             reason: messageText,
             timestamp: timestamp,
           })

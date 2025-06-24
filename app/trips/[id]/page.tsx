@@ -201,17 +201,29 @@ export default function TripDetailPage() {
   const handleResendForDriver = async (phone: string) => {
     setResendingPhone(phone)
     try {
-      // Отправляем запрос на повторную отправку для всех сообщений водителя
+      // Получаем все рейсы водителя
       const driverMessages = messages.filter((m) => m.phone === phone)
 
-      for (const message of driverMessages) {
-        const response = await fetch(`/api/trips/messages/${message.id}/resend-telegram`, {
-          method: "POST",
-        })
-        const data = await response.json()
-        if (!data.success) {
-          throw new Error(`Failed to resend message ${message.id}`)
-        }
+      if (driverMessages.length === 0) {
+        throw new Error("No messages found for driver")
+      }
+
+      // Отправляем запрос на повторную отправку объединенного сообщения
+      // Используем ID первого сообщения как основное
+      const response = await fetch(`/api/trips/messages/${driverMessages[0].id}/resend-combined`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone: phone,
+          messageIds: driverMessages.map((m) => m.id),
+        }),
+      })
+
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error || "Failed to resend combined message")
       }
 
       await fetchMessages()
