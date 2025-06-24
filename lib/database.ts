@@ -35,6 +35,8 @@ export interface Point {
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
+  latitude?: number
+  longitude?: number
   created_at: string
   updated_at: string
 }
@@ -52,6 +54,8 @@ export interface TripPoint {
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
+  latitude?: number
+  longitude?: number
 }
 
 export interface TripMessage {
@@ -355,11 +359,13 @@ export async function createPoint(
   doorOpen1?: string,
   doorOpen2?: string,
   doorOpen3?: string,
+  latitude?: number,
+  longitude?: number,
 ) {
   try {
     const result = await sql`
-      INSERT INTO points (point_id, point_name, door_open_1, door_open_2, door_open_3)
-      VALUES (${pointId}, ${pointName}, ${doorOpen1 || null}, ${doorOpen2 || null}, ${doorOpen3 || null})
+      INSERT INTO points (point_id, point_name, door_open_1, door_open_2, door_open_3, latitude, longitude)
+      VALUES (${pointId}, ${pointName}, ${doorOpen1 || null}, ${doorOpen2 || null}, ${doorOpen3 || null}, ${latitude || null}, ${longitude || null})
       RETURNING *
     `
     return result[0] as Point
@@ -376,6 +382,8 @@ export async function updatePoint(
   doorOpen1?: string,
   doorOpen2?: string,
   doorOpen3?: string,
+  latitude?: number,
+  longitude?: number,
 ) {
   try {
     const result = await sql`
@@ -385,6 +393,8 @@ export async function updatePoint(
           door_open_1 = ${doorOpen1 || null},
           door_open_2 = ${doorOpen2 || null},
           door_open_3 = ${doorOpen3 || null},
+          latitude = ${latitude || null},
+          longitude = ${longitude || null},
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id}
       RETURNING *
@@ -411,7 +421,7 @@ export async function deletePoint(id: number) {
 export async function getTripPoints(tripId: number) {
   try {
     const result = await sql`
-      SELECT tp.*, p.point_name, p.point_id as point_short_id, p.door_open_1, p.door_open_2, p.door_open_3
+      SELECT tp.*, p.point_name, p.point_id as point_short_id, p.door_open_1, p.door_open_2, p.door_open_3, p.latitude, p.longitude
       FROM trip_points tp
       JOIN points p ON tp.point_id = p.id
       WHERE tp.trip_id = ${tripId}
@@ -625,6 +635,8 @@ export async function getTripDataForMessages(tripId: number) {
         p.door_open_1,
         p.door_open_2,
         p.door_open_3,
+        p.latitude,
+        p.longitude,
         u.first_name,
         u.full_name
       FROM trip_messages tm
@@ -695,7 +707,9 @@ export async function getTripDataGroupedByPhone(tripId: number) {
             p.point_name,
             p.door_open_1,
             p.door_open_2,
-            p.door_open_3
+            p.door_open_3,
+            p.latitude,
+            p.longitude
           FROM trip_points tp
           JOIN points p ON tp.point_id = p.id
           WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${row.trip_identifier}
@@ -720,6 +734,8 @@ export async function getTripDataGroupedByPhone(tripId: number) {
             door_open_1: point.door_open_1,
             door_open_2: point.door_open_2,
             door_open_3: point.door_open_3,
+            latitude: point.latitude,
+            longitude: point.longitude,
           }
 
           if (point.point_type === "P") {
@@ -774,5 +790,46 @@ export async function deleteTrip(tripId: number) {
   } catch (error) {
     console.error("Error deleting trip:", error)
     throw error
+  }
+}
+
+// Функция для построения маршрута Яндекс.Карт
+export function buildYandexMapsRoute(
+  loadingPoints: Array<{ latitude?: number; longitude?: number; point_num: number }>,
+  unloadingPoints: Array<{ latitude?: number; longitude?: number; point_num: number }>,
+): string | null {
+  try {
+    // Собираем все координаты в правильном порядке
+    const coordinates: string[] = []
+
+    // Сначала точки погрузки по возрастанию point_num
+    const sortedLoadingPoints = [...loadingPoints]
+      .filter((point) => point.latitude && point.longitude)
+      .sort((a, b) => a.point_num - b.point_num)
+
+    for (const point of sortedLoadingPoints) {
+      coordinates.push(`${point.latitude},${point.longitude}`)
+    }
+
+    // Затем точки разгрузки по возрастанию point_num
+    const sortedUnloadingPoints = [...unloadingPoints]
+      .filter((point) => point.latitude && point.longitude)
+      .sort((a, b) => a.point_num - b.point_num)
+
+    for (const point of sortedUnloadingPoints) {
+      coordinates.push(`${point.latitude},${point.longitude}`)
+    }
+
+    // Если координат меньше 2, маршрут построить нельзя
+    if (coordinates.length < 2) {
+      return null
+    }
+
+    // Строим URL для Яндекс.Карт
+    const routeText = coordinates.join("~")
+    return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${routeText}&utm_source=ymaps_app_redirect`
+  } catch (error) {
+    console.error("Error building Yandex Maps route:", error)
+    return null
   }
 }

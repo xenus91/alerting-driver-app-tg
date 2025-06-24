@@ -167,6 +167,47 @@ export async function sendTripMessageWithButtons(
   }
 }
 
+// Функция для построения маршрута Яндекс.Карт
+function buildYandexMapsRoute(
+  loadingPoints: Array<{ latitude?: number; longitude?: number; point_num: number }>,
+  unloadingPoints: Array<{ latitude?: number; longitude?: number; point_num: number }>,
+): string | null {
+  try {
+    // Собираем все координаты в правильном порядке
+    const coordinates: string[] = []
+
+    // Сначала точки погрузки по возрастанию point_num
+    const sortedLoadingPoints = [...loadingPoints]
+      .filter((point) => point.latitude && point.longitude)
+      .sort((a, b) => a.point_num - b.point_num)
+
+    for (const point of sortedLoadingPoints) {
+      coordinates.push(`${point.latitude},${point.longitude}`)
+    }
+
+    // Затем точки разгрузки по возрастанию point_num
+    const sortedUnloadingPoints = [...unloadingPoints]
+      .filter((point) => point.latitude && point.longitude)
+      .sort((a, b) => a.point_num - b.point_num)
+
+    for (const point of sortedUnloadingPoints) {
+      coordinates.push(`${point.latitude},${point.longitude}`)
+    }
+
+    // Если координат меньше 2, маршрут построить нельзя
+    if (coordinates.length < 2) {
+      return null
+    }
+
+    // Строим URL для Яндекс.Карт
+    const routeText = coordinates.join("~")
+    return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${routeText}&utm_source=ymaps_app_redirect`
+  } catch (error) {
+    console.error("Error building Yandex Maps route:", error)
+    return null
+  }
+}
+
 export async function sendMultipleTripMessageWithButtons(
   chatId: number,
   trips: Array<{
@@ -177,16 +218,22 @@ export async function sendMultipleTripMessageWithButtons(
     loading_points: Array<{
       point_id: string
       point_name: string
+      point_num: number
       door_open_1?: string
       door_open_2?: string
       door_open_3?: string
+      latitude?: number
+      longitude?: number
     }>
     unloading_points: Array<{
       point_id: string
       point_name: string
+      point_num: number
       door_open_1?: string
       door_open_2?: string
       door_open_3?: string
+      latitude?: number
+      longitude?: number
     }>
   }>,
   firstName: string,
@@ -275,6 +322,12 @@ export async function sendMultipleTripMessageWithButtons(
           }
         })
         message += `\n`
+      }
+
+      // Строим маршрут для этого рейса
+      const routeUrl = buildYandexMapsRoute(trip.loading_points, trip.unloading_points)
+      if (routeUrl) {
+        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
       }
 
       // Комментарий
