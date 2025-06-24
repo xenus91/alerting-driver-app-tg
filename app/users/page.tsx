@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Dialog,
@@ -18,7 +18,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { RefreshCw, Users, Phone, Calendar, ExternalLink, Edit, Save, X, ChevronDown } from "lucide-react"
+import { RefreshCw, Users, Phone, Calendar, ExternalLink, Edit, Save, X, ChevronDown, Check } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface UserInterface {
   id: number
@@ -116,24 +117,22 @@ export default function UsersPage() {
     }
 
     // Фильтр по автопарку
-    if (columnFilters.carpark) {
-      filtered = filtered.filter((user) =>
-        (user.carpark || "").toLowerCase().includes(columnFilters.carpark.toLowerCase()),
-      )
+    if (columnFilters.carpark && columnFilters.carpark !== "all") {
+      filtered = filtered.filter((user) => user.carpark === columnFilters.carpark)
     }
 
     // Фильтр по роли
-    if (columnFilters.role) {
-      filtered = filtered.filter((user) => (user.role || "").toLowerCase().includes(columnFilters.role.toLowerCase()))
+    if (columnFilters.role && columnFilters.role !== "all") {
+      filtered = filtered.filter((user) => user.role === columnFilters.role)
     }
 
     // Фильтр по верификации
-    if (columnFilters.verified) {
+    if (columnFilters.verified && columnFilters.verified !== "all") {
       filtered = filtered.filter((user) => (columnFilters.verified === "verified" ? user.verified : !user.verified))
     }
 
     // Фильтр по состоянию регистрации
-    if (columnFilters.registration_state) {
+    if (columnFilters.registration_state && columnFilters.registration_state !== "all") {
       filtered = filtered.filter((user) => user.registration_state === columnFilters.registration_state)
     }
 
@@ -153,14 +152,10 @@ export default function UsersPage() {
 
   const translateRegistrationState = (state: string) => {
     const translations: Record<string, string> = {
-      pending: "Ожидает",
+      awaiting_first_name: "Ожидание имени и отчества",
+      awaiting_last_name: "Ожидание фамилии",
+      awaiting_carpark: "Ожидание автохозяйства",
       completed: "Завершена",
-      verified: "Верифицирован",
-      active: "Активен",
-      inactive: "Неактивен",
-      blocked: "Заблокирован",
-      new: "Новый",
-      registered: "Зарегистрирован",
     }
     return translations[state] || state
   }
@@ -224,10 +219,72 @@ export default function UsersPage() {
     })
   }
 
-  const hasActiveFilters = Object.values(columnFilters).some((filter) => filter !== "")
+  const hasActiveFilters = Object.values(columnFilters).some((filter) => filter !== "" && filter !== "all")
 
   const togglePopover = (column: string) => {
     setOpenPopovers((prev) => ({ ...prev, [column]: !prev[column] }))
+  }
+
+  // Компонент для фильтра с поиском
+  const FilterCombobox = ({
+    column,
+    placeholder,
+    options,
+    value,
+    onValueChange,
+    getDisplayValue,
+  }: {
+    column: string
+    placeholder: string
+    options: string[]
+    value: string
+    onValueChange: (value: string) => void
+    getDisplayValue?: (value: string) => string
+  }) => {
+    return (
+      <Popover open={openPopovers[column]} onOpenChange={() => togglePopover(column)}>
+        <PopoverTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+            <ChevronDown className="h-3 w-3" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-64 p-0" align="start">
+          <Command>
+            <CommandInput placeholder={`Поиск ${placeholder.toLowerCase()}...`} />
+            <CommandList>
+              <CommandEmpty>Ничего не найдено</CommandEmpty>
+              <CommandGroup>
+                <CommandItem
+                  value="all"
+                  onSelect={() => {
+                    onValueChange("all")
+                    togglePopover(column)
+                  }}
+                >
+                  <Check
+                    className={cn("mr-2 h-4 w-4", value === "all" || value === "" ? "opacity-100" : "opacity-0")}
+                  />
+                  Все
+                </CommandItem>
+                {options.map((option) => (
+                  <CommandItem
+                    key={option}
+                    value={option}
+                    onSelect={() => {
+                      onValueChange(option)
+                      togglePopover(column)
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", value === option ? "opacity-100" : "opacity-0")} />
+                    {getDisplayValue ? getDisplayValue(option) : option}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    )
   }
 
   return (
@@ -238,12 +295,6 @@ export default function UsersPage() {
           <p className="text-muted-foreground">Пользователи, которые зарегистрировались в Telegram боте</p>
         </div>
         <div className="flex gap-2">
-          {hasActiveFilters && (
-            <Button variant="outline" size="sm" onClick={clearAllFilters}>
-              <X className="h-4 w-4 mr-1" />
-              Очистить фильтры
-            </Button>
-          )}
           <Button onClick={fetchUsers} disabled={isLoading} variant="outline">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Обновить
@@ -311,13 +362,23 @@ export default function UsersPage() {
       {/* Таблица пользователей */}
       <Card>
         <CardHeader>
-          <CardTitle>
-            Пользователи ({filteredUsers.length}
-            {hasActiveFilters && ` из ${users.length}`})
-          </CardTitle>
-          <CardDescription>
-            {hasActiveFilters ? "Отфильтрованные пользователи" : "Все зарегистрированные пользователи"}
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>
+                Пользователи ({filteredUsers.length}
+                {hasActiveFilters && ` из ${users.length}`})
+              </CardTitle>
+              <CardDescription>
+                {hasActiveFilters ? "Отфильтрованные пользователи" : "Все зарегистрированные пользователи"}
+              </CardDescription>
+            </div>
+            {hasActiveFilters && (
+              <Button variant="outline" size="sm" onClick={clearAllFilters}>
+                <X className="h-4 w-4 mr-1" />
+                Очистить фильтры
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {isLoading ? (
@@ -427,133 +488,53 @@ export default function UsersPage() {
                     <TableHead>
                       <div className="flex items-center gap-2">
                         Автопарк
-                        <Popover open={openPopovers.carpark} onOpenChange={() => togglePopover("carpark")}>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <ChevronDown className="h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64" align="start">
-                            <div className="space-y-2">
-                              <Label>Фильтр по автопарку</Label>
-                              <Select
-                                value={columnFilters.carpark}
-                                onValueChange={(value) => updateColumnFilter("carpark", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Выберите автопарк" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">Все</SelectItem>
-                                  {getUniqueValues("carpark").map((carpark) => (
-                                    <SelectItem key={carpark} value={carpark}>
-                                      {carpark}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                        <FilterCombobox
+                          column="carpark"
+                          placeholder="автопарк"
+                          options={getUniqueValues("carpark")}
+                          value={columnFilters.carpark}
+                          onValueChange={(value) => updateColumnFilter("carpark", value)}
+                        />
                       </div>
                     </TableHead>
                     <TableHead>
                       <div className="flex items-center gap-2">
                         Роль
-                        <Popover open={openPopovers.role} onOpenChange={() => togglePopover("role")}>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <ChevronDown className="h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64" align="start">
-                            <div className="space-y-2">
-                              <Label>Фильтр по роли</Label>
-                              <Select
-                                value={columnFilters.role}
-                                onValueChange={(value) => updateColumnFilter("role", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Выберите роль" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">Все</SelectItem>
-                                  {getUniqueValues("role").map((role) => (
-                                    <SelectItem key={role} value={role}>
-                                      {role}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                        <FilterCombobox
+                          column="role"
+                          placeholder="роль"
+                          options={getUniqueValues("role")}
+                          value={columnFilters.role}
+                          onValueChange={(value) => updateColumnFilter("role", value)}
+                        />
                       </div>
                     </TableHead>
                     <TableHead>
                       <div className="flex items-center gap-2">
                         Верификация
-                        <Popover open={openPopovers.verified} onOpenChange={() => togglePopover("verified")}>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <ChevronDown className="h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64" align="start">
-                            <div className="space-y-2">
-                              <Label>Фильтр по верификации</Label>
-                              <Select
-                                value={columnFilters.verified}
-                                onValueChange={(value) => updateColumnFilter("verified", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Все" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">Все</SelectItem>
-                                  <SelectItem value="verified">Верифицированные</SelectItem>
-                                  <SelectItem value="not_verified">Не верифицированные</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                        <FilterCombobox
+                          column="verified"
+                          placeholder="верификацию"
+                          options={["verified", "not_verified"]}
+                          value={columnFilters.verified}
+                          onValueChange={(value) => updateColumnFilter("verified", value)}
+                          getDisplayValue={(value) =>
+                            value === "verified" ? "Верифицированные" : "Не верифицированные"
+                          }
+                        />
                       </div>
                     </TableHead>
                     <TableHead>
                       <div className="flex items-center gap-2">
                         Состояние
-                        <Popover
-                          open={openPopovers.registration_state}
-                          onOpenChange={() => togglePopover("registration_state")}
-                        >
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <ChevronDown className="h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64" align="start">
-                            <div className="space-y-2">
-                              <Label>Фильтр по состоянию</Label>
-                              <Select
-                                value={columnFilters.registration_state}
-                                onValueChange={(value) => updateColumnFilter("registration_state", value)}
-                              >
-                                <SelectTrigger>
-                                  <SelectValue placeholder="Все" />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">Все</SelectItem>
-                                  {getUniqueValues("registration_state").map((state) => (
-                                    <SelectItem key={state} value={state}>
-                                      {translateRegistrationState(state)}
-                                    </SelectItem>
-                                  ))}
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </PopoverContent>
-                        </Popover>
+                        <FilterCombobox
+                          column="registration_state"
+                          placeholder="состояние"
+                          options={getUniqueValues("registration_state")}
+                          value={columnFilters.registration_state}
+                          onValueChange={(value) => updateColumnFilter("registration_state", value)}
+                          getDisplayValue={translateRegistrationState}
+                        />
                       </div>
                     </TableHead>
                     <TableHead>Регистрация</TableHead>
