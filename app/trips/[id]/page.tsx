@@ -659,10 +659,37 @@ export default function TripDetailPage() {
     if (!dateString) return "—"
 
     try {
-      // Парсим строку даты напрямую без конвертации в локальную таймзону
-      const parts = dateString.match(/(\d{2})\.(\d{2})\.(\d{4}) (\d{2}):(\d{2})/)
+      // Парсим формат "6/20/25 15:00" или "M/D/YY H:MM"
+      const parts = dateString.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})/)
       if (parts) {
-        const [, day, month, year, hour, minute] = parts
+        const [, month, day, year, hour, minute] = parts
+
+        // Преобразуем год в полный формат
+        const fullYear = year.length === 2 ? `20${year}` : year
+
+        const monthNames = [
+          "января",
+          "февраля",
+          "марта",
+          "апреля",
+          "мая",
+          "июня",
+          "июля",
+          "августа",
+          "сентября",
+          "октября",
+          "ноября",
+          "декабря",
+        ]
+
+        const monthName = monthNames[Number.parseInt(month) - 1]
+        return `${Number.parseInt(day)} ${monthName} ${fullYear}, ${hour.padStart(2, "0")}:${minute}`
+      }
+
+      // Если формат не M/D/YY H:MM, пробуем DD.MM.YYYY HH:MM
+      const parts2 = dateString.match(/(\d{2})\.(\d{2})\.(\d{4})\s+(\d{2}):(\d{2})/)
+      if (parts2) {
+        const [, day, month, year, hour, minute] = parts2
         const monthNames = [
           "января",
           "февраля",
@@ -681,31 +708,10 @@ export default function TripDetailPage() {
         return `${Number.parseInt(day)} ${monthName} ${year}, ${hour}:${minute}`
       }
 
-      // Если формат не DD.MM.YYYY HH:MM, пробуем стандартный парсинг
-      const date = new Date(dateString)
-      const day = date.getDate()
-      const month = date.getMonth()
-      const year = date.getFullYear()
-      const hour = date.getHours().toString().padStart(2, "0")
-      const minute = date.getMinutes().toString().padStart(2, "0")
-
-      const monthNames = [
-        "января",
-        "февраля",
-        "марта",
-        "апреля",
-        "мая",
-        "июня",
-        "июля",
-        "августа",
-        "сентября",
-        "октября",
-        "ноября",
-        "декабря",
-      ]
-
-      return `${day} ${monthNames[month]} ${year}, ${hour}:${minute}`
+      // Если ничего не подошло, возвращаем как есть
+      return dateString
     } catch (error) {
+      console.error("Error formatting time:", error, "Input:", dateString)
       return dateString
     }
   }
