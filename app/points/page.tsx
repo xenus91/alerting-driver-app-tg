@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -132,14 +132,24 @@ export default function PointsPage() {
     created_at: false,
   })
 
-  // Отладочное состояние
+  // Отладочное состояние - используем useRef чтобы избежать лишних рендеров
   const [debugInfo, setDebugInfo] = useState<string[]>([])
   const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+  const debugTimeoutRef = useRef<NodeJS.Timeout>()
 
-  const addDebugInfo = (message: string) => {
+  // Стабильная функция для добавления отладочной информации
+  const addDebugInfo = useCallback((message: string) => {
     console.log(`[DEBUG] ${message}`)
-    setDebugInfo((prev) => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`])
-  }
+
+    // Батчим обновления отладочной информации
+    if (debugTimeoutRef.current) {
+      clearTimeout(debugTimeoutRef.current)
+    }
+
+    debugTimeoutRef.current = setTimeout(() => {
+      setDebugInfo((prev) => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`])
+    }, 0)
+  }, [])
 
   const fetchPoints = async () => {
     setIsLoading(true)
@@ -175,94 +185,96 @@ export default function PointsPage() {
   }, [points])
 
   // Функция сортировки
-  const handleSort = (field: SortField) => {
-    addDebugInfo(`Sort clicked: ${field}`)
-    if (sortField === field) {
-      if (sortDirection === "asc") {
-        setSortDirection("desc")
-      } else if (sortDirection === "desc") {
-        setSortField(null)
-        setSortDirection(null)
+  const handleSort = useCallback(
+    (field: SortField) => {
+      addDebugInfo(`Sort clicked: ${field}`)
+      if (sortField === field) {
+        if (sortDirection === "asc") {
+          setSortDirection("desc")
+        } else if (sortDirection === "desc") {
+          setSortField(null)
+          setSortDirection(null)
+        }
+      } else {
+        setSortField(field)
+        setSortDirection("asc")
       }
-    } else {
-      setSortField(field)
-      setSortDirection("asc")
-    }
-  }
+    },
+    [sortField, sortDirection, addDebugInfo],
+  )
 
   // Функции управления popover'ами
-  const handlePopoverOpen = (field: keyof PopoverStates, open: boolean) => {
-    addDebugInfo(`Popover ${field}: ${open ? "opened" : "closed"}`)
-    setPopoverStates((prev) => ({
-      ...prev,
-      [field]: open,
-    }))
-  }
+  const handlePopoverOpen = useCallback(
+    (field: keyof PopoverStates, open: boolean) => {
+      addDebugInfo(`Popover ${field}: ${open ? "opened" : "closed"}`)
+      setPopoverStates((prev) => ({
+        ...prev,
+        [field]: open,
+      }))
+    },
+    [addDebugInfo],
+  )
 
   // Функции фильтрации
-  const handleFilterChange = (field: keyof ColumnFilters, value: string, checked: boolean) => {
-    addDebugInfo(`Filter change: ${field} - ${value} - ${checked}`)
-    setColumnFilters((prev) => ({
-      ...prev,
-      [field]: checked ? [...prev[field], value] : prev[field].filter((v) => v !== value),
-    }))
-  }
+  const handleFilterChange = useCallback(
+    (field: keyof ColumnFilters, value: string, checked: boolean) => {
+      addDebugInfo(`Filter change: ${field} - ${value} - ${checked}`)
+      setColumnFilters((prev) => ({
+        ...prev,
+        [field]: checked ? [...prev[field], value] : prev[field].filter((v) => v !== value),
+      }))
+    },
+    [addDebugInfo],
+  )
 
-  const handleFilterSearchChange = (field: keyof FilterSearches, value: string) => {
-    addDebugInfo(`Search change: ${field} - "${value}" (length: ${value.length})`)
+  const handleFilterSearchChange = useCallback(
+    (field: keyof FilterSearches, value: string) => {
+      addDebugInfo(`Search change: ${field} - "${value}" (length: ${value.length})`)
 
-    // Сохраняем текущий фокус
-    const activeElement = document.activeElement
-    addDebugInfo(`Active element before: ${activeElement?.tagName} ${activeElement?.className}`)
+      setFilterSearches((prev) => ({
+        ...prev,
+        [field]: value,
+      }))
+    },
+    [addDebugInfo],
+  )
 
-    setFilterSearches((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
+  const clearFilter = useCallback(
+    (field: keyof ColumnFilters) => {
+      addDebugInfo(`Clear filter: ${field}`)
+      setColumnFilters((prev) => ({
+        ...prev,
+        [field]: [],
+      }))
+      setFilterSearches((prev) => ({
+        ...prev,
+        [field]: "",
+      }))
+    },
+    [addDebugInfo],
+  )
 
-    // Проверяем фокус после изменения состояния
-    setTimeout(() => {
-      const newActiveElement = document.activeElement
-      addDebugInfo(`Active element after: ${newActiveElement?.tagName} ${newActiveElement?.className}`)
+  const clearSearchOnly = useCallback(
+    (field: keyof FilterSearches) => {
+      addDebugInfo(`Clear search only: ${field}`)
+      setFilterSearches((prev) => ({
+        ...prev,
+        [field]: "",
+      }))
 
-      // Если фокус потерялся, возвращаем его на input
-      if (inputRefs.current[field] && newActiveElement !== inputRefs.current[field]) {
-        addDebugInfo(`Focus lost! Restoring focus to input ${field}`)
-        inputRefs.current[field]?.focus()
-      }
-    }, 0)
-  }
-
-  const clearFilter = (field: keyof ColumnFilters) => {
-    addDebugInfo(`Clear filter: ${field}`)
-    setColumnFilters((prev) => ({
-      ...prev,
-      [field]: [],
-    }))
-    setFilterSearches((prev) => ({
-      ...prev,
-      [field]: "",
-    }))
-  }
-
-  const clearSearchOnly = (field: keyof FilterSearches) => {
-    addDebugInfo(`Clear search only: ${field}`)
-    setFilterSearches((prev) => ({
-      ...prev,
-      [field]: "",
-    }))
-
-    // Возвращаем фокус на input после очистки
-    setTimeout(() => {
-      if (inputRefs.current[field]) {
-        inputRefs.current[field]?.focus()
-        addDebugInfo(`Focus restored to input ${field} after clear`)
-      }
-    }, 0)
-  }
+      // Возвращаем фокус на input после очистки
+      setTimeout(() => {
+        if (inputRefs.current[field]) {
+          inputRefs.current[field]?.focus()
+          addDebugInfo(`Focus restored to input ${field} after clear`)
+        }
+      }, 0)
+    },
+    [addDebugInfo],
+  )
 
   // Получение значения для фильтрации/сортировки
-  const getFieldValue = (point: Point, field: SortField): string => {
+  const getFieldValue = useCallback((point: Point, field: SortField): string => {
     switch (field) {
       case "point_id":
         return point.point_id
@@ -280,7 +292,7 @@ export default function PointsPage() {
       default:
         return ""
     }
-  }
+  }, [])
 
   // Фильтрованные и отсортированные пункты
   const filteredAndSortedPoints = useMemo(() => {
@@ -316,7 +328,7 @@ export default function PointsPage() {
     }
 
     return filtered
-  }, [points, columnFilters, sortField, sortDirection])
+  }, [points, columnFilters, sortField, sortDirection, getFieldValue])
 
   const handleOpenDialog = (point?: Point) => {
     if (point) {
@@ -451,168 +463,179 @@ export default function PointsPage() {
   }
 
   // Компонент поля поиска с кнопкой очистки внутри
-  const SearchInput = ({ field, placeholder = "Поиск..." }: { field: keyof FilterSearches; placeholder?: string }) => {
-    const value = filterSearches[field]
-    const hasValue = value.length > 0
+  const SearchInput = useCallback(
+    ({ field, placeholder = "Поиск..." }: { field: keyof FilterSearches; placeholder?: string }) => {
+      const value = filterSearches[field]
+      const hasValue = value.length > 0
 
-    return (
-      <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
-        <Input
-          ref={(el) => {
-            inputRefs.current[field] = el
-            addDebugInfo(`Input ref set for ${field}: ${el ? "success" : "null"}`)
-          }}
-          placeholder={placeholder}
-          value={value}
-          onChange={(e) => {
-            addDebugInfo(`Input onChange triggered: ${field} - "${e.target.value}"`)
-            e.stopPropagation()
-            handleFilterSearchChange(field, e.target.value)
-          }}
-          onKeyDown={(e) => {
-            addDebugInfo(`Input onKeyDown: ${field} - ${e.key}`)
-            e.stopPropagation()
-          }}
-          onClick={(e) => {
-            addDebugInfo(`Input onClick: ${field}`)
-            e.stopPropagation()
-          }}
-          onFocus={(e) => {
-            addDebugInfo(`Input onFocus: ${field}`)
-          }}
-          onBlur={(e) => {
-            addDebugInfo(`Input onBlur: ${field}`)
-          }}
-          className="h-8 pl-9 pr-8"
-          autoComplete="off"
-        />
-        {hasValue && (
-          <button
-            type="button"
-            onClick={(e) => {
-              addDebugInfo(`Clear button clicked: ${field}`)
+      return (
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+          <Input
+            ref={(el) => {
+              inputRefs.current[field] = el
+            }}
+            placeholder={placeholder}
+            value={value}
+            onChange={(e) => {
               e.stopPropagation()
-              e.preventDefault()
-              clearSearchOnly(field)
+              handleFilterSearchChange(field, e.target.value)
             }}
-            onMouseDown={(e) => {
-              addDebugInfo(`Clear button mouseDown: ${field}`)
-              e.preventDefault() // Предотвращаем потерю фокуса
+            onKeyDown={(e) => {
+              e.stopPropagation()
             }}
-            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-            tabIndex={-1} // Убираем из tab order
-          >
-            <X className="h-3 w-3" />
-          </button>
-        )}
-      </div>
-    )
-  }
+            onClick={(e) => {
+              e.stopPropagation()
+            }}
+            onFocus={(e) => {
+              addDebugInfo(`Input onFocus: ${field}`)
+            }}
+            onBlur={(e) => {
+              addDebugInfo(`Input onBlur: ${field}`)
+            }}
+            className="h-8 pl-9 pr-8"
+            autoComplete="off"
+          />
+          {hasValue && (
+            <button
+              type="button"
+              onClick={(e) => {
+                addDebugInfo(`Clear button clicked: ${field}`)
+                e.stopPropagation()
+                e.preventDefault()
+                clearSearchOnly(field)
+              }}
+              onMouseDown={(e) => {
+                e.preventDefault() // Предотвращаем потерю фокуса
+              }}
+              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              tabIndex={-1} // Убираем из tab order
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      )
+    },
+    [filterSearches, handleFilterSearchChange, clearSearchOnly, addDebugInfo],
+  )
 
   // Компонент заголовка колонки с сортировкой и фильтрацией
-  const ColumnHeader = ({
-    field,
-    children,
-    className = "",
-  }: {
-    field: SortField
-    children: React.ReactNode
-    className?: string
-  }) => {
-    const isActive = sortField === field
-    const hasActiveFilter = columnFilters[field].length > 0
-    const isPopoverOpen = popoverStates[field]
+  const ColumnHeader = useCallback(
+    ({
+      field,
+      children,
+      className = "",
+    }: {
+      field: SortField
+      children: React.ReactNode
+      className?: string
+    }) => {
+      const isActive = sortField === field
+      const hasActiveFilter = columnFilters[field].length > 0
+      const isPopoverOpen = popoverStates[field]
 
-    const getSortIcon = () => {
-      if (!isActive) return <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />
-      if (sortDirection === "asc") return <ArrowUp className="h-3 w-3" />
-      if (sortDirection === "desc") return <ArrowDown className="h-3 w-3" />
-      return <ArrowUpDown className="h-3 w-3 opacity-50" />
-    }
+      const getSortIcon = () => {
+        if (!isActive) return <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />
+        if (sortDirection === "asc") return <ArrowUp className="h-3 w-3" />
+        if (sortDirection === "desc") return <ArrowDown className="h-3 w-3" />
+        return <ArrowUpDown className="h-3 w-3 opacity-50" />
+      }
 
-    const getFilteredOptions = () => {
-      const options = filterOptions[field] || []
-      const search = filterSearches[field].toLowerCase()
-      return search ? options.filter((option) => option.toLowerCase().includes(search)) : options
-    }
+      const getFilteredOptions = () => {
+        const options = filterOptions[field] || []
+        const search = filterSearches[field].toLowerCase()
+        return search ? options.filter((option) => option.toLowerCase().includes(search)) : options
+      }
 
-    return (
-      <div className={`flex items-center justify-between group ${className}`}>
-        <button
-          className="flex items-center gap-1 hover:text-foreground text-left flex-1"
-          onClick={() => handleSort(field)}
-        >
-          <span>{children}</span>
-          {getSortIcon()}
-        </button>
+      return (
+        <div className={`flex items-center justify-between group ${className}`}>
+          <button
+            className="flex items-center gap-1 hover:text-foreground text-left flex-1"
+            onClick={() => handleSort(field)}
+          >
+            <span>{children}</span>
+            {getSortIcon()}
+          </button>
 
-        <Popover open={isPopoverOpen} onOpenChange={(open) => handlePopoverOpen(field, open)}>
-          <PopoverTrigger asChild>
-            <button
-              className={`ml-2 p-1 rounded hover:bg-muted ${
-                hasActiveFilter ? "text-blue-600" : "opacity-0 group-hover:opacity-100"
-              }`}
-            >
-              <Filter className="h-3 w-3" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent className="w-64" align="start">
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <h4 className="font-medium text-sm">Фильтр</h4>
-                {(columnFilters[field].length > 0 || filterSearches[field]) && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={(e) => {
-                      addDebugInfo(`Reset all button clicked: ${field}`)
-                      e.stopPropagation()
-                      clearFilter(field)
-                    }}
-                    onMouseDown={(e) => {
-                      addDebugInfo(`Reset all button mouseDown: ${field}`)
-                      e.preventDefault()
-                    }}
-                    className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                    tabIndex={-1}
-                  >
-                    Сбросить всё
-                  </Button>
+          <Popover open={isPopoverOpen} onOpenChange={(open) => handlePopoverOpen(field, open)}>
+            <PopoverTrigger asChild>
+              <button
+                className={`ml-2 p-1 rounded hover:bg-muted ${
+                  hasActiveFilter ? "text-blue-600" : "opacity-0 group-hover:opacity-100"
+                }`}
+              >
+                <Filter className="h-3 w-3" />
+              </button>
+            </PopoverTrigger>
+            <PopoverContent className="w-64" align="start">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <h4 className="font-medium text-sm">Фильтр</h4>
+                  {(columnFilters[field].length > 0 || filterSearches[field]) && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        clearFilter(field)
+                      }}
+                      onMouseDown={(e) => {
+                        e.preventDefault()
+                      }}
+                      className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                      tabIndex={-1}
+                    >
+                      Сбросить всё
+                    </Button>
+                  )}
+                </div>
+
+                <SearchInput field={field} />
+
+                <div className="max-h-48 overflow-y-auto space-y-2">
+                  {getFilteredOptions().map((option) => (
+                    <div key={option} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`${field}-${option}`}
+                        checked={columnFilters[field].includes(option)}
+                        onCheckedChange={(checked) => {
+                          handleFilterChange(field, option, checked as boolean)
+                        }}
+                      />
+                      <label
+                        htmlFor={`${field}-${option}`}
+                        className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                      >
+                        {option}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+
+                {getFilteredOptions().length === 0 && (
+                  <p className="text-sm text-muted-foreground text-center py-2">Ничего не найдено</p>
                 )}
               </div>
-
-              <SearchInput field={field} />
-
-              <div className="max-h-48 overflow-y-auto space-y-2">
-                {getFilteredOptions().map((option) => (
-                  <div key={option} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={`${field}-${option}`}
-                      checked={columnFilters[field].includes(option)}
-                      onCheckedChange={(checked) => {
-                        handleFilterChange(field, option, checked as boolean)
-                      }}
-                    />
-                    <label
-                      htmlFor={`${field}-${option}`}
-                      className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
-                    >
-                      {option}
-                    </label>
-                  </div>
-                ))}
-              </div>
-
-              {getFilteredOptions().length === 0 && (
-                <p className="text-sm text-muted-foreground text-center py-2">Ничего не найдено</p>
-              )}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
-    )
-  }
+            </PopoverContent>
+          </Popover>
+        </div>
+      )
+    },
+    [
+      sortField,
+      sortDirection,
+      columnFilters,
+      popoverStates,
+      filterOptions,
+      filterSearches,
+      handleSort,
+      handlePopoverOpen,
+      clearFilter,
+      handleFilterChange,
+      SearchInput,
+    ],
+  )
 
   return (
     <div className="space-y-6">
