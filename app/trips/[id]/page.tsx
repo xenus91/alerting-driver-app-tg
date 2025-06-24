@@ -654,6 +654,24 @@ export default function TripDetailPage() {
     )
   }
 
+  // Добавить эту функцию после других функций форматирования
+  const formatTimeRussian = (dateString: string) => {
+    if (!dateString) return "—"
+
+    try {
+      const date = new Date(dateString)
+      return date.toLocaleDateString("ru-RU", {
+        day: "numeric",
+        month: "long",
+        year: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    } catch (error) {
+      return dateString
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -918,7 +936,7 @@ export default function TripDetailPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-600">⏰</span>
-                                <span>{trip.planned_loading_time || "—"}</span>
+                                <span>{formatTimeRussian(trip.planned_loading_time)}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-600">🛣️</span>

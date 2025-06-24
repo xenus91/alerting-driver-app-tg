@@ -5,7 +5,8 @@ import Link from "next/link"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { RefreshCw, Eye, Truck, Calendar, CheckCircle, XCircle, Clock } from "lucide-react"
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
+import { RefreshCw, Eye, Truck, Calendar, CheckCircle, XCircle, Clock, MoreVertical, Trash2 } from "lucide-react"
 
 interface TripData {
   id: number
@@ -24,6 +25,8 @@ interface TripData {
 export default function TripsPage() {
   const [trips, setTrips] = useState<TripData[]>([])
   const [isLoading, setIsLoading] = useState(true)
+  const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
 
   const fetchTrips = async () => {
     setIsLoading(true)
@@ -136,6 +139,38 @@ export default function TripsPage() {
     }
   }
 
+  // Проверяем можно ли удалить рассылку
+  const canDeleteTrip = (trip: TripData) => {
+    const totalResponses = trip.confirmed_responses + trip.rejected_responses
+    return (
+      trip.sent_messages > 0 &&
+      (totalResponses === trip.sent_messages || trip.status === "completed" || trip.error_messages > 0)
+    )
+  }
+
+  const handleDeleteTrip = async (tripId: number) => {
+    setDeletingTripId(tripId)
+    try {
+      const response = await fetch(`/api/trips/${tripId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error || "Failed to delete trip")
+      }
+
+      // Обновляем список рассылок
+      await fetchTrips()
+    } catch (error) {
+      console.error("Error deleting trip:", error)
+      alert("Ошибка при удалении рассылки")
+    } finally {
+      setDeletingTripId(null)
+      setShowDeleteConfirm(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -201,12 +236,33 @@ export default function TripsPage() {
                         </CardDescription>
                       </div>
                     </div>
-                    <Button asChild variant="outline">
-                      <Link href={`/trips/${trip.id}`}>
-                        <Eye className="h-4 w-4 mr-2" />
-                        Детали
-                      </Link>
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button asChild variant="outline">
+                        <Link href={`/trips/${trip.id}`}>
+                          <Eye className="h-4 w-4 mr-2" />
+                          Детали
+                        </Link>
+                      </Button>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="sm">
+                            <MoreVertical className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          {canDeleteTrip(trip) && (
+                            <DropdownMenuItem
+                              onClick={() => setShowDeleteConfirm(trip.id)}
+                              className="text-red-600 focus:text-red-600"
+                              disabled={deletingTripId === trip.id}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              {deletingTripId === trip.id ? "Удаление..." : "Удалить рассылку"}
+                            </DropdownMenuItem>
+                          )}
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
@@ -327,6 +383,35 @@ export default function TripsPage() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {/* Диалог подтверждения удаления */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Подтверждение удаления</h3>
+            <p className="text-gray-600 mb-6">
+              Вы уверены, что хотите удалить рассылку #{showDeleteConfirm}? Это действие нельзя отменить. Будут удалены
+              все связанные данные из базы данных.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button
+                variant="outline"
+                onClick={() => setShowDeleteConfirm(null)}
+                disabled={deletingTripId === showDeleteConfirm}
+              >
+                Отмена
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => handleDeleteTrip(showDeleteConfirm)}
+                disabled={deletingTripId === showDeleteConfirm}
+              >
+                {deletingTripId === showDeleteConfirm ? "Удаление..." : "Удалить"}
+              </Button>
+            </div>
+          </div>
         </div>
       )}
     </div>
