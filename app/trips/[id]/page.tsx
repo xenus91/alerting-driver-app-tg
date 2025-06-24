@@ -654,11 +654,38 @@ export default function TripDetailPage() {
     )
   }
 
-  // Исправленная функция форматирования времени без таймзоны
+  // Исправленная функция форматирования времени для ISO формата
   const formatTimeRussian = (dateString: string) => {
     if (!dateString) return "—"
 
     try {
+      // Парсим ISO формат "2025-06-20T15:00:00.000Z"
+      if (dateString.includes("T") && (dateString.includes("Z") || dateString.includes("+"))) {
+        // Это ISO формат - парсим как UTC и НЕ конвертируем в локальное время
+        const isoMatch = dateString.match(/(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/)
+        if (isoMatch) {
+          const [, year, month, day, hour, minute] = isoMatch
+
+          const monthNames = [
+            "января",
+            "февраля",
+            "марта",
+            "апреля",
+            "мая",
+            "июня",
+            "июля",
+            "августа",
+            "сентября",
+            "октября",
+            "ноября",
+            "декабря",
+          ]
+
+          const monthName = monthNames[Number.parseInt(month) - 1]
+          return `${Number.parseInt(day)} ${monthName} ${year}, ${hour}:${minute}`
+        }
+      }
+
       // Парсим формат "6/20/25 15:00" или "M/D/YY H:MM"
       const parts = dateString.match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})\s+(\d{1,2}):(\d{2})/)
       if (parts) {
