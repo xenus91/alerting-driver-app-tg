@@ -477,10 +477,9 @@ export async function POST(request: NextRequest) {
 
             // Альтернативный поиск: найдем любое сообщение этого пользователя
             const userMessageResult = await sql`
-              SELECT DISTINCT tm.phone, tm.trip_id
+              SELECT phone, trip_id
               FROM trip_messages tm
               WHERE tm.telegram_id = ${userId} AND tm.response_status = 'pending'
-              ORDER BY tm.created_at DESC
               LIMIT 1
             `
 
@@ -637,10 +636,9 @@ export async function POST(request: NextRequest) {
         try {
           // Находим все pending сообщения этого пользователя
           const userMessagesResult = await sql`
-            SELECT DISTINCT phone, trip_id
+            SELECT phone, trip_id
             FROM trip_messages 
             WHERE telegram_id = ${userId} AND response_status = 'pending'
-            ORDER BY created_at DESC
             LIMIT 1
           `
 
