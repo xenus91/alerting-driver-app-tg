@@ -110,6 +110,17 @@ export default function TripDetailPage() {
   const [filteredDrivers, setFilteredDrivers] = useState<GroupedDriver[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [resendingPhone, setResendingPhone] = useState<string | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+
+  // Проверяем можно ли удалить рассылку (все подтверждены или завершены)
+  const canDeleteTrip = () => {
+    return (
+      groupedDrivers.every(
+        (driver) => driver.overall_response_status === "confirmed" || driver.overall_status === "error",
+      ) && groupedDrivers.length > 0
+    )
+  }
   const [activeFilter, setActiveFilter] = useState<string | null>(filterParam)
 
   // Состояние для сортировки
@@ -481,6 +492,29 @@ export default function TripDetailPage() {
     }
   }
 
+  const handleDeleteTrip = async () => {
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/trips/${tripId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+      if (!data.success) {
+        throw new Error(data.error || "Failed to delete trip")
+      }
+
+      // Перенаправляем на список рассылок
+      router.push("/trips")
+    } catch (error) {
+      console.error("Error deleting trip:", error)
+      alert("Ошибка при удалении рассылки")
+    } finally {
+      setIsDeleting(false)
+      setShowDeleteConfirm(false)
+    }
+  }
+
   const formatDateTime = (dateString: string) => {
     if (!dateString) return "—"
 
@@ -635,6 +669,23 @@ export default function TripDetailPage() {
           <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
           Обновить
         </Button>
+        {canDeleteTrip() && (
+          <Button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isDeleting}
+            variant="destructive"
+            className="ml-2"
+          >
+            {isDeleting ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Удаление...
+              </>
+            ) : (
+              "Удалить рассылку"
+            )}
+          </Button>
+        )}
       </div>
 
       {/* Основной фильтр */}
@@ -867,7 +918,7 @@ export default function TripDetailPage() {
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-600">⏰</span>
-                                <span>{formatDateTime(trip.planned_loading_time)}</span>
+                                <span>{trip.planned_loading_time || "—"}</span>
                               </div>
                               <div className="flex items-center gap-2">
                                 <span className="text-gray-600">🛣️</span>
@@ -963,6 +1014,25 @@ export default function TripDetailPage() {
             </Table>
           </CardContent>
         </Card>
+      )}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Подтверждение удаления</h3>
+            <p className="text-gray-600 mb-6">
+              Вы уверены, что хотите удалить эту рассылку? Это действие нельзя отменить. Будут удалены все связанные
+              данные из базы данных.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <Button variant="outline" onClick={() => setShowDeleteConfirm(false)} disabled={isDeleting}>
+                Отмена
+              </Button>
+              <Button variant="destructive" onClick={handleDeleteTrip} disabled={isDeleting}>
+                {isDeleting ? "Удаление..." : "Удалить"}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )
