@@ -66,6 +66,21 @@ export async function sendMessage(chatId: number, text: string) {
   }
 }
 
+// Функция для построения ссылки на Яндекс.Карты
+function buildRouteUrl(points: Array<{ latitude?: number; longitude?: number }>) {
+  // Фильтруем точки с координатами
+  const validPoints = points.filter((p) => p.latitude && p.longitude)
+
+  if (validPoints.length === 0) {
+    return null
+  }
+
+  // Формируем строку координат для URL
+  const rtext = validPoints.map((p) => `${p.latitude},${p.longitude}`).join("~")
+
+  return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${rtext}&utm_source=ymaps_app_redirect`
+}
+
 export async function sendTripMessageWithButtons(
   chatId: number,
   tripData: {
@@ -79,12 +94,16 @@ export async function sendTripMessageWithButtons(
     door_open_1?: string
     door_open_2?: string
     door_open_3?: string
+    latitude?: number
+    longitude?: number
   }>,
   unloadingPoints: Array<{
     point_name: string
     door_open_1?: string
     door_open_2?: string
     door_open_3?: string
+    latitude?: number
+    longitude?: number
   }>,
   firstName: string,
   messageId: number,
@@ -124,6 +143,14 @@ export async function sendTripMessageWithButtons(
     // Комментарий
     if (tripData.driver_comment && tripData.driver_comment.trim()) {
       message += `💬 <b>Комментарий по рейсу:</b>\n<i>${tripData.driver_comment}</i>\n\n`
+    }
+
+    // Строим ссылку на маршрут
+    const allPoints = [...loadingPoints, ...unloadingPoints]
+    const routeUrl = buildRouteUrl(allPoints)
+
+    if (routeUrl) {
+      message += `🗺️ <a href="${routeUrl}">Построить маршрут в Яндекс.Картах</a>\n\n`
     }
 
     message += `🙏 <b>Просьба подтвердить рейс</b>`
@@ -167,47 +194,6 @@ export async function sendTripMessageWithButtons(
   }
 }
 
-// Функция для построения маршрута Яндекс.Карт
-function buildYandexMapsRoute(
-  loadingPoints: Array<{ latitude?: number; longitude?: number; point_num: number }>,
-  unloadingPoints: Array<{ latitude?: number; longitude?: number; point_num: number }>,
-): string | null {
-  try {
-    // Собираем все координаты в правильном порядке
-    const coordinates: string[] = []
-
-    // Сначала точки погрузки по возрастанию point_num
-    const sortedLoadingPoints = [...loadingPoints]
-      .filter((point) => point.latitude && point.longitude)
-      .sort((a, b) => a.point_num - b.point_num)
-
-    for (const point of sortedLoadingPoints) {
-      coordinates.push(`${point.latitude},${point.longitude}`)
-    }
-
-    // Затем точки разгрузки по возрастанию point_num
-    const sortedUnloadingPoints = [...unloadingPoints]
-      .filter((point) => point.latitude && point.longitude)
-      .sort((a, b) => a.point_num - b.point_num)
-
-    for (const point of sortedUnloadingPoints) {
-      coordinates.push(`${point.latitude},${point.longitude}`)
-    }
-
-    // Если координат меньше 2, маршрут построить нельзя
-    if (coordinates.length < 2) {
-      return null
-    }
-
-    // Строим URL для Яндекс.Карт
-    const routeText = coordinates.join("~")
-    return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${routeText}&utm_source=ymaps_app_redirect`
-  } catch (error) {
-    console.error("Error building Yandex Maps route:", error)
-    return null
-  }
-}
-
 export async function sendMultipleTripMessageWithButtons(
   chatId: number,
   trips: Array<{
@@ -218,7 +204,6 @@ export async function sendMultipleTripMessageWithButtons(
     loading_points: Array<{
       point_id: string
       point_name: string
-      point_num: number
       door_open_1?: string
       door_open_2?: string
       door_open_3?: string
@@ -228,7 +213,6 @@ export async function sendMultipleTripMessageWithButtons(
     unloading_points: Array<{
       point_id: string
       point_name: string
-      point_num: number
       door_open_1?: string
       door_open_2?: string
       door_open_3?: string
@@ -324,15 +308,35 @@ export async function sendMultipleTripMessageWithButtons(
         message += `\n`
       }
 
-      // Строим маршрут для этого рейса
-      const routeUrl = buildYandexMapsRoute(trip.loading_points, trip.unloading_points)
-      if (routeUrl) {
-        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
-      }
-
       // Комментарий
       if (trip.driver_comment && trip.driver_comment.trim()) {
         message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
+      }
+
+      // Строим ссылку на маршрут для этого рейса
+      const routePoints = []
+
+      // Сначала добавляем точки погрузки по порядку
+      trip.loading_points
+        .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+        .forEach((point) => {
+          if (point.latitude && point.longitude) {
+            routePoints.push({ latitude: point.latitude, longitude: point.longitude })
+          }
+        })
+
+      // Затем добавляем точки разгрузки по порядку
+      trip.unloading_points
+        .sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+        .forEach((point) => {
+          if (point.latitude && point.longitude) {
+            routePoints.push({ latitude: point.latitude, longitude: point.longitude })
+          }
+        })
+
+      const routeUrl = buildRouteUrl(routePoints)
+      if (routeUrl) {
+        message += `🗺️ <a href="${routeUrl}">Построить маршрут в Яндекс.Картах</a>\n\n`
       }
 
       // Добавляем разделитель между рейсами (кроме последнего)
