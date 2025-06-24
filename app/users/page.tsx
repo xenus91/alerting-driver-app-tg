@@ -241,6 +241,13 @@ export default function UsersPage() {
     onValueChange: (value: string) => void
     getDisplayValue?: (value: string) => string
   }) => {
+    const [searchValue, setSearchValue] = useState("")
+
+    // Фильтруем опции по поисковому запросу
+    const filteredOptions = options.filter((option) =>
+      (getDisplayValue ? getDisplayValue(option) : option).toLowerCase().includes(searchValue.toLowerCase()),
+    )
+
     return (
       <Popover open={openPopovers[column]} onOpenChange={() => togglePopover(column)}>
         <PopoverTrigger asChild>
@@ -250,15 +257,19 @@ export default function UsersPage() {
         </PopoverTrigger>
         <PopoverContent className="w-64 p-0" align="start">
           <Command>
-            <CommandInput placeholder={`Поиск ${placeholder.toLowerCase()}...`} />
+            <CommandInput
+              placeholder={`Поиск ${placeholder.toLowerCase()}...`}
+              value={searchValue}
+              onValueChange={setSearchValue}
+            />
             <CommandList>
               <CommandEmpty>Ничего не найдено</CommandEmpty>
               <CommandGroup>
                 <CommandItem
-                  value="all"
                   onSelect={() => {
                     onValueChange("all")
                     togglePopover(column)
+                    setSearchValue("")
                   }}
                 >
                   <Check
@@ -266,13 +277,13 @@ export default function UsersPage() {
                   />
                   Все
                 </CommandItem>
-                {options.map((option) => (
+                {filteredOptions.map((option) => (
                   <CommandItem
                     key={option}
-                    value={option}
                     onSelect={() => {
                       onValueChange(option)
                       togglePopover(column)
+                      setSearchValue("")
                     }}
                   >
                     <Check className={cn("mr-2 h-4 w-4", value === option ? "opacity-100" : "opacity-0")} />
