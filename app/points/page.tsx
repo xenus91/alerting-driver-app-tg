@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -132,6 +132,15 @@ export default function PointsPage() {
     created_at: false,
   })
 
+  // Отладочное состояние
+  const [debugInfo, setDebugInfo] = useState<string[]>([])
+  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  const addDebugInfo = (message: string) => {
+    console.log(`[DEBUG] ${message}`)
+    setDebugInfo((prev) => [...prev.slice(-4), `${new Date().toLocaleTimeString()}: ${message}`])
+  }
+
   const fetchPoints = async () => {
     setIsLoading(true)
     try {
@@ -167,6 +176,7 @@ export default function PointsPage() {
 
   // Функция сортировки
   const handleSort = (field: SortField) => {
+    addDebugInfo(`Sort clicked: ${field}`)
     if (sortField === field) {
       if (sortDirection === "asc") {
         setSortDirection("desc")
@@ -182,6 +192,7 @@ export default function PointsPage() {
 
   // Функции управления popover'ами
   const handlePopoverOpen = (field: keyof PopoverStates, open: boolean) => {
+    addDebugInfo(`Popover ${field}: ${open ? "opened" : "closed"}`)
     setPopoverStates((prev) => ({
       ...prev,
       [field]: open,
@@ -190,6 +201,7 @@ export default function PointsPage() {
 
   // Функции фильтрации
   const handleFilterChange = (field: keyof ColumnFilters, value: string, checked: boolean) => {
+    addDebugInfo(`Filter change: ${field} - ${value} - ${checked}`)
     setColumnFilters((prev) => ({
       ...prev,
       [field]: checked ? [...prev[field], value] : prev[field].filter((v) => v !== value),
@@ -197,13 +209,32 @@ export default function PointsPage() {
   }
 
   const handleFilterSearchChange = (field: keyof FilterSearches, value: string) => {
+    addDebugInfo(`Search change: ${field} - "${value}" (length: ${value.length})`)
+
+    // Сохраняем текущий фокус
+    const activeElement = document.activeElement
+    addDebugInfo(`Active element before: ${activeElement?.tagName} ${activeElement?.className}`)
+
     setFilterSearches((prev) => ({
       ...prev,
       [field]: value,
     }))
+
+    // Проверяем фокус после изменения состояния
+    setTimeout(() => {
+      const newActiveElement = document.activeElement
+      addDebugInfo(`Active element after: ${newActiveElement?.tagName} ${newActiveElement?.className}`)
+
+      // Если фокус потерялся, возвращаем его на input
+      if (inputRefs.current[field] && newActiveElement !== inputRefs.current[field]) {
+        addDebugInfo(`Focus lost! Restoring focus to input ${field}`)
+        inputRefs.current[field]?.focus()
+      }
+    }, 0)
   }
 
   const clearFilter = (field: keyof ColumnFilters) => {
+    addDebugInfo(`Clear filter: ${field}`)
     setColumnFilters((prev) => ({
       ...prev,
       [field]: [],
@@ -215,10 +246,19 @@ export default function PointsPage() {
   }
 
   const clearSearchOnly = (field: keyof FilterSearches) => {
+    addDebugInfo(`Clear search only: ${field}`)
     setFilterSearches((prev) => ({
       ...prev,
       [field]: "",
     }))
+
+    // Возвращаем фокус на input после очистки
+    setTimeout(() => {
+      if (inputRefs.current[field]) {
+        inputRefs.current[field]?.focus()
+        addDebugInfo(`Focus restored to input ${field} after clear`)
+      }
+    }, 0)
   }
 
   // Получение значения для фильтрации/сортировки
@@ -417,30 +457,51 @@ export default function PointsPage() {
 
     return (
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground" />
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
         <Input
+          ref={(el) => {
+            inputRefs.current[field] = el
+            addDebugInfo(`Input ref set for ${field}: ${el ? "success" : "null"}`)
+          }}
           placeholder={placeholder}
           value={value}
           onChange={(e) => {
+            addDebugInfo(`Input onChange triggered: ${field} - "${e.target.value}"`)
             e.stopPropagation()
             handleFilterSearchChange(field, e.target.value)
           }}
           onKeyDown={(e) => {
+            addDebugInfo(`Input onKeyDown: ${field} - ${e.key}`)
             e.stopPropagation()
           }}
           onClick={(e) => {
+            addDebugInfo(`Input onClick: ${field}`)
             e.stopPropagation()
           }}
+          onFocus={(e) => {
+            addDebugInfo(`Input onFocus: ${field}`)
+          }}
+          onBlur={(e) => {
+            addDebugInfo(`Input onBlur: ${field}`)
+          }}
           className="h-8 pl-9 pr-8"
+          autoComplete="off"
         />
         {hasValue && (
           <button
             type="button"
             onClick={(e) => {
+              addDebugInfo(`Clear button clicked: ${field}`)
               e.stopPropagation()
+              e.preventDefault()
               clearSearchOnly(field)
             }}
+            onMouseDown={(e) => {
+              addDebugInfo(`Clear button mouseDown: ${field}`)
+              e.preventDefault() // Предотвращаем потерю фокуса
+            }}
             className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            tabIndex={-1} // Убираем из tab order
           >
             <X className="h-3 w-3" />
           </button>
@@ -504,10 +565,17 @@ export default function PointsPage() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => {
+                    onClick={(e) => {
+                      addDebugInfo(`Reset all button clicked: ${field}`)
+                      e.stopPropagation()
                       clearFilter(field)
                     }}
+                    onMouseDown={(e) => {
+                      addDebugInfo(`Reset all button mouseDown: ${field}`)
+                      e.preventDefault()
+                    }}
                     className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    tabIndex={-1}
                   >
                     Сбросить всё
                   </Button>
@@ -548,6 +616,29 @@ export default function PointsPage() {
 
   return (
     <div className="space-y-6">
+      {/* Отладочная панель */}
+      {debugInfo.length > 0 && (
+        <Card className="border-yellow-200 bg-yellow-50">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm flex items-center justify-between">
+              🐛 Отладочная информация
+              <Button variant="ghost" size="sm" onClick={() => setDebugInfo([])} className="h-6 px-2 text-xs">
+                Очистить
+              </Button>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-1 text-xs font-mono">
+              {debugInfo.map((info, index) => (
+                <div key={index} className="text-yellow-800">
+                  {info}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold">Управление пунктами</h1>
