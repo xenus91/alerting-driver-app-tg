@@ -463,20 +463,40 @@ export async function POST(request: NextRequest) {
         console.log(`Processing confirmation for message ${messageId}`)
 
         try {
-          // Получаем информацию о сообщении и пользователе
+          // Получаем информацию о сообщении напрямую
           const messageResult = await sql`
-            SELECT tm.phone, tm.trip_id, u.telegram_id
-            FROM trip_messages tm
-            JOIN users u ON tm.phone = u.phone
-            WHERE tm.id = ${messageId}
+            SELECT phone, trip_id
+            FROM trip_messages 
+            WHERE id = ${messageId}
             LIMIT 1
           `
 
+          let phone, trip_id
           if (messageResult.length === 0) {
-            throw new Error("Message not found")
+            console.log(`Message ${messageId} not found, trying to find by user telegram_id`)
+
+            // Альтернативный поиск: найдем любое сообщение этого пользователя
+            const userMessageResult = await sql`
+              SELECT DISTINCT tm.phone, tm.trip_id
+              FROM trip_messages tm
+              WHERE tm.telegram_id = ${userId} AND tm.response_status = 'pending'
+              ORDER BY tm.created_at DESC
+              LIMIT 1
+            `
+
+            if (userMessageResult.length === 0) {
+              throw new Error(`No pending messages found for user ${userId}`)
+            }
+
+            console.log(`Found alternative message for user ${userId}:`, userMessageResult[0])
+            phone = userMessageResult[0].phone
+            trip_id = userMessageResult[0].trip_id
+          } else {
+            phone = messageResult[0].phone
+            trip_id = messageResult[0].trip_id
           }
 
-          const { phone, trip_id } = messageResult[0]
+          console.log(`Confirming for phone: ${phone}, trip_id: ${trip_id}`)
 
           // Обновляем ВСЕ сообщения этого водителя в этой рассылке
           const updateResult = await sql`
@@ -534,7 +554,19 @@ export async function POST(request: NextRequest) {
             throw new Error("User not found")
           }
 
+          // Проверяем, что у пользователя есть pending сообщения
+          const pendingCheck = await sql`
+            SELECT COUNT(*) as count
+            FROM trip_messages 
+            WHERE telegram_id = ${userId} AND response_status = 'pending'
+          `
+
+          if (pendingCheck[0].count === 0) {
+            throw new Error("No pending messages found for this user")
+          }
+
           // Устанавливаем pending action для ожидания причины
+          // Используем messageId или любой ID для связи
           await setUserPendingAction(user.id, "awaiting_rejection_reason", messageId)
 
           // Отвечаем на callback query (игнорируем ошибки старых запросов)
@@ -603,19 +635,22 @@ export async function POST(request: NextRequest) {
         console.log(`Processing rejection reason: "${messageText}"`)
 
         try {
-          // Получаем информацию о сообщении
-          const messageResult = await sql`
-            SELECT tm.phone, tm.trip_id
-            FROM trip_messages tm
-            WHERE tm.id = ${pendingAction.related_message_id}
+          // Находим все pending сообщения этого пользователя
+          const userMessagesResult = await sql`
+            SELECT DISTINCT phone, trip_id
+            FROM trip_messages 
+            WHERE telegram_id = ${userId} AND response_status = 'pending'
+            ORDER BY created_at DESC
             LIMIT 1
           `
 
-          if (messageResult.length === 0) {
-            throw new Error("Message not found")
+          if (userMessagesResult.length === 0) {
+            throw new Error("No pending messages found for this user")
           }
 
-          const { phone, trip_id } = messageResult[0]
+          const phone = userMessagesResult[0].phone
+          const trip_id = userMessagesResult[0].trip_id
+          console.log(`Rejecting for phone: ${phone}, trip_id: ${trip_id}`)
 
           // Обновляем ВСЕ сообщения этого водителя в этой рассылке
           const updateResult = await sql`
