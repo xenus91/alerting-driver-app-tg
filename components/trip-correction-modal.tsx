@@ -8,7 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X } from "lucide-react"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X, Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface CorrectionData {
   phone: string
@@ -43,6 +46,7 @@ export function TripCorrectionModal({
 }: TripCorrectionModalProps) {
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string }>>([])
+  const [pointSearchStates, setPointSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isSending, setIsSending] = useState(false)
@@ -269,6 +273,93 @@ export function TripCorrectionModal({
     }
   }
 
+  // Функция для получения уникального ключа для каждой точки
+  const getPointKey = (tripIdentifier: string, pointType: string, pointNum: number) => {
+    return `${tripIdentifier}-${pointType}-${pointNum}`
+  }
+
+  // Функция для управления состоянием поиска точек
+  const setPointSearchState = (key: string, state: { open?: boolean; search?: string }) => {
+    setPointSearchStates((prev) => ({
+      ...prev,
+      [key]: { ...prev[key], ...state },
+    }))
+  }
+
+  // Функция фильтрации точек
+  const filterPoints = (searchTerm: string) => {
+    if (!searchTerm) return availablePoints
+
+    const lowerSearch = searchTerm.toLowerCase()
+    return availablePoints.filter(
+      (point) =>
+        point.point_id.toLowerCase().includes(lowerSearch) || point.point_name.toLowerCase().includes(lowerSearch),
+    )
+  }
+
+  // Компонент для выбора точки с поиском
+  const PointSelector = ({
+    value,
+    onChange,
+    pointKey,
+  }: {
+    value: string
+    onChange: (value: string) => void
+    pointKey: string
+  }) => {
+    const searchState = pointSearchStates[pointKey] || { open: false, search: "" }
+    const filteredPoints = filterPoints(searchState.search)
+    const selectedPoint = availablePoints.find((p) => p.point_id === value)
+
+    return (
+      <Popover open={searchState.open} onOpenChange={(open) => setPointSearchState(pointKey, { open })}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
+            {selectedPoint ? (
+              <div className="flex flex-col items-start">
+                <span className="font-medium">{selectedPoint.point_id}</span>
+                <span className="text-xs text-muted-foreground">{selectedPoint.point_name}</span>
+              </div>
+            ) : (
+              "Выберите точку..."
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0">
+          <Command>
+            <CommandInput
+              placeholder="Поиск по коду или названию..."
+              value={searchState.search}
+              onValueChange={(search) => setPointSearchState(pointKey, { search })}
+            />
+            <CommandList>
+              <CommandEmpty>Точки не найдены.</CommandEmpty>
+              <CommandGroup>
+                {filteredPoints.map((point) => (
+                  <CommandItem
+                    key={point.point_id}
+                    value={point.point_id}
+                    onSelect={() => {
+                      onChange(point.point_id)
+                      setPointSearchState(pointKey, { open: false, search: "" })
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
+                    <div className="flex flex-col">
+                      <span className="font-medium">{point.point_id}</span>
+                      <span className="text-sm text-muted-foreground">{point.point_name}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
   // Группируем корректировки по trip_identifier
   const groupedCorrections = corrections.reduce(
     (groups, correction) => {
@@ -431,6 +522,12 @@ export function TripCorrectionModal({
                           c.point_num === correction.point_num &&
                           c.point_type === correction.point_type,
                       )
+                      const pointKey = getPointKey(
+                        correction.trip_identifier,
+                        correction.point_type,
+                        correction.point_num,
+                      )
+
                       return (
                         <TableRow
                           key={`${correction.trip_identifier}-${correction.point_type}-${correction.point_num}`}
@@ -468,21 +565,11 @@ export function TripCorrectionModal({
                             />
                           </TableCell>
                           <TableCell>
-                            <Select
+                            <PointSelector
                               value={correction.point_id}
-                              onValueChange={(value) => updateCorrection(globalIndex, "point_id", value)}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Выберите точку" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {availablePoints.map((point) => (
-                                  <SelectItem key={point.point_id} value={point.point_id}>
-                                    {point.point_id} - {point.point_name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
+                              onChange={(value) => updateCorrection(globalIndex, "point_id", value)}
+                              pointKey={pointKey}
+                            />
                           </TableCell>
                           <TableCell>
                             <Button
