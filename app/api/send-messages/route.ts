@@ -1,4 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
+import { cookies } from "next/headers"
 import {
   createTrip,
   createTripMessage,
@@ -9,10 +10,44 @@ import {
 } from "@/lib/database"
 import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
 
+export const dynamic = "force-dynamic"
+
 export async function POST(request: NextRequest) {
   try {
+    // Получаем информацию о текущем пользователе
+    const cookieStore = cookies()
+    const sessionCookie = cookieStore.get("session_token")
+
+    if (!sessionCookie) {
+      return NextResponse.json({ error: "Не авторизован" }, { status: 401 })
+    }
+
+    // Получаем данные текущего пользователя из сессии
+    const { neon } = await import("@neondatabase/serverless")
+    const sql = neon(process.env.DATABASE_URL!)
+
+    const currentUserResult = await sql`
+      SELECT u.id, u.telegram_id, u.phone, u.name, u.first_name, u.last_name, u.full_name, u.carpark, u.role
+      FROM users u
+      JOIN user_sessions us ON u.id = us.user_id
+      WHERE us.session_token = ${sessionCookie.value} AND us.expires_at > NOW()
+      LIMIT 1
+    `
+
+    if (currentUserResult.length === 0) {
+      return NextResponse.json({ error: "Сессия не найдена или истекла" }, { status: 401 })
+    }
+
+    const currentUser = currentUserResult[0]
+    console.log(`=== SEND MESSAGES API CALLED BY USER ===`)
+    console.log(`Current user:`, {
+      id: currentUser.id,
+      name: currentUser.first_name || currentUser.name,
+      carpark: currentUser.carpark,
+      role: currentUser.role,
+    })
+
     const body = await request.json()
-    console.log(`=== SEND MESSAGES API CALLED ===`)
     console.log(`Received body:`, JSON.stringify(body, null, 2))
 
     // Поддерживаем оба формата: новый (tripData) и старый (campaignId как массив)
@@ -25,9 +60,9 @@ export async function POST(request: NextRequest) {
 
     console.log(`Processing ${tripData.length} trips for sending`)
 
-    // Создаем основной trip ТОЛЬКО при отправке
-    const mainTrip = await createTrip()
-    console.log(`Created main trip with ID: ${mainTrip.id}`)
+    // Создаем основной trip ТОЛЬКО при отправке с carpark текущего пользователя
+    const mainTrip = await createTrip(currentUser.carpark)
+    console.log(`Created main trip with ID: ${mainTrip.id} and carpark: ${currentUser.carpark}`)
 
     // Получаем все доступные пункты из базы данных
     const allPoints = await getAllPoints()
@@ -156,7 +191,7 @@ export async function POST(request: NextRequest) {
               const point = pointsMap.get(loadingPoint.point_id)
               if (point) {
                 console.log(`DEBUG: Loading point ${point.point_id} coordinates:`, {
-                  latitude: point.latitude, // Теперь без пробела!
+                  latitude: point.latitude,
                   longitude: point.longitude,
                   latitude_type: typeof point.latitude,
                   longitude_type: typeof point.longitude,
@@ -169,7 +204,7 @@ export async function POST(request: NextRequest) {
                   door_open_1: point.door_open_1,
                   door_open_2: point.door_open_2,
                   door_open_3: point.door_open_3,
-                  latitude: point.latitude, // Теперь без пробела!
+                  latitude: point.latitude,
                   longitude: point.longitude,
                 })
               }
@@ -179,7 +214,7 @@ export async function POST(request: NextRequest) {
               const point = pointsMap.get(unloadingPoint.point_id)
               if (point) {
                 console.log(`DEBUG: Unloading point ${point.point_id} coordinates:`, {
-                  latitude: point.latitude, // Теперь без пробела!
+                  latitude: point.latitude,
                   longitude: point.longitude,
                   latitude_type: typeof point.latitude,
                   longitude_type: typeof point.longitude,
@@ -192,7 +227,7 @@ export async function POST(request: NextRequest) {
                   door_open_1: point.door_open_1,
                   door_open_2: point.door_open_2,
                   door_open_3: point.door_open_3,
-                  latitude: point.latitude, // Теперь без пробела!
+                  latitude: point.latitude,
                   longitude: point.longitude,
                 })
               }
@@ -221,9 +256,6 @@ export async function POST(request: NextRequest) {
           console.log(`Telegram API result:`, telegramResult)
 
           // Обновляем статус ВСЕХ сообщений для этого пользователя на "sent"
-          const { neon } = await import("@neondatabase/serverless")
-          const sql = neon(process.env.DATABASE_URL!)
-
           await sql`
             UPDATE trip_messages 
             SET status = 'sent', 
@@ -249,9 +281,6 @@ export async function POST(request: NextRequest) {
 
           // Обновляем статус на "error" при ошибке
           try {
-            const { neon } = await import("@neondatabase/serverless")
-            const sql = neon(process.env.DATABASE_URL!)
-
             await sql`
               UPDATE trip_messages 
               SET status = 'error', 
@@ -285,10 +314,12 @@ export async function POST(request: NextRequest) {
 
     console.log(`=== MESSAGE SENDING COMPLETE ===`)
     console.log(`Total: ${results.total}, Sent: ${results.sent}, Errors: ${results.errors}`)
+    console.log(`Trip created with carpark: ${currentUser.carpark}`)
 
     return NextResponse.json({
       success: true,
       tripId: mainTrip.id,
+      carpark: currentUser.carpark,
       results,
     })
   } catch (error) {
