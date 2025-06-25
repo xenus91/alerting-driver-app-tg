@@ -328,11 +328,12 @@ async function updateUserRegistrationStep(telegramId: number, step: string, data
   }
 }
 
-async function setUserPendingAction(userId: number, actionType: string, relatedMessageId?: number) {
+async function setUserPendingAction(userId: number, actionType: string, relatedData?: any) {
   try {
+    const dataString = relatedData ? JSON.stringify(relatedData) : null
     const result = await sql`
       INSERT INTO user_pending_actions (user_id, action_type, related_message_id)
-      VALUES (${userId}, ${actionType}, ${relatedMessageId || null})
+      VALUES (${userId}, ${actionType}, ${dataString})
       ON CONFLICT (user_id) DO UPDATE SET
         action_type = EXCLUDED.action_type,
         related_message_id = EXCLUDED.related_message_id,
@@ -372,6 +373,31 @@ async function deleteUserPendingAction(userId: number) {
   }
 }
 
+async function getAllPoints() {
+  try {
+    const result = await sql`
+      SELECT point_id, point_name, latitude, longitude 
+      FROM points 
+      WHERE latitude IS NOT NULL AND longitude IS NOT NULL
+      ORDER BY point_id ASC
+    `
+    return result
+  } catch (error) {
+    console.error("Error getting all points:", error)
+    throw error
+  }
+}
+
+function buildRouteUrl(points: Array<{ latitude: string; longitude: string }>) {
+  if (points.length < 2) {
+    return null
+  }
+
+  const coordinates = points.map((p) => `${p.latitude},${p.longitude}`).join("~")
+
+  return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
+}
+
 export async function POST(request: NextRequest) {
   const timestamp = new Date().toISOString()
   console.log(`=== TELEGRAM WEBHOOK RECEIVED at ${timestamp} ===`)
@@ -399,6 +425,252 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ ok: true, status: "no_chat_id" })
       }
 
+      // Обработка выбора точки для маршрута
+      if (data?.startsWith("route_point_")) {
+        const pointId = data.replace("route_point_", "")
+        console.log(`🗺️ User ${userId} selected route point: ${pointId}`)
+
+        try {
+          const user = await getUserByTelegramId(userId)
+          if (!user) {
+            throw new Error("User not found")
+          }
+
+          const pendingAction = await getUserPendingAction(user.id)
+
+          // Получаем информацию о выбранной точке
+          const pointResult = await sql`
+            SELECT point_id, point_name, latitude, longitude 
+            FROM points 
+            WHERE point_id = ${pointId}
+            LIMIT 1
+          `
+
+          if (pointResult.length === 0) {
+            throw new Error("Point not found")
+          }
+
+          const selectedPoint = pointResult[0]
+
+          let routePoints = []
+          let stepMessage = ""
+
+          if (pendingAction?.action_type === "building_route_start") {
+            // Первая точка выбрана
+            routePoints = [selectedPoint]
+            stepMessage = `✅ Точка отправления: <b>${selectedPoint.point_id} ${selectedPoint.point_name}</b>\n\n🎯 Теперь выберите точку назначения:`
+
+            await setUserPendingAction(user.id, "building_route_continue", { points: routePoints })
+          } else if (pendingAction?.action_type === "building_route_continue") {
+            // Добавляем следующую точку
+            const existingData = pendingAction.related_message_id
+              ? JSON.parse(pendingAction.related_message_id)
+              : { points: [] }
+            routePoints = [...existingData.points, selectedPoint]
+
+            stepMessage = `🗺️ <b>Маршрут строится:</b>\n\n`
+            routePoints.forEach((point, index) => {
+              const emoji = index === 0 ? "🚀" : index === routePoints.length - 1 ? "🏁" : "📍"
+              stepMessage += `${emoji} ${index + 1}. ${point.point_id} ${point.point_name}\n`
+            })
+
+            if (routePoints.length >= 2) {
+              stepMessage += `\n💡 Выберите следующую точку или завершите построение маршрута:`
+            } else {
+              stepMessage += `\n🎯 Выберите следующую точку:`
+            }
+
+            await setUserPendingAction(user.id, "building_route_continue", { points: routePoints })
+          }
+
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, `Добавлена точка: ${selectedPoint.point_name}`)
+
+          // Скрываем кнопки предыдущего сообщения
+          if (messageId) {
+            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          }
+
+          // Получаем все доступные точки для следующего выбора
+          const allPoints = await getAllPoints()
+
+          // Исключаем уже выбранные точки
+          const selectedPointIds = routePoints.map((p) => p.point_id)
+          const availablePoints = allPoints.filter((p) => !selectedPointIds.includes(p.point_id))
+
+          // Формируем кнопки
+          const buttons = []
+
+          // Кнопки с точками (по 2 в ряд)
+          for (let i = 0; i < availablePoints.length; i += 2) {
+            const row = []
+            row.push({
+              text: `${availablePoints[i].point_id} ${availablePoints[i].point_name}`,
+              callback_data: `route_point_${availablePoints[i].point_id}`,
+            })
+            if (i + 1 < availablePoints.length) {
+              row.push({
+                text: `${availablePoints[i + 1].point_id} ${availablePoints[i + 1].point_name}`,
+                callback_data: `route_point_${availablePoints[i + 1].point_id}`,
+              })
+            }
+            buttons.push(row)
+          }
+
+          // Кнопка "Завершить" если уже есть минимум 2 точки
+          if (routePoints.length >= 2) {
+            buttons.push([
+              {
+                text: "✅ Завершить построение маршрута",
+                callback_data: "route_finish",
+              },
+            ])
+          }
+
+          // Кнопка отмены
+          buttons.push([
+            {
+              text: "❌ Отменить",
+              callback_data: "route_cancel",
+            },
+          ])
+
+          await sendMessageWithButtons(chatId, stepMessage, buttons)
+
+          console.log("=== ROUTE POINT SELECTED ===")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_point_selected",
+            point_id: pointId,
+            total_points: routePoints.length,
+            timestamp: timestamp,
+          })
+        } catch (error) {
+          console.error("Error processing route point selection:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при выборе точки маршрута.")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_point_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          })
+        }
+      }
+
+      // Обработка завершения построения маршрута
+      if (data === "route_finish") {
+        console.log(`🏁 User ${userId} finishing route building`)
+
+        try {
+          const user = await getUserByTelegramId(userId)
+          if (!user) {
+            throw new Error("User not found")
+          }
+
+          const pendingAction = await getUserPendingAction(user.id)
+          if (!pendingAction || pendingAction.action_type !== "building_route_continue") {
+            throw new Error("No route building in progress")
+          }
+
+          const routeData = JSON.parse(pendingAction.related_message_id)
+          const routePoints = routeData.points
+
+          if (routePoints.length < 2) {
+            throw new Error("Not enough points for route")
+          }
+
+          // Строим URL маршрута
+          const routeUrl = buildRouteUrl(routePoints)
+
+          if (!routeUrl) {
+            throw new Error("Failed to build route URL")
+          }
+
+          // Формируем сообщение с маршрутом
+          let routeMessage = `🗺️ <b>Маршрут построен!</b>\n\n`
+          routeMessage += `📍 <b>Точки маршрута:</b>\n`
+
+          routePoints.forEach((point, index) => {
+            const emoji = index === 0 ? "🚀" : index === routePoints.length - 1 ? "🏁" : "📍"
+            routeMessage += `${emoji} ${index + 1}. ${point.point_id} ${point.point_name}\n`
+          })
+
+          routeMessage += `\n🔗 <a href="${routeUrl}">Открыть маршрут в Яндекс.Картах</a>`
+
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, "Маршрут построен!")
+
+          // Скрываем кнопки
+          if (messageId) {
+            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          }
+
+          // Отправляем готовый маршрут
+          await sendMessage(chatId, routeMessage)
+
+          // Удаляем pending action
+          await deleteUserPendingAction(user.id)
+
+          console.log("=== ROUTE FINISHED ===")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_finished",
+            points_count: routePoints.length,
+            route_url: routeUrl,
+            timestamp: timestamp,
+          })
+        } catch (error) {
+          console.error("Error finishing route:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при построении маршрута.")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_finish_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          })
+        }
+      }
+
+      // Обработка отмены построения маршрута
+      if (data === "route_cancel") {
+        console.log(`❌ User ${userId} cancelling route building`)
+
+        try {
+          const user = await getUserByTelegramId(userId)
+          if (user) {
+            await deleteUserPendingAction(user.id)
+          }
+
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, "Построение маршрута отменено")
+
+          // Скрываем кнопки
+          if (messageId) {
+            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          }
+
+          await sendMessage(chatId, "❌ Построение маршрута отменено.")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_cancelled",
+            timestamp: timestamp,
+          })
+        } catch (error) {
+          console.error("Error cancelling route:", error)
+          return NextResponse.json({
+            ok: true,
+            status: "route_cancel_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          })
+        }
+      }
+
       // Обработка выбора автопарка
       if (data?.startsWith("carpark_")) {
         const carpark = data.replace("carpark_", "")
@@ -408,7 +680,7 @@ export async function POST(request: NextRequest) {
           // Сначала отвечаем на callback query (игнорируем ошибки старых запросов)
           await answerCallbackQuery(callbackQuery.id, `Выбран автопарк ${carpark}`)
 
-          // ��крываем кнопки (убираем reply_markup)
+          // Скрываем кнопки (убираем reply_markup)
           if (messageId) {
             await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
             console.log("✅ Buttons hidden after carpark selection")
@@ -626,6 +898,100 @@ export async function POST(request: NextRequest) {
     // Получаем информацию о пользователе
     const existingUser = await getUserByTelegramId(userId)
 
+    // Обработка команды /toroute - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
+    if (messageText === "/toroute") {
+      console.log("=== PROCESSING /TOROUTE COMMAND ===")
+
+      try {
+        // Очищаем любые pending actions при старте команды
+        if (existingUser) {
+          await deleteUserPendingAction(existingUser.id)
+          console.log("Cleared pending actions for user on /toroute")
+        }
+
+        // Проверяем, зарегистрирован ли пользователь
+        if (!existingUser || existingUser.registration_state !== "completed") {
+          await sendMessage(
+            chatId,
+            "❌ Для использования команды /toroute необходимо сначала зарегистрироваться. Отправьте /start",
+          )
+          return NextResponse.json({
+            ok: true,
+            status: "user_not_registered",
+            timestamp: timestamp,
+          })
+        }
+
+        // Получаем все доступные точки с координатами
+        const allPoints = await getAllPoints()
+
+        if (allPoints.length < 2) {
+          await sendMessage(
+            chatId,
+            "❌ Недостаточно точек с координатами для построения маршрута. Обратитесь к администратору.",
+          )
+          return NextResponse.json({
+            ok: true,
+            status: "insufficient_points",
+            timestamp: timestamp,
+          })
+        }
+
+        // Устанавливаем pending action для начала построения маршрута
+        await setUserPendingAction(existingUser.id, "building_route_start", { points: [] })
+
+        const welcomeMessage = `🗺️ <b>Построение маршрута</b>\n\n` + `📍 Выберите точку отправления из списка ниже:`
+
+        // Формируем кнопки с точками (по 2 в ряд)
+        const buttons = []
+
+        for (let i = 0; i < allPoints.length; i += 2) {
+          const row = []
+          row.push({
+            text: `${allPoints[i].point_id} ${allPoints[i].point_name}`,
+            callback_data: `route_point_${allPoints[i].point_id}`,
+          })
+          if (i + 1 < allPoints.length) {
+            row.push({
+              text: `${allPoints[i + 1].point_id} ${allPoints[i + 1].point_name}`,
+              callback_data: `route_point_${allPoints[i + 1].point_id}`,
+            })
+          }
+          buttons.push(row)
+        }
+
+        // Кнопка отмены
+        buttons.push([
+          {
+            text: "❌ Отменить",
+            callback_data: "route_cancel",
+          },
+        ])
+
+        await sendMessageWithButtons(chatId, welcomeMessage, buttons)
+
+        console.log("=== /TOROUTE COMMAND PROCESSED SUCCESSFULLY ===")
+
+        return NextResponse.json({
+          ok: true,
+          status: "toroute_started",
+          available_points: allPoints.length,
+          timestamp: timestamp,
+          user_id: userId,
+          chat_id: chatId,
+        })
+      } catch (error) {
+        console.error("=== ERROR PROCESSING /TOROUTE ===", error)
+        await sendMessage(chatId, "❌ Произошла ошибка при запуске построения маршрута.")
+        return NextResponse.json({
+          ok: true, // Возвращаем ok: true чтобы не блокировать webhook
+          status: "toroute_error",
+          error: error instanceof Error ? error.message : "Unknown error",
+          timestamp: timestamp,
+        })
+      }
+    }
+
     // Обработка команды /start - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
     if (messageText === "/start") {
       console.log("=== PROCESSING /START COMMAND ===")
@@ -646,7 +1012,9 @@ export async function POST(request: NextRequest) {
             `👤 ФИО: ${existingUser.full_name}\n` +
             `📱 Телефон: +${existingUser.phone}\n` +
             `🏢 Автопарк: ${existingUser.carpark}\n\n` +
-            `🚛 Ожидайте сообщения о предстоящих рейсах.`
+            `🚛 Ожидайте сообщения о предстоящих рейсах.\n\n` +
+            `💡 <b>Доступные команды:</b>\n` +
+            `🗺️ /toroute - Построить маршрут между точками`
 
           await sendMessage(chatId, registeredMessage)
 
@@ -687,7 +1055,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Проверяем, есть ли pending action для пользователя (ПОСЛЕ обработки /start)
+    // Проверяем, есть ли pending action для пользователя (ПОСЛЕ обработки команд)
     if (existingUser) {
       const pendingAction = await getUserPendingAction(existingUser.id)
 
@@ -794,7 +1162,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Обработка текстовых сообщений в зависимости от состояния регистрации
-    if (messageText && messageText !== "/start") {
+    if (messageText && messageText !== "/start" && messageText !== "/toroute") {
       console.log("=== PROCESSING TEXT MESSAGE ===")
       console.log("Existing user:", existingUser)
 
@@ -911,7 +1279,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (existingUser.registration_state === "completed") {
-        // Пользоват��ль уже зарегистрирован
+        // Пользователь уже зарегистрирован
         const registeredMessage =
           `👋 Здравствуйте, ${existingUser.first_name}!\n\n` +
           `✅ Вы уже зарегистрированы в системе уведомлений.\n\n` +
@@ -919,7 +1287,9 @@ export async function POST(request: NextRequest) {
           `👤 ФИО: ${existingUser.full_name}\n` +
           `📱 Телефон: +${existingUser.phone}\n` +
           `🏢 Автопарк: ${existingUser.carpark}\n\n` +
-          `🚛 Ожидайте сообщения о предстоящих рейсах.`
+          `🚛 Ожидайте сообщения о предстоящих рейсах.\n\n` +
+          `💡 <b>Доступные команды:</b>\n` +
+          `🗺️ /toroute - Построить маршрут между точками`
 
         await sendMessage(chatId, registeredMessage)
 
@@ -968,7 +1338,8 @@ export async function GET() {
   console.log("GET request to telegram-webhook endpoint")
 
   return NextResponse.json({
-    status: "Telegram webhook endpoint is working with FULL REGISTRATION LOGIC + CALLBACK HANDLING + ERROR RESILIENCE",
+    status:
+      "Telegram webhook endpoint is working with FULL REGISTRATION LOGIC + CALLBACK HANDLING + ERROR RESILIENCE + ROUTE BUILDING",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
     vercel_url: process.env.VERCEL_URL,
