@@ -8,7 +8,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Send, Plus, Trash2, User, Zap } from "lucide-react"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { RefreshCw, Send, Plus, Trash2, User, Zap, Check, ChevronsUpDown } from "lucide-react"
+import { cn } from "@/lib/utils"
 
 interface TripData {
   trip_identifier: string
@@ -262,7 +265,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   }
 
   const getDriverDisplayName = (driver: Driver) => {
-    return driver.first_name || driver.full_name || driver.name || `ID: ${driver.telegram_id}`
+    return driver.full_name || driver.first_name || driver.name || `ID: ${driver.telegram_id}`
   }
 
   const formatPhone = (phone: string) => {
@@ -272,6 +275,129 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
       return `+7 (${phone.slice(1, 4)}) ${phone.slice(4, 7)}-${phone.slice(7, 9)}-${phone.slice(9)}`
     }
     return phone
+  }
+
+  // Компонент для поиска водителей
+  const DriverSelector = () => {
+    const [open, setOpen] = useState(false)
+    const [searchValue, setSearchValue] = useState("")
+
+    const filteredDrivers = drivers.filter((driver) => {
+      const displayName = getDriverDisplayName(driver).toLowerCase()
+      const phone = formatPhone(driver.phone).toLowerCase()
+      const search = searchValue.toLowerCase()
+
+      return displayName.includes(search) || phone.includes(search) || driver.phone.includes(search)
+    })
+
+    const selectedDriverData = drivers.find((driver) => driver.phone === selectedDriver)
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+            {selectedDriverData
+              ? `${getDriverDisplayName(selectedDriverData)} - ${formatPhone(selectedDriverData.phone)}`
+              : "Выберите водителя для отправки рейса"}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full p-0">
+          <Command>
+            <CommandInput
+              placeholder="Поиск по имени или телефону..."
+              value={searchValue}
+              onValueChange={setSearchValue}
+            />
+            <CommandList>
+              <CommandEmpty>Водители не найдены.</CommandEmpty>
+              <CommandGroup>
+                {filteredDrivers.map((driver) => (
+                  <CommandItem
+                    key={driver.phone}
+                    value={driver.phone}
+                    onSelect={(currentValue) => {
+                      setSelectedDriver(currentValue === selectedDriver ? "" : currentValue)
+                      setOpen(false)
+                      setSearchValue("")
+                    }}
+                  >
+                    <Check
+                      className={cn("mr-2 h-4 w-4", selectedDriver === driver.phone ? "opacity-100" : "opacity-0")}
+                    />
+                    <div className="flex items-center justify-between w-full">
+                      <span>{getDriverDisplayName(driver)}</span>
+                      <span className="text-sm text-gray-500 ml-4">{formatPhone(driver.phone)}</span>
+                    </div>
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    )
+  }
+
+  // Компонент для поиска точек
+  const PointSelector = ({
+    value,
+    onValueChange,
+    placeholder,
+  }: {
+    value: string
+    onValueChange: (value: string) => void
+    placeholder: string
+  }) => {
+    const [open, setOpen] = useState(false)
+    const [searchValue, setSearchValue] = useState("")
+
+    const filteredPoints = availablePoints.filter(
+      (point) =>
+        point.point_id.toLowerCase().includes(searchValue.toLowerCase()) ||
+        point.point_name.toLowerCase().includes(searchValue.toLowerCase()),
+    )
+
+    const selectedPoint = availablePoints.find((point) => point.point_id === value)
+
+    return (
+      <Popover open={open} onOpenChange={setOpen}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
+            {selectedPoint ? `${selectedPoint.point_id} - ${selectedPoint.point_name}` : placeholder}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-full p-0">
+          <Command>
+            <CommandInput
+              placeholder="Поиск по ID или названию..."
+              value={searchValue}
+              onValueChange={setSearchValue}
+            />
+            <CommandList>
+              <CommandEmpty>Точки не найдены.</CommandEmpty>
+              <CommandGroup>
+                {filteredPoints.map((point) => (
+                  <CommandItem
+                    key={point.point_id}
+                    value={point.point_id}
+                    onSelect={(currentValue) => {
+                      onValueChange(currentValue === value ? "" : currentValue)
+                      setOpen(false)
+                      setSearchValue("")
+                    }}
+                  >
+                    <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
+                    {point.point_id} - {point.point_name}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            </CommandList>
+          </Command>
+        </PopoverContent>
+      </Popover>
+    )
   }
 
   return (
@@ -309,21 +435,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                 <User className="h-4 w-4 text-blue-600" />
                 <h3 className="font-medium text-blue-900">Выбор водителя</h3>
               </div>
-              <Select value={selectedDriver} onValueChange={setSelectedDriver}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Выберите водителя для отправки рейса" />
-                </SelectTrigger>
-                <SelectContent>
-                  {drivers.map((driver) => (
-                    <SelectItem key={driver.phone} value={driver.phone}>
-                      <div className="flex items-center justify-between w-full">
-                        <span>{getDriverDisplayName(driver)}</span>
-                        <span className="text-sm text-gray-500 ml-4">{formatPhone(driver.phone)}</span>
-                      </div>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <DriverSelector />
               {drivers.length === 0 && (
                 <p className="text-sm text-gray-500 mt-2">Нет доступных верифицированных водителей</p>
               )}
@@ -450,21 +562,11 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                           />
                         </TableCell>
                         <TableCell>
-                          <Select
+                          <PointSelector
                             value={point.point_id}
                             onValueChange={(value) => updatePoint(tripIndex, pointIndex, "point_id", value)}
-                          >
-                            <SelectTrigger>
-                              <SelectValue placeholder="Выберите точку" />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {availablePoints.map((availablePoint) => (
-                                <SelectItem key={availablePoint.point_id} value={availablePoint.point_id}>
-                                  {availablePoint.point_id} - {availablePoint.point_name}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
+                            placeholder="Выберите точку"
+                          />
                         </TableCell>
                         <TableCell>
                           <Button
