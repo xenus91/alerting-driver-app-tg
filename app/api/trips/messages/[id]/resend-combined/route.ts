@@ -146,26 +146,38 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Обновляем статус всех сообщений водителя
     // Если это корректировка, сбрасываем статус подтверждения
-    const updateResult = await sql`
-      UPDATE trip_messages 
-      SET status = 'sent', 
-          sent_at = ${new Date().toISOString()},
-          error_message = NULL,
-          response_status = ${isCorrection ? null : "response_status"},
-          response_time = ${isCorrection ? null : "response_time"}
-      WHERE id = ANY(${messageIds})
-      RETURNING *
-    `
-
-    console.log(`Updated ${updateResult.length} messages status to sent`)
-
+    let updateResult
     if (isCorrection) {
-      console.log(`Reset response status for correction - messages need new confirmation`)
+      // Для корректировки: статус sent, response_status pending, response_at null, обновляем sent_at
+      updateResult = await sql`
+        UPDATE trip_messages 
+        SET status = 'sent', 
+            sent_at = ${new Date().toISOString()},
+            error_message = NULL,
+            response_status = 'pending',
+            response_at = NULL
+        WHERE id = ANY(${messageIds})
+        RETURNING *
+      `
+      console.log(`Correction sent - reset response status to pending for ${updateResult.length} messages`)
+    } else {
+      // Для обычной повторной отправки: только обновляем статус отправки
+      updateResult = await sql`
+        UPDATE trip_messages 
+        SET status = 'sent', 
+            sent_at = ${new Date().toISOString()},
+            error_message = NULL
+        WHERE id = ANY(${messageIds})
+        RETURNING *
+      `
+      console.log(`Regular resend - updated ${updateResult.length} messages status to sent`)
     }
 
     return NextResponse.json({
       success: true,
-      message: isCorrection ? "Correction sent successfully" : "Combined message resent successfully",
+      message: isCorrection
+        ? "Correction sent successfully - driver needs to confirm again"
+        : "Combined message resent successfully",
       messageIds: messageIds,
       updatedMessages: updateResult.length,
       isCorrection: isCorrection,
