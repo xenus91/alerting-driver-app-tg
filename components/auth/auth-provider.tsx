@@ -10,6 +10,7 @@ interface User {
   telegram_id: number
   name: string
   role: string
+  carpark?: string
 }
 
 interface AuthContextType {
