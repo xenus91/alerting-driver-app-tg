@@ -1,51 +1,14 @@
-import { NextResponse } from "next/server"
-import { parseExcelData, validateExcelData, groupTripsByPhone } from "@/lib/excel"
-import { getUsersWithVerificationByPhones, getAllPoints } from "@/lib/database"
-import { cookies } from "next/headers"
-import { neon } from "@neondatabase/serverless"
+import { type NextRequest, NextResponse } from "next/server"
+import { parseExcelData, validateExcelData, groupTripsByPhone, createExampleExcelFile } from "@/lib/excel"
+import { getUserByPhone, getAllPoints, type Point } from "@/lib/database"
 
-const sql = neon(process.env.DATABASE_URL!)
-
-export const dynamic = "force-dynamic"
-
-// Функция для получения текущего пользователя
-async function getCurrentUser() {
-  const cookieStore = cookies()
-  const sessionToken = cookieStore.get("session_token")
-
-  if (!sessionToken) {
-    return null
-  }
-
-  const result = await sql`
-    SELECT u.*, s.expires_at
-    FROM users u
-    JOIN user_sessions s ON u.id = s.user_id
-    WHERE s.session_token = ${sessionToken.value}
-    AND s.expires_at > NOW()
-    LIMIT 1
-  `
-
-  return result[0] || null
-}
-
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
   try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
-      return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
-    }
-
-    console.log(`Upload request from user: ${currentUser.name} (carpark: ${currentUser.carpark})`)
-
     const formData = await request.formData()
     const file = formData.get("file") as File
 
     if (!file) {
-      return NextResponse.json({
-        success: false,
-        error: "Файл не найден",
-      })
+      return NextResponse.json({ error: "Файл не найден" }, { status: 400 })
     }
 
     console.log(`Processing file: ${file.name}, size: ${file.size}`)
@@ -54,107 +17,160 @@ export async function POST(request: Request) {
     const buffer = await file.arrayBuffer()
 
     // Парсим Excel данные
-    const excelRows = parseExcelData(buffer)
-    console.log(`Parsed ${excelRows.length} rows from Excel`)
+    const rawRows = parseExcelData(buffer)
+    console.log(`Parsed ${rawRows.length} raw rows`)
 
     // Валидируем данные
-    const { valid: validRows, errors } = validateExcelData(excelRows)
+    const { valid: validRows, errors } = validateExcelData(rawRows)
     console.log(`Valid rows: ${validRows.length}, Errors: ${errors.length}`)
 
-    if (validRows.length === 0) {
-      return NextResponse.json({
-        success: false,
-        error: "Нет валидных данных для обработки",
-        errors,
-      })
+    if (errors.length > 0) {
+      return NextResponse.json(
+        {
+          error: "Ошибки валидации данных",
+          details: errors,
+          validRows: validRows.length,
+          totalRows: rawRows.length,
+        },
+        { status: 400 },
+      )
     }
 
-    // Группируем по телефонам
-    const tripData = groupTripsByPhone(validRows)
-    console.log(`Grouped into ${tripData.length} trips`)
+    if (validRows.length === 0) {
+      return NextResponse.json({ error: "Нет валидных данных для обработки" }, { status: 400 })
+    }
 
-    // Получаем уникальные номера телефонов
-    const phones = [...new Set(tripData.map((trip) => trip.phone))]
-    console.log(`Unique phones: ${phones.length}`)
+    // Группируем по телефонам и рейсам
+    const groupedTrips = groupTripsByPhone(validRows)
+    console.log(`Grouped into ${groupedTrips.length} trips`)
 
-    // Проверяем пользователей в базе
-    const usersInDb = await getUsersWithVerificationByPhones(phones)
-    console.log(`Found ${usersInDb.length} users in database`)
-
-    // Получаем все точки для проверки
+    // Получаем все доступные пункты из базы данных
     const allPoints = await getAllPoints()
-    const pointIds = new Set(allPoints.map((p) => p.point_id))
-    console.log(`Available points: ${pointIds.size}`)
+    console.log(`Found ${allPoints.length} points in database`)
 
-    // Анализируем данные
-    const foundPhones = new Set(usersInDb.map((u) => u.phone))
-    const verifiedPhones = new Set(usersInDb.filter((u) => u.verified).map((u) => u.phone))
+    // Создаем карту пунктов для быстрого поиска
+    const pointsMap = new Map<string, Point>()
+    for (const point of allPoints) {
+      pointsMap.set(point.point_id, point)
+    }
 
-    const notFoundPhones = phones.filter((phone) => !foundPhones.has(phone))
-    const notVerifiedPhones = phones.filter((phone) => foundPhones.has(phone) && !verifiedPhones.has(phone))
+    const results = {
+      processed: 0,
+      phoneNotFound: 0,
+      phoneNotVerified: 0,
+      pointNotFound: 0,
+      details: [] as any[],
+      notFoundPhones: [] as string[],
+      notVerifiedPhones: [] as string[],
+      validTripData: [] as any[],
+    }
 
-    console.log(`Not found phones: ${notFoundPhones.length}`)
-    console.log(`Not verified phones: ${notVerifiedPhones.length}`)
+    // Проверяем каждый сгруппированный рейс БЕЗ создания trip
+    for (const tripData of groupedTrips) {
+      try {
+        // Ищем пользователя по номеру телефона
+        const user = await getUserByPhone(tripData.phone)
+        if (!user) {
+          console.log(`User not found for phone: ${tripData.phone}`)
+          results.phoneNotFound++
+          results.notFoundPhones.push(tripData.phone)
+          continue
+        }
 
-    // Проверяем точки
-    const allTripPoints = tripData.flatMap((trip) => [
-      ...trip.loading_points.map((p) => p.point_id),
-      ...trip.unloading_points.map((p) => p.point_id),
-    ])
-    const uniqueTripPoints = [...new Set(allTripPoints)]
-    const notFoundPoints = uniqueTripPoints.filter((pointId) => !pointIds.has(pointId))
+        // Проверяем верификацию пользователя
+        if (!user.verified) {
+          console.log(`User not verified for phone: ${tripData.phone}`)
+          results.phoneNotVerified++
+          results.notVerifiedPhones.push(tripData.phone)
+          continue
+        }
 
-    console.log(`Trip points: ${uniqueTripPoints.length}, Not found: ${notFoundPoints.length}`)
+        console.log(`Processing trip for user: ${user.first_name || user.name}`)
 
-    // Готовые к отправке поездки (только верифицированные пользователи с существующими точками)
-    const readyTrips = tripData.filter((trip) => {
-      const phoneVerified = verifiedPhones.has(trip.phone)
-      const allPointsExist =
-        trip.loading_points.every((p) => pointIds.has(p.point_id)) &&
-        trip.unloading_points.every((p) => pointIds.has(p.point_id))
-      return phoneVerified && allPointsExist
-    })
+        // Проверяем наличие всех пунктов
+        let allPointsExist = true
+        for (const loadingPoint of tripData.loading_points) {
+          const point = pointsMap.get(loadingPoint.point_id)
+          if (!point) {
+            console.warn(`Point not found: ${loadingPoint.point_id}`)
+            results.pointNotFound++
+            allPointsExist = false
+          }
+        }
 
-    console.log(`Ready trips: ${readyTrips.length}`)
+        for (const unloadingPoint of tripData.unloading_points) {
+          const point = pointsMap.get(unloadingPoint.point_id)
+          if (!point) {
+            console.warn(`Point not found: ${unloadingPoint.point_id}`)
+            results.pointNotFound++
+            allPointsExist = false
+          }
+        }
 
-    // Подготавливаем результат с carpark пользователя
-    const result = {
+        if (allPointsExist) {
+          results.processed++
+          results.validTripData.push(tripData)
+          console.log(`Validated trip for user: ${user.first_name || user.name} (${tripData.phone})`)
+        }
+      } catch (error) {
+        console.error(`Error processing trip for phone ${tripData.phone}:`, error)
+        results.details.push({
+          phone: tripData.phone,
+          error: error instanceof Error ? error.message : "Unknown error",
+        })
+      }
+    }
+
+    console.log(
+      `Processing complete. Ready to send: ${results.processed}, Not found phones: ${results.phoneNotFound}, Not verified phones: ${results.phoneNotVerified}, Not found points: ${results.pointNotFound}`,
+    )
+
+    return NextResponse.json({
       success: true,
-      totalRows: excelRows.length,
+      // НЕ создаем campaign здесь, только возвращаем данные для валидации
+      totalRows: rawRows.length,
       validRows: validRows.length,
-      readyToSend: readyTrips.length,
-      notFoundPhones: notFoundPhones.length,
-      notVerifiedPhones: notVerifiedPhones.length,
-      notFoundPoints: notFoundPoints.length,
-      notFoundPhonesList: notFoundPhones,
-      notVerifiedPhonesList: notVerifiedPhones,
-      readyTrips: readyTrips.map((trip) => ({
+      readyToSend: results.processed,
+      notFoundPhones: results.phoneNotFound,
+      notVerifiedPhones: results.phoneNotVerified,
+      notFoundPoints: results.pointNotFound,
+      notFoundPhonesList: results.notFoundPhones,
+      notVerifiedPhonesList: results.notVerifiedPhones,
+      readyTrips: results.validTripData.map((trip) => ({
         phone: trip.phone,
         trip_identifier: trip.trip_identifier,
         vehicle_number: trip.vehicle_number,
       })),
-      tripData: readyTrips,
-      errors: errors.length > 0 ? errors : undefined,
-      carpark: currentUser.carpark, // Добавляем carpark в результат
-    }
-
-    console.log(`Upload result:`, {
-      totalRows: result.totalRows,
-      validRows: result.validRows,
-      readyToSend: result.readyToSend,
-      carpark: result.carpark,
+      // Сохраняем только валидные данные для последующей отправки
+      tripData: results.validTripData,
+      errors: errors,
     })
-
-    return NextResponse.json(result)
   } catch (error) {
-    console.error("Error processing upload:", error)
+    console.error("Upload error:", error)
     return NextResponse.json(
       {
-        success: false,
         error: "Ошибка при обработке файла",
         details: error instanceof Error ? error.message : "Неизвестная ошибка",
       },
       { status: 500 },
     )
+  }
+}
+
+export async function GET() {
+  try {
+    // Создаем пример Excel файла
+    const exampleBuffer = createExampleExcelFile()
+
+    return new NextResponse(exampleBuffer, {
+      status: 200,
+      headers: {
+        "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "Content-Disposition": 'attachment; filename="example-trips.xlsx"',
+      },
+    })
+  } catch (error) {
+    console.error("Error creating example file:", error)
+    return NextResponse.json({ error: "Ошибка при создании примера файла" }, { status: 500 })
   }
 }

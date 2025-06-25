@@ -4,70 +4,62 @@ import { cookies } from "next/headers"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-export const dynamic = "force-dynamic"
-
-// Функция для получения текущего пользователя
-async function getCurrentUser() {
-  const cookieStore = cookies()
-  const sessionToken = cookieStore.get("session_token")
-
-  if (!sessionToken) {
-    return null
-  }
-
-  const result = await sql`
-    SELECT u.*, s.expires_at
-    FROM users u
-    JOIN user_sessions s ON u.id = s.user_id
-    WHERE s.session_token = ${sessionToken.value}
-    AND s.expires_at > NOW()
-    LIMIT 1
-  `
-
-  return result[0] || null
-}
-
 export async function GET() {
   try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
+    // Получаем session_token из cookies
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get("session_token")?.value
+
+    if (!sessionToken) {
       return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
-    console.log(
-      `Getting users for user: ${currentUser.name} (role: ${currentUser.role}, carpark: ${currentUser.carpark})`,
-    )
+    // Получаем данные текущего пользователя через сессию
+    const sessions = await sql`
+      SELECT s.*, u.id, u.telegram_id, u.name, u.full_name, u.role, u.carpark
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token = ${sessionToken} AND s.expires_at > NOW()
+    `
 
-    let users
+    if (sessions.length === 0) {
+      return NextResponse.json({ success: false, error: "Сессия истекла" }, { status: 401 })
+    }
+
+    const currentUser = sessions[0]
+
+    // Определяем фильтр в зависимости от роли пользователя
+    let usersQuery
+
     if (currentUser.role === "operator" && currentUser.carpark) {
       // Операторы видят только водителей из своего автопарка
-      users = await sql`
-        SELECT id, telegram_id, phone, name, first_name, last_name, full_name, carpark, created_at, registration_state, verified, role
+      usersQuery = sql`
+        SELECT id, telegram_id, phone, name, created_at, first_name, last_name, full_name, role, verified, carpark, registration_state
         FROM users
         WHERE role = 'driver' AND carpark = ${currentUser.carpark}
         ORDER BY created_at DESC
       `
-      console.log(`Operator ${currentUser.name} sees ${users.length} drivers from carpark ${currentUser.carpark}`)
     } else {
-      // Админы и другие роли видят всех пользователей
-      users = await sql`
-        SELECT id, telegram_id, phone, name, first_name, last_name, full_name, carpark, created_at, registration_state, verified, role
+      // Администраторы и другие роли видят всех пользователей
+      usersQuery = sql`
+        SELECT id, telegram_id, phone, name, created_at, first_name, last_name, full_name, role, verified, carpark, registration_state
         FROM users
         ORDER BY created_at DESC
       `
-      console.log(`Admin/other role sees ${users.length} total users`)
     }
+
+    const users = await usersQuery
 
     return NextResponse.json({
       success: true,
-      users: users, // Исправлено: возвращаем users, а не data
+      users: users,
       currentUser: {
         role: currentUser.role,
         carpark: currentUser.carpark,
       },
     })
   } catch (error) {
-    console.error("Error getting users:", error)
+    console.error("Get users error:", error)
     return NextResponse.json(
       {
         success: false,
@@ -78,3 +70,5 @@ export async function GET() {
     )
   }
 }
+
+export const dynamic = "force-dynamic"

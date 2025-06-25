@@ -95,21 +95,8 @@ export async function POST(request: NextRequest) {
 
         // Создаем записи в БД для всех рейсов этого пользователя
         for (const tripDataItem of phoneTrips) {
-          // Проверяем и создаем пункты для этого рейса
-          const loadingPoints = tripDataItem.loading_points || []
-          const unloadingPoints = tripDataItem.unloading_points || []
-
-          console.log(
-            `Trip ${tripDataItem.trip_identifier}: ${loadingPoints.length} loading points, ${unloadingPoints.length} unloading points`,
-          )
-
-          // Создаем пункты погрузки
-          for (const loadingPoint of loadingPoints) {
-            if (!loadingPoint || !loadingPoint.point_id) {
-              console.warn(`Invalid loading point:`, loadingPoint)
-              continue
-            }
-
+          // Создаем пункты для этого рейса
+          for (const loadingPoint of tripDataItem.loading_points || []) {
             const point = pointsMap.get(loadingPoint.point_id)
             if (!point) {
               console.warn(`Point not found: ${loadingPoint.point_id}`)
@@ -120,19 +107,13 @@ export async function POST(request: NextRequest) {
               mainTrip.id,
               loadingPoint.point_id,
               "P",
-              loadingPoint.point_num || 1,
+              loadingPoint.point_num,
               tripDataItem.trip_identifier,
             )
             console.log(`Created loading point: ${loadingPoint.point_id}`)
           }
 
-          // Создаем пункты разгрузки
-          for (const unloadingPoint of unloadingPoints) {
-            if (!unloadingPoint || !unloadingPoint.point_id) {
-              console.warn(`Invalid unloading point:`, unloadingPoint)
-              continue
-            }
-
+          for (const unloadingPoint of tripDataItem.unloading_points || []) {
             const point = pointsMap.get(unloadingPoint.point_id)
             if (!point) {
               console.warn(`Point not found: ${unloadingPoint.point_id}`)
@@ -143,7 +124,7 @@ export async function POST(request: NextRequest) {
               mainTrip.id,
               unloadingPoint.point_id,
               "D",
-              unloadingPoint.point_num || 1,
+              unloadingPoint.point_num,
               tripDataItem.trip_identifier,
             )
             console.log(`Created unloading point: ${unloadingPoint.point_id}`)
@@ -171,16 +152,11 @@ export async function POST(request: NextRequest) {
             const loadingPointsData = []
             const unloadingPointsData = []
 
-            const loadingPoints = tripDataItem.loading_points || []
-            const unloadingPoints = tripDataItem.unloading_points || []
-
-            for (const loadingPoint of loadingPoints) {
-              if (!loadingPoint || !loadingPoint.point_id) continue
-
+            for (const loadingPoint of tripDataItem.loading_points || []) {
               const point = pointsMap.get(loadingPoint.point_id)
               if (point) {
                 console.log(`DEBUG: Loading point ${point.point_id} coordinates:`, {
-                  latitude: point.latitude,
+                  latitude: point.latitude, // Теперь без пробела!
                   longitude: point.longitude,
                   latitude_type: typeof point.latitude,
                   longitude_type: typeof point.longitude,
@@ -189,23 +165,21 @@ export async function POST(request: NextRequest) {
                 loadingPointsData.push({
                   point_id: point.point_id,
                   point_name: point.point_name,
-                  point_num: loadingPoint.point_num || 1,
+                  point_num: loadingPoint.point_num,
                   door_open_1: point.door_open_1,
                   door_open_2: point.door_open_2,
                   door_open_3: point.door_open_3,
-                  latitude: point.latitude,
+                  latitude: point.latitude, // Теперь без пробела!
                   longitude: point.longitude,
                 })
               }
             }
 
-            for (const unloadingPoint of unloadingPoints) {
-              if (!unloadingPoint || !unloadingPoint.point_id) continue
-
+            for (const unloadingPoint of tripDataItem.unloading_points || []) {
               const point = pointsMap.get(unloadingPoint.point_id)
               if (point) {
                 console.log(`DEBUG: Unloading point ${point.point_id} coordinates:`, {
-                  latitude: point.latitude,
+                  latitude: point.latitude, // Теперь без пробела!
                   longitude: point.longitude,
                   latitude_type: typeof point.latitude,
                   longitude_type: typeof point.longitude,
@@ -214,11 +188,11 @@ export async function POST(request: NextRequest) {
                 unloadingPointsData.push({
                   point_id: point.point_id,
                   point_name: point.point_name,
-                  point_num: unloadingPoint.point_num || 1,
+                  point_num: unloadingPoint.point_num,
                   door_open_1: point.door_open_1,
                   door_open_2: point.door_open_2,
                   door_open_3: point.door_open_3,
-                  latitude: point.latitude,
+                  latitude: point.latitude, // Теперь без пробела!
                   longitude: point.longitude,
                 })
               }
@@ -251,11 +225,11 @@ export async function POST(request: NextRequest) {
           const sql = neon(process.env.DATABASE_URL!)
 
           await sql`
-          UPDATE trip_messages 
-          SET status = 'sent', 
-              sent_at = ${new Date().toISOString()}
-          WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
-        `
+            UPDATE trip_messages 
+            SET status = 'sent', 
+                sent_at = ${new Date().toISOString()}
+            WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
+          `
 
           console.log(`Updated message status to 'sent' for phone: ${phone}`)
 
@@ -279,11 +253,11 @@ export async function POST(request: NextRequest) {
             const sql = neon(process.env.DATABASE_URL!)
 
             await sql`
-            UPDATE trip_messages 
-            SET status = 'error', 
-                error_message = ${errorMessage}
-            WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
-          `
+              UPDATE trip_messages 
+              SET status = 'error', 
+                  error_message = ${errorMessage}
+              WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
+            `
           } catch (updateError) {
             console.error("Error updating message status to error:", updateError)
           }

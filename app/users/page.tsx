@@ -9,14 +9,12 @@ import {
   createColumnHelper,
   flexRender,
 } from "@tanstack/react-table"
-import { useAuth } from "@/components/auth/auth-provider"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -25,16 +23,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import {
   RefreshCw,
@@ -49,7 +37,6 @@ import {
   ArrowUp,
   ArrowDown,
   Search,
-  Trash2,
 } from "lucide-react"
 
 interface UserInterface {
@@ -74,42 +61,31 @@ interface EditingUser {
   last_name: string
   carpark: string
   role: string
-  verified?: boolean
 }
 
 const columnHelper = createColumnHelper<UserInterface>()
 
 export default function UsersPage() {
-  const { user: currentUser } = useAuth()
   const [users, setUsers] = useState<UserInterface[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   const [globalFilter, setGlobalFilter] = useState("")
-  const [userToDelete, setUserToDelete] = useState<UserInterface | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // В начале компонента добавить состояние для текущего пользователя
+  const [currentUser, setCurrentUser] = useState<{ role: string; carpark: string } | null>(null)
 
+  // Обновить функцию fetchUsers
   const fetchUsers = async () => {
     setIsLoading(true)
-    setError(null)
     try {
       const response = await fetch("/api/users")
       const data = await response.json()
-
-      console.log("API response:", data) // Для отладки
-
-      if (data.success && Array.isArray(data.users)) {
+      if (data.success) {
         setUsers(data.users)
-      } else {
-        console.error("Invalid API response:", data)
-        setError(data.error || "Неверный формат ответа API")
-        setUsers([]) // Устанавливаем пустой массив для предотвращения ошибок
+        setCurrentUser(data.currentUser)
       }
     } catch (error) {
       console.error("Error fetching users:", error)
-      setError("Ошибка при загрузке пользователей")
-      setUsers([]) // Устанавливаем пустой массив для предотвращения ошибок
     } finally {
       setIsLoading(false)
     }
@@ -141,21 +117,14 @@ export default function UsersPage() {
   }
 
   const handleEditUser = (user: UserInterface) => {
-    const editingData: EditingUser = {
+    setEditingUser({
       id: user.id,
       name: user.name || "",
       first_name: user.first_name || "",
       last_name: user.last_name || "",
       carpark: user.carpark || "",
       role: user.role || "",
-    }
-
-    // Только админы могут редактировать поле verified
-    if (currentUser?.role === "admin") {
-      editingData.verified = user.verified
-    }
-
-    setEditingUser(editingData)
+    })
   }
 
   const handleUpdateUser = async () => {
@@ -176,37 +145,13 @@ export default function UsersPage() {
         await fetchUsers()
         setEditingUser(null)
       } else {
-        alert("Ошибка при обновлении пользователя: " + (data.error || "Неизвестная ошибка"))
+        alert("Ошибка при обновлении пользователя")
       }
     } catch (error) {
       console.error("Error updating user:", error)
       alert("Ошибка при обновлении пользователя")
     } finally {
       setIsUpdating(false)
-    }
-  }
-
-  const handleDeleteUser = async () => {
-    if (!userToDelete) return
-
-    setIsDeleting(true)
-    try {
-      const response = await fetch(`/api/users/${userToDelete.id}`, {
-        method: "DELETE",
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        await fetchUsers()
-        setUserToDelete(null)
-      } else {
-        alert("Ошибка при удалении пользователя: " + (data.error || "Неизвестная ошибка"))
-      }
-    } catch (error) {
-      console.error("Error deleting user:", error)
-      alert("Ошибка при удалении пользователя")
-    } finally {
-      setIsDeleting(false)
     }
   }
 
@@ -282,25 +227,13 @@ export default function UsersPage() {
         id: "actions",
         header: "Действия",
         cell: (info) => (
-          <div className="flex items-center gap-1">
-            <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
-              <Edit className="h-4 w-4" />
-            </Button>
-            {currentUser?.role === "admin" && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => setUserToDelete(info.row.original)}
-                className="text-red-600 hover:text-red-700 hover:bg-red-50"
-              >
-                <Trash2 className="h-4 w-4" />
-              </Button>
-            )}
-          </div>
+          <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
+            <Edit className="h-4 w-4" />
+          </Button>
         ),
       }),
     ],
-    [currentUser?.role],
+    [],
   )
 
   const table = useReactTable({
@@ -339,32 +272,10 @@ export default function UsersPage() {
     return <ArrowUpDown className="h-3 w-3" />
   }
 
-  // Показываем ошибку, если есть
-  if (error) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-2xl font-bold">Зарегистрированные пользователи</h1>
-            <p className="text-muted-foreground">Ошибка при загрузке данных</p>
-          </div>
-          <Button onClick={fetchUsers} disabled={isLoading} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Попробовать снова
-          </Button>
-        </div>
-        <Alert variant="destructive">
-          <AlertDescription>
-            <strong>Ошибка:</strong> {error}
-          </AlertDescription>
-        </Alert>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
+        {/* В заголовке страницы, после описания добавить информацию о фильтрации */}
         <div>
           <h1 className="text-2xl font-bold">Зарегистрированные пользователи</h1>
           <p className="text-muted-foreground">
@@ -549,8 +460,7 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Редактирование пользователя</DialogTitle>
             <DialogDescription>
-              Изменение данных пользователя.
-              {currentUser?.role !== "admin" && ' Поле "Верифицирован" недоступно для редактирования.'}
+              Изменение данных пользователя. Поле "Верифицирован" недоступно для редактирования.
             </DialogDescription>
           </DialogHeader>
           {editingUser && (
@@ -595,17 +505,6 @@ export default function UsersPage() {
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                 />
               </div>
-              {/* Поле verified только для админов */}
-              {currentUser?.role === "admin" && editingUser.verified !== undefined && (
-                <div className="flex items-center space-x-2">
-                  <Switch
-                    id="verified"
-                    checked={editingUser.verified}
-                    onCheckedChange={(checked) => setEditingUser({ ...editingUser, verified: checked })}
-                  />
-                  <Label htmlFor="verified">Верифицирован</Label>
-                </div>
-              )}
             </div>
           )}
           <DialogFooter>
@@ -628,42 +527,6 @@ export default function UsersPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
-      {/* Диалог подтверждения удаления */}
-      <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Удаление пользователя</AlertDialogTitle>
-            <AlertDialogDescription>
-              Вы уверены, что хотите удалить пользователя{" "}
-              <strong>{userToDelete?.full_name || userToDelete?.name}</strong>?
-              <br />
-              <br />
-              Это действие нельзя отменить. Будут удалены:
-              <ul className="list-disc list-inside mt-2">
-                <li>Данные пользователя</li>
-                <li>Все активные сессии</li>
-              </ul>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Отмена</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDeleteUser} disabled={isDeleting} className="bg-red-600 hover:bg-red-700">
-              {isDeleting ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  Удаление...
-                </>
-              ) : (
-                <>
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Удалить
-                </>
-              )}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Инструкции */}
       <Alert>

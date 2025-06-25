@@ -1,133 +1,72 @@
 import { NextResponse } from "next/server"
+import { getTrips, updateTripStatus } from "@/lib/database"
 import { neon } from "@neondatabase/serverless"
 import { cookies } from "next/headers"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-export const dynamic = "force-dynamic"
-
-// Функция для получения текущего пользователя
-async function getCurrentUser() {
-  const cookieStore = cookies()
-  const sessionToken = cookieStore.get("session_token")
-
-  if (!sessionToken) {
-    return null
-  }
-
-  const result = await sql`
-    SELECT u.*, s.expires_at
-    FROM users u
-    JOIN user_sessions s ON u.id = s.user_id
-    WHERE s.session_token = ${sessionToken.value}
-    AND s.expires_at > NOW()
-    LIMIT 1
-  `
-
-  return result[0] || null
-}
-
 export async function GET() {
   try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
+    // Получаем session_token из cookies
+    const cookieStore = await cookies()
+    const sessionToken = cookieStore.get("session_token")?.value
+
+    if (!sessionToken) {
       return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
-    console.log(
-      `Getting trips for user: ${currentUser.name} (role: ${currentUser.role}, carpark: ${currentUser.carpark})`,
-    )
+    // Получаем данные текущего пользователя через сессию
+    const sessions = await sql`
+      SELECT s.*, u.id, u.telegram_id, u.name, u.full_name, u.role, u.carpark
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token = ${sessionToken} AND s.expires_at > NOW()
+    `
 
+    if (sessions.length === 0) {
+      return NextResponse.json({ success: false, error: "Сессия истекла" }, { status: 401 })
+    }
+
+    const currentUser = sessions[0]
+
+    // Получаем поездки с учетом роли пользователя
     let trips
+
     if (currentUser.role === "operator" && currentUser.carpark) {
-      // Операторы видят только поездки своего автопарка
-      trips = await sql`
-        SELECT t.*, 
-               COUNT(tm.id) as total_messages,
-               COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
-               COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
-               COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
-               COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
-               COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
-               MIN(tm.sent_at) as first_sent_at,
-               MAX(tm.sent_at) as last_sent_at
-        FROM trips t
-        LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-        WHERE t.carpark = ${currentUser.carpark}
-        GROUP BY t.id
-        ORDER BY t.created_at DESC
-      `
-      console.log(`Operator ${currentUser.name} sees ${trips.length} trips from carpark ${currentUser.carpark}`)
+      // Операторы видят только поездки из своего автопарка
+      trips = await getTrips(currentUser.carpark)
     } else {
-      // Админы видят все поездки
-      trips = await sql`
-        SELECT t.*, 
-               COUNT(tm.id) as total_messages,
-               COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
-               COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
-               COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
-               COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
-               COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
-               MIN(tm.sent_at) as first_sent_at,
-               MAX(tm.sent_at) as last_sent_at
-        FROM trips t
-        LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-        GROUP BY t.id
-        ORDER BY t.created_at DESC
-      `
-      console.log(`Admin sees ${trips.length} total trips`)
+      // Администраторы видят все поездки
+      trips = await getTrips()
+    }
+
+    // Проверяем и обновляем статусы завершенных рассылок
+    for (const trip of trips) {
+      const totalResponses = Number(trip.confirmed_responses) + Number(trip.rejected_responses)
+      const sentMessages = Number(trip.sent_messages)
+
+      // Если все отправленные сообщения получили ответы и статус не "completed"
+      if (sentMessages > 0 && totalResponses === sentMessages && trip.status !== "completed") {
+        console.log(`Updating trip ${trip.id} status to completed`)
+        await updateTripStatus(trip.id, "completed")
+        trip.status = "completed" // Обновляем в текущем результате
+      }
     }
 
     return NextResponse.json({
       success: true,
-      trips: trips, // Возвращаем trips, а не data
+      trips: trips,
       currentUser: {
         role: currentUser.role,
         carpark: currentUser.carpark,
       },
     })
   } catch (error) {
-    console.error("Error getting trips:", error)
+    console.error("Get trips error:", error)
     return NextResponse.json(
       {
         success: false,
-        error: "Ошибка при получении поездок",
-        details: error instanceof Error ? error.message : "Неизвестная ошибка",
-      },
-      { status: 500 },
-    )
-  }
-}
-
-export async function DELETE(request: Request) {
-  try {
-    const currentUser = await getCurrentUser()
-    if (!currentUser) {
-      return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
-    }
-
-    const { tripId } = await request.json()
-
-    console.log(`Deleting trip ${tripId}`)
-
-    // Удаляем связанные записи в правильном порядке
-    await sql`DELETE FROM trip_messages WHERE trip_id = ${tripId}`
-    await sql`DELETE FROM trip_points WHERE trip_id = ${tripId}`
-    await sql`DELETE FROM trips WHERE id = ${tripId}`
-
-    console.log(`Trip ${tripId} and related records deleted`)
-
-    return NextResponse.json({
-      success: true,
-      message: "Поездка успешно удалена",
-    })
-  } catch (error) {
-    console.error("Error deleting trip:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Ошибка при удалении поездки",
-        details: error instanceof Error ? error.message : "Неизвестная ошибка",
+        error: "Ошибка при получении рассылок",
       },
       { status: 500 },
     )

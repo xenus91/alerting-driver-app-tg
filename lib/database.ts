@@ -245,78 +245,6 @@ export async function updateTripStatus(tripId: number, status: string) {
   }
 }
 
-// Улучшенная функция для проверки и обновления статуса рассылки
-export async function checkAndUpdateTripCompletion(tripId: number) {
-  try {
-    console.log(`=== CHECKING COMPLETION FOR TRIP ${tripId} ===`)
-
-    // Получаем детальную статистику по рассылке
-    const result = await sql`
-      SELECT 
-        COUNT(*) as total_messages,
-        COUNT(CASE WHEN status = 'sent' THEN 1 END) as sent_messages,
-        COUNT(CASE WHEN status = 'error' THEN 1 END) as error_messages,
-        COUNT(CASE WHEN response_status = 'confirmed' THEN 1 END) as confirmed_responses,
-        COUNT(CASE WHEN response_status = 'rejected' THEN 1 END) as rejected_responses,
-        COUNT(CASE WHEN response_status = 'pending' AND status = 'sent' THEN 1 END) as pending_responses
-      FROM trip_messages 
-      WHERE trip_id = ${tripId}
-    `
-
-    const stats = result[0]
-    console.log(`Trip ${tripId} detailed stats:`, {
-      total_messages: stats.total_messages,
-      sent_messages: stats.sent_messages,
-      error_messages: stats.error_messages,
-      confirmed_responses: stats.confirmed_responses,
-      rejected_responses: stats.rejected_responses,
-      pending_responses: stats.pending_responses,
-    })
-
-    // Проверяем текущий статус рассылки
-    const tripResult = await sql`
-      SELECT status FROM trips WHERE id = ${tripId}
-    `
-
-    if (tripResult.length === 0) {
-      console.log(`Trip ${tripId} not found`)
-      return false
-    }
-
-    const currentStatus = tripResult[0].status
-    console.log(`Current trip status: ${currentStatus}`)
-
-    // Если рассылка уже завершена, не меняем статус
-    if (currentStatus === "completed") {
-      console.log(`Trip ${tripId} already completed`)
-      return true
-    }
-
-    // Условия для завершения рассылки:
-    // 1. Есть отправленные сообщения
-    // 2. Нет ожидающих ответов (все либо подтвердили, либо отклонили)
-    const hasResponses = stats.sent_messages > 0
-    const allResponded = stats.pending_responses === 0
-
-    console.log(`Completion check: hasResponses=${hasResponses}, allResponded=${allResponded}`)
-
-    if (hasResponses && allResponded) {
-      console.log(`✅ All conditions met for trip ${tripId} completion`)
-
-      await updateTripStatus(tripId, "completed")
-
-      console.log(`🎉 Trip ${tripId} marked as COMPLETED`)
-      return true
-    } else {
-      console.log(`⏳ Trip ${tripId} still has ${stats.pending_responses} pending responses`)
-      return false
-    }
-  } catch (error) {
-    console.error("Error checking trip completion:", error)
-    throw error
-  }
-}
-
 export async function createTripMessage(
   tripId: number,
   phone: string,
@@ -530,7 +458,6 @@ export async function updateMessageStatus(messageId: number, status: string, err
   }
 }
 
-// Обновляем функцию updateMessageResponse для автоматической проверки завершения
 export async function updateMessageResponse(messageId: number, responseStatus: string, responseComment?: string) {
   try {
     const result = await sql`
@@ -541,16 +468,7 @@ export async function updateMessageResponse(messageId: number, responseStatus: s
       WHERE id = ${messageId}
       RETURNING *
     `
-
-    const updatedMessage = result[0] as TripMessage
-
-    // Автоматически проверяем завершение рассылки
-    if (updatedMessage.trip_id) {
-      console.log(`🔄 Checking completion for trip ${updatedMessage.trip_id} after response update`)
-      await checkAndUpdateTripCompletion(updatedMessage.trip_id)
-    }
-
-    return updatedMessage
+    return result[0] as TripMessage
   } catch (error) {
     console.error("Error updating message response:", error)
     throw error
