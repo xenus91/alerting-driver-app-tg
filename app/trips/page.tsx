@@ -17,7 +17,9 @@ import {
   MoreVertical,
   Trash2,
   AlertTriangle,
+  Zap,
 } from "lucide-react"
+import { QuickTripForm } from "@/components/quick-trip-form"
 
 interface TripData {
   id: number
@@ -47,6 +49,7 @@ export default function TripsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+  const [showQuickTripForm, setShowQuickTripForm] = useState(false)
 
   // Состояния для диалога ошибок
   const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
@@ -308,10 +311,16 @@ export default function TripsPage() {
           <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
           <p className="text-muted-foreground">Управление рассылками и отслеживание ответов водителей</p>
         </div>
-        <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Обновить
-        </Button>
+        <div className="flex gap-2">
+          <Button onClick={() => setShowQuickTripForm(true)} className="bg-blue-600 hover:bg-blue-700">
+            <Zap className="h-4 w-4 mr-2" />
+            Быстрая рассылка
+          </Button>
+          <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Обновить
+          </Button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -624,6 +633,15 @@ export default function TripsPage() {
           </div>
         </div>
       )}
+      {/* Модальное окно быстрой рассылки */}
+      <QuickTripForm
+        isOpen={showQuickTripForm}
+        onClose={() => setShowQuickTripForm(false)}
+        onTripSent={() => {
+          fetchTrips() // Обновляем список после отправки
+          setShowQuickTripForm(false)
+        }}
+      />
     </div>
   )
 }

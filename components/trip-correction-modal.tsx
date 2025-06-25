@@ -122,13 +122,9 @@ export function TripCorrectionModal({
 
   const addNewTrip = () => {
     // Генерируем новый номер рейса
-    const existingTripNumbers = Object.keys(groupedCorrections).map((id) => Number.parseInt(id) || 0)
-    const maxTripNumber = Math.max(...existingTripNumbers, 4000000)
-    const newTripIdentifier = (maxTripNumber + 1).toString()
-
     const newTrip: CorrectionData = {
       phone,
-      trip_identifier: newTripIdentifier,
+      trip_identifier: "", // Пустое поле вместо автогенерации
       vehicle_number: "",
       planned_loading_time: new Date().toISOString(),
       point_type: "P",
