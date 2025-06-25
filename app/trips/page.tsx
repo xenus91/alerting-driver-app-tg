@@ -101,7 +101,7 @@ export default function TripsPage() {
 
   // Функция для расшифровки ошибок Telegram API
   const translateTelegramError = (errorMessage: string, userName?: string) => {
-    const userNameText = userName ? userName : "Пользователь"
+    const userNameText = userName && userName.trim() ? userName : "Неизвестный пользователь"
 
     if (errorMessage.includes("bot was blocked by the user")) {
       return {
