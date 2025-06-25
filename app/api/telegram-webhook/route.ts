@@ -504,25 +504,27 @@ export async function POST(request: NextRequest) {
           // Формируем кнопки
           const buttons = []
 
-          // Кнопка "Завершить" если уже есть минимум 2 точки - ВВЕРХУ
+          // Кнопки управления ВВЕРХУ
+          const controlButtons = []
+
+          // Кнопка "Завершить" если уже есть минимум 2 точки
           if (routePoints.length >= 2) {
-            buttons.push([
-              {
-                text: "✅ Завершить построение маршрута",
-                callback_data: "route_finish",
-              },
-            ])
+            controlButtons.push({
+              text: "✅ Завершить построение маршрута",
+              callback_data: "route_finish",
+            })
           }
 
-          // Кнопка отмены - ВВЕРХУ
-          buttons.push([
-            {
-              text: "❌ Отменить",
-              callback_data: "route_cancel",
-            },
-          ])
+          // Кнопка отмены
+          controlButtons.push({
+            text: "❌ Отменить",
+            callback_data: "route_cancel",
+          })
 
-          // Кнопки с точками (по 2 в ряд)
+          // Добавляем кнопки управления в первый ряд
+          buttons.push(controlButtons)
+
+          // Кнопки с точками (по 2 в ряд) ВНИЗУ
           for (let i = 0; i < availablePoints.length; i += 2) {
             const row = []
             row.push({
@@ -948,15 +950,6 @@ export async function POST(request: NextRequest) {
         // Формируем кнопки с точками (по 2 в ряд)
         const buttons = []
 
-        // Кнопка отмены ВВЕРХУ
-        buttons.push([
-          {
-            text: "❌ Отменить",
-            callback_data: "route_cancel",
-          },
-        ])
-
-        // Затем кнопки с точками (по 2 в ряд)
         for (let i = 0; i < allPoints.length; i += 2) {
           const row = []
           row.push({
@@ -971,6 +964,14 @@ export async function POST(request: NextRequest) {
           }
           buttons.push(row)
         }
+
+        // Кнопка отмены
+        buttons.push([
+          {
+            text: "❌ Отменить",
+            callback_data: "route_cancel",
+          },
+        ])
 
         await sendMessageWithButtons(chatId, welcomeMessage, buttons)
 
@@ -991,6 +992,102 @@ export async function POST(request: NextRequest) {
           ok: true, // Возвращаем ok: true чтобы не блокировать webhook
           status: "toroute_error",
           error: error instanceof Error ? error.message : "Unknown error",
+          timestamp: timestamp,
+        })
+      }
+    }
+
+    // Обработка команды /status
+    if (messageText === "/status") {
+      console.log("=== PROCESSING /STATUS COMMAND ===")
+
+      try {
+        if (!existingUser) {
+          await sendMessage(chatId, "❌ Вы не зарегистрированы в системе.\n\n📱 Для регистрации отправьте /start")
+          return NextResponse.json({
+            ok: true,
+            status: "user_not_found",
+            timestamp: timestamp,
+          })
+        }
+
+        let statusMessage = `📊 <b>Ваш статус в системе:</b>\n\n`
+        statusMessage += `👤 <b>Пользователь:</b> ${existingUser.first_name || "Не указано"}\n`
+        statusMessage += `📱 <b>Телефон:</b> +${existingUser.phone}\n`
+
+        if (existingUser.registration_state === "completed") {
+          statusMessage += `✅ <b>Статус:</b> Регистрация завершена\n`
+          statusMessage += `👤 <b>ФИО:</b> ${existingUser.full_name}\n`
+          statusMessage += `🏢 <b>Автопарк:</b> ${existingUser.carpark}\n\n`
+          statusMessage += `🚛 Вы получаете уведомления о рейсах`
+        } else {
+          statusMessage += `⏳ <b>Статус:</b> Регистрация не завершена\n`
+          statusMessage += `📝 <b>Этап:</b> ${existingUser.registration_state}\n\n`
+          statusMessage += `💡 Для завершения регистрации отправьте /start`
+        }
+
+        await sendMessage(chatId, statusMessage)
+
+        return NextResponse.json({
+          ok: true,
+          status: "status_sent",
+          registration_state: existingUser.registration_state,
+          timestamp: timestamp,
+        })
+      } catch (error) {
+        console.error("Error processing /status:", error)
+        await sendMessage(chatId, "❌ Произошла ошибка при получении статуса.")
+        return NextResponse.json({
+          ok: true,
+          status: "status_error",
+          timestamp: timestamp,
+        })
+      }
+    }
+
+    // Обработка команды /help
+    if (messageText === "/help") {
+      console.log("=== PROCESSING /HELP COMMAND ===")
+
+      try {
+        let helpMessage = `❓ <b>Справка по использованию бота</b>\n\n`
+        helpMessage += `🤖 <b>Этот бот предназначен для:</b>\n`
+        helpMessage += `• Получения уведомлений о рейсах\n`
+        helpMessage += `• Подтверждения/отклонения рейсов\n`
+        helpMessage += `• Построения маршрутов между точками\n\n`
+
+        helpMessage += `📋 <b>Доступные команды:</b>\n`
+        helpMessage += `🚀 /start - Начать работу и регистрацию\n`
+        helpMessage += `🗺️ /toroute - Построить маршрут между точками\n`
+        helpMessage += `📊 /status - Проверить статус регистрации\n`
+        helpMessage += `❓ /help - Показать эту справку\n\n`
+
+        if (existingUser && existingUser.registration_state === "completed") {
+          helpMessage += `✅ <b>Вы зарегистрированы!</b>\n`
+          helpMessage += `🚛 Ожидайте уведомления о рейсах\n\n`
+        } else {
+          helpMessage += `📱 <b>Для начала работы:</b>\n`
+          helpMessage += `1. Отправьте /start\n`
+          helpMessage += `2. Поделитесь номером телефона\n`
+          helpMessage += `3. Заполните данные регистрации\n\n`
+        }
+
+        helpMessage += `🆘 <b>Нужна помощь?</b>\n`
+        helpMessage += `Обратитесь к диспетчеру или администратору системы.`
+
+        await sendMessage(chatId, helpMessage)
+
+        return NextResponse.json({
+          ok: true,
+          status: "help_sent",
+          timestamp: timestamp,
+        })
+      } catch (error) {
+        console.error("Error processing /help:", error)
+        await sendMessage(chatId, "❌ Произошла ошибка при получении справки.")
+        return NextResponse.json({
+          ok: true,
+          status: "help_error",
           timestamp: timestamp,
         })
       }
