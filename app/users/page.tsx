@@ -88,17 +88,28 @@ export default function UsersPage() {
   const [globalFilter, setGlobalFilter] = useState("")
   const [userToDelete, setUserToDelete] = useState<UserInterface | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   const fetchUsers = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const response = await fetch("/api/users")
       const data = await response.json()
-      if (data.success) {
+
+      console.log("API response:", data) // Для отладки
+
+      if (data.success && Array.isArray(data.users)) {
         setUsers(data.users)
+      } else {
+        console.error("Invalid API response:", data)
+        setError(data.error || "Неверный формат ответа API")
+        setUsers([]) // Устанавливаем пустой массив для предотвращения ошибок
       }
     } catch (error) {
       console.error("Error fetching users:", error)
+      setError("Ошибка при загрузке пользователей")
+      setUsers([]) // Устанавливаем пустой массив для предотвращения ошибок
     } finally {
       setIsLoading(false)
     }
@@ -165,7 +176,7 @@ export default function UsersPage() {
         await fetchUsers()
         setEditingUser(null)
       } else {
-        alert("Ошибка при обновлении пользователя")
+        alert("Ошибка при обновлении пользователя: " + (data.error || "Неизвестная ошибка"))
       }
     } catch (error) {
       console.error("Error updating user:", error)
@@ -189,7 +200,7 @@ export default function UsersPage() {
         await fetchUsers()
         setUserToDelete(null)
       } else {
-        alert("Ошибка при удалении пользователя")
+        alert("Ошибка при удалении пользователя: " + (data.error || "Неизвестная ошибка"))
       }
     } catch (error) {
       console.error("Error deleting user:", error)
@@ -326,6 +337,29 @@ export default function UsersPage() {
     if (isSorted === "asc") return <ArrowUp className="h-3 w-3" />
     if (isSorted === "desc") return <ArrowDown className="h-3 w-3" />
     return <ArrowUpDown className="h-3 w-3" />
+  }
+
+  // Показываем ошибку, если есть
+  if (error) {
+    return (
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Зарегистрированные пользователи</h1>
+            <p className="text-muted-foreground">Ошибка при загрузке данных</p>
+          </div>
+          <Button onClick={fetchUsers} disabled={isLoading} variant="outline">
+            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+            Попробовать снова
+          </Button>
+        </div>
+        <Alert variant="destructive">
+          <AlertDescription>
+            <strong>Ошибка:</strong> {error}
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
   }
 
   return (

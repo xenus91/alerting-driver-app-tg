@@ -32,13 +32,19 @@ export async function POST(request: NextRequest) {
     const user = users[0]
     console.log("User found:", user)
 
-    // Проверяем роль пользователя
-    if (user.role !== "operator") {
-      console.log("❌ User is not an operator, role:", user.role)
-      return NextResponse.json({ success: false, error: "Доступ запрещен. Требуется роль оператора." }, { status: 403 })
+    // Проверяем роль пользователя - разрешаем вход операторам и администраторам
+    if (user.role !== "operator" && user.role !== "admin") {
+      console.log("❌ User access denied, role:", user.role)
+      return NextResponse.json(
+        {
+          success: false,
+          error: "Доступ запрещен. Требуется роль оператора или администратора.",
+        },
+        { status: 403 },
+      )
     }
 
-    console.log("✅ User is operator, creating session")
+    console.log("✅ User has valid role:", user.role)
 
     // Создаем сессию
     const sessionToken = crypto.randomBytes(32).toString("hex")
@@ -55,7 +61,7 @@ export async function POST(request: NextRequest) {
       VALUES (${user.id}, ${sessionToken}, ${expiresAt.toISOString()})
     `
 
-    console.log("✅ Session created")
+    console.log("✅ Session created for role:", user.role)
 
     // Устанавливаем cookie
     const response = NextResponse.json({
@@ -76,7 +82,7 @@ export async function POST(request: NextRequest) {
       maxAge: 30 * 24 * 60 * 60, // 30 дней
     })
 
-    console.log("✅ Auth successful")
+    console.log("✅ Auth successful for role:", user.role)
     return response
   } catch (error) {
     console.error("❌ Auth error:", error)

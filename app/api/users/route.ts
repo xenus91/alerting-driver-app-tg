@@ -31,7 +31,7 @@ export async function GET() {
   try {
     const currentUser = await getCurrentUser()
     if (!currentUser) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
     console.log(
@@ -60,7 +60,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: users,
+      users: users, // Исправлено: возвращаем users, а не data
       currentUser: {
         role: currentUser.role,
         carpark: currentUser.carpark,
@@ -70,6 +70,7 @@ export async function GET() {
     console.error("Error getting users:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Ошибка при получении пользователей",
         details: error instanceof Error ? error.message : "Неизвестная ошибка",
       },
