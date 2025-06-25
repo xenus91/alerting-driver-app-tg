@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -60,6 +60,29 @@ interface SidebarProps {
 
 export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/auth/me")
+        const data = await response.json()
+        if (data.success) {
+          setCurrentUser({ role: data.user.role })
+        }
+      } catch (error) {
+        console.error("Error fetching current user:", error)
+      }
+    }
+    fetchCurrentUser()
+  }, [])
+
+  const filteredMenuItems = menuItems.filter((item) => {
+    if (item.href === "/bot-settings") {
+      return currentUser?.role === "admin"
+    }
+    return true
+  })
 
   return (
     <div className={cn("pb-12 transition-all duration-300", collapsed ? "w-16" : "w-64", className)}>
@@ -77,7 +100,7 @@ export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps
             )}
           </div>
           <div className="space-y-1">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <Link key={item.href} href={item.href}>
                 <Button
                   variant={pathname === item.href ? "secondary" : "ghost"}

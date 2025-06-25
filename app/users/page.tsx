@@ -37,6 +37,7 @@ import {
   ArrowUp,
   ArrowDown,
   Search,
+  Trash2,
 } from "lucide-react"
 
 interface UserInterface {
@@ -61,6 +62,7 @@ interface EditingUser {
   last_name: string
   carpark: string
   role: string
+  verified: boolean
 }
 
 const columnHelper = createColumnHelper<UserInterface>()
@@ -73,6 +75,8 @@ export default function UsersPage() {
   const [globalFilter, setGlobalFilter] = useState("")
   // В начале компонента добавить состояние для текущего пользователя
   const [currentUser, setCurrentUser] = useState<{ role: string; carpark: string } | null>(null)
+  const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
+  const [isDeleting, setIsDeleting] = useState(false)
 
   // Обновить функцию fetchUsers
   const fetchUsers = async () => {
@@ -124,6 +128,7 @@ export default function UsersPage() {
       last_name: user.last_name || "",
       carpark: user.carpark || "",
       role: user.role || "",
+      verified: user.verified,
     })
   }
 
@@ -152,6 +157,28 @@ export default function UsersPage() {
       alert("Ошибка при обновлении пользователя")
     } finally {
       setIsUpdating(false)
+    }
+  }
+
+  const handleDeleteUser = async (userId: number) => {
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/users/${userId}/delete`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        await fetchUsers()
+        setDeletingUserId(null)
+      } else {
+        alert("Ошибка при удалении пользователя")
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error)
+      alert("Ошибка при удалении пользователя")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -227,9 +254,21 @@ export default function UsersPage() {
         id: "actions",
         header: "Действия",
         cell: (info) => (
-          <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
-            <Edit className="h-4 w-4" />
-          </Button>
+          <div className="flex gap-1">
+            <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
+              <Edit className="h-4 w-4" />
+            </Button>
+            {currentUser?.role === "admin" && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => setDeletingUserId(info.row.original.id)}
+                className="text-red-600 hover:text-red-700"
+              >
+                <Trash2 className="h-4 w-4" />
+              </Button>
+            )}
+          </div>
         ),
       }),
     ],
@@ -505,6 +544,18 @@ export default function UsersPage() {
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                 />
               </div>
+              {currentUser?.role === "admin" && (
+                <div className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    id="verified"
+                    checked={editingUser.verified}
+                    onChange={(e) => setEditingUser({ ...editingUser, verified: e.target.checked })}
+                    className="rounded border-gray-300"
+                  />
+                  <Label htmlFor="verified">Верифицирован</Label>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>
@@ -522,6 +573,37 @@ export default function UsersPage() {
                   <Save className="h-4 w-4 mr-2" />
                   Сохранить
                 </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Диалог подтверждения удаления */}
+      <Dialog open={!!deletingUserId} onOpenChange={() => setDeletingUserId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Подтверждение удаления</DialogTitle>
+            <DialogDescription>
+              Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingUserId(null)}>
+              Отмена
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => deletingUserId && handleDeleteUser(deletingUserId)}
+              disabled={isDeleting}
+            >
+              {isDeleting ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  Удаление...
+                </>
+              ) : (
+                "Удалить"
               )}
             </Button>
           </DialogFooter>
