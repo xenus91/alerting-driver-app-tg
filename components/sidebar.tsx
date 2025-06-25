@@ -19,36 +19,47 @@ import {
   ChevronRight,
 } from "lucide-react"
 
+interface CurrentUser {
+  role: string
+  carpark: string
+}
+
 const menuItems = [
   {
     title: "Главная",
     href: "/",
     icon: Home,
+    roles: ["admin", "operator"], // Доступно всем
   },
   {
     title: "Загрузка файлов",
     href: "/upload",
     icon: Upload,
+    roles: ["admin", "operator"],
   },
   {
     title: "Рассылки",
     href: "/trips",
     icon: MessageSquare,
+    roles: ["admin", "operator"],
   },
   {
     title: "Пользователи",
     href: "/users",
     icon: Users,
+    roles: ["admin", "operator"],
   },
   {
     title: "Пункты",
     href: "/points",
     icon: MapPin,
+    roles: ["admin", "operator"],
   },
   {
     title: "Настройки бота",
     href: "/bot-settings",
     icon: Bot,
+    roles: ["admin"], // Только для администраторов
   },
 ]
 
@@ -60,7 +71,7 @@ interface SidebarProps {
 
 export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
-  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 
   useEffect(() => {
     const fetchCurrentUser = async () => {
@@ -68,21 +79,18 @@ export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps
         const response = await fetch("/api/auth/me")
         const data = await response.json()
         if (data.success) {
-          setCurrentUser({ role: data.user.role })
+          setCurrentUser({ role: data.user.role, carpark: data.user.carpark })
         }
       } catch (error) {
         console.error("Error fetching current user:", error)
       }
     }
+
     fetchCurrentUser()
   }, [])
 
-  const filteredMenuItems = menuItems.filter((item) => {
-    if (item.href === "/bot-settings") {
-      return currentUser?.role === "admin"
-    }
-    return true
-  })
+  // Фильтруем пункты меню по роли пользователя
+  const filteredMenuItems = menuItems.filter((item) => !currentUser || item.roles.includes(currentUser.role))
 
   return (
     <div className={cn("pb-12 transition-all duration-300", collapsed ? "w-16" : "w-64", className)}>

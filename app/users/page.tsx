@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,16 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import {
   RefreshCw,
@@ -65,6 +76,11 @@ interface EditingUser {
   verified: boolean
 }
 
+interface CurrentUser {
+  role: string
+  carpark: string
+}
+
 const columnHelper = createColumnHelper<UserInterface>()
 
 export default function UsersPage() {
@@ -73,12 +89,10 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   const [globalFilter, setGlobalFilter] = useState("")
-  // В начале компонента добавить состояние для текущего пользователя
-  const [currentUser, setCurrentUser] = useState<{ role: string; carpark: string } | null>(null)
-  const [deletingUserId, setDeletingUserId] = useState<number | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  const [userToDelete, setUserToDelete] = useState<UserInterface | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
 
-  // Обновить функцию fetchUsers
   const fetchUsers = async () => {
     setIsLoading(true)
     try {
@@ -128,7 +142,7 @@ export default function UsersPage() {
       last_name: user.last_name || "",
       carpark: user.carpark || "",
       role: user.role || "",
-      verified: user.verified,
+      verified: user.verified || false,
     })
   }
 
@@ -150,7 +164,7 @@ export default function UsersPage() {
         await fetchUsers()
         setEditingUser(null)
       } else {
-        alert("Ошибка при обновлении пользователя")
+        alert(`Ошибка при обновлении пользователя: ${data.error}`)
       }
     } catch (error) {
       console.error("Error updating user:", error)
@@ -160,19 +174,21 @@ export default function UsersPage() {
     }
   }
 
-  const handleDeleteUser = async (userId: number) => {
+  const handleDeleteUser = async () => {
+    if (!userToDelete) return
+
     setIsDeleting(true)
     try {
-      const response = await fetch(`/api/users/${userId}/delete`, {
+      const response = await fetch(`/api/users/${userToDelete.id}`, {
         method: "DELETE",
       })
 
       const data = await response.json()
       if (data.success) {
         await fetchUsers()
-        setDeletingUserId(null)
+        setUserToDelete(null)
       } else {
-        alert("Ошибка при удалении пользователя")
+        alert(`Ошибка при удалении пользователя: ${data.error}`)
       }
     } catch (error) {
       console.error("Error deleting user:", error)
@@ -181,6 +197,8 @@ export default function UsersPage() {
       setIsDeleting(false)
     }
   }
+
+  const isAdmin = currentUser?.role === "admin"
 
   const columns = useMemo(
     () => [
@@ -254,16 +272,16 @@ export default function UsersPage() {
         id: "actions",
         header: "Действия",
         cell: (info) => (
-          <div className="flex gap-1">
+          <div className="flex items-center gap-2">
             <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
               <Edit className="h-4 w-4" />
             </Button>
-            {currentUser?.role === "admin" && (
+            {isAdmin && (
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => setDeletingUserId(info.row.original.id)}
-                className="text-red-600 hover:text-red-700"
+                onClick={() => setUserToDelete(info.row.original)}
+                className="text-red-600 hover:text-red-700 hover:bg-red-50"
               >
                 <Trash2 className="h-4 w-4" />
               </Button>
@@ -272,7 +290,7 @@ export default function UsersPage() {
         ),
       }),
     ],
-    [],
+    [isAdmin],
   )
 
   const table = useReactTable({
@@ -314,7 +332,6 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        {/* В заголовке страницы, после описания добавить информацию о фильтрации */}
         <div>
           <h1 className="text-2xl font-bold">Зарегистрированные пользователи</h1>
           <p className="text-muted-foreground">
@@ -499,7 +516,8 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Редактирование пользователя</DialogTitle>
             <DialogDescription>
-              Изменение данных пользователя. Поле "Верифицирован" недоступно для редактирования.
+              Изменение данных пользователя.
+              {!isAdmin && ' Поле "Верифицирован" недоступно для редактирования.'}
             </DialogDescription>
           </DialogHeader>
           {editingUser && (
@@ -544,14 +562,12 @@ export default function UsersPage() {
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                 />
               </div>
-              {currentUser?.role === "admin" && (
+              {isAdmin && (
                 <div className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
+                  <Switch
                     id="verified"
                     checked={editingUser.verified}
-                    onChange={(e) => setEditingUser({ ...editingUser, verified: e.target.checked })}
-                    className="rounded border-gray-300"
+                    onCheckedChange={(checked) => setEditingUser({ ...editingUser, verified: checked })}
                   />
                   <Label htmlFor="verified">Верифицирован</Label>
                 </div>
@@ -580,35 +596,41 @@ export default function UsersPage() {
       </Dialog>
 
       {/* Диалог подтверждения удаления */}
-      <Dialog open={!!deletingUserId} onOpenChange={() => setDeletingUserId(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Подтверждение удаления</DialogTitle>
-            <DialogDescription>
-              Вы уверены, что хотите удалить этого пользователя? Это действие нельзя отменить.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeletingUserId(null)}>
-              Отмена
-            </Button>
-            <Button
-              variant="destructive"
-              onClick={() => deletingUserId && handleDeleteUser(deletingUserId)}
-              disabled={isDeleting}
-            >
+      <AlertDialog open={!!userToDelete} onOpenChange={() => setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Удаление пользователя</AlertDialogTitle>
+            <AlertDialogDescription>
+              Вы уверены, что хотите удалить пользователя{" "}
+              <strong>{userToDelete?.full_name || userToDelete?.name}</strong>?
+              <br />
+              <br />
+              Это действие нельзя отменить. Будут удалены:
+              <ul className="list-disc list-inside mt-2">
+                <li>Данные пользователя</li>
+                <li>Все сессии пользователя</li>
+                <li>Ожидающие действия</li>
+              </ul>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Отмена</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDeleteUser} disabled={isDeleting} className="bg-red-600 hover:bg-red-700">
               {isDeleting ? (
                 <>
                   <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
                   Удаление...
                 </>
               ) : (
-                "Удалить"
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Удалить
+                </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* Инструкции */}
       <Alert>
