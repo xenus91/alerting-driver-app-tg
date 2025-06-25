@@ -18,7 +18,7 @@ async function getCurrentUser() {
   const result = await sql`
     SELECT u.*, s.expires_at
     FROM users u
-    JOIN user_sessions s ON u.telegram_id = s.telegram_id
+    JOIN user_sessions s ON u.id = s.user_id
     WHERE s.session_token = ${sessionToken.value}
     AND s.expires_at > NOW()
     LIMIT 1
@@ -39,12 +39,14 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
     const { name, first_name, last_name, carpark, role, verified } = body
 
     console.log(`Updating user ${userId}:`, { name, first_name, last_name, carpark, role, verified })
+    console.log(`Current user role: ${currentUser.role}`)
 
     // Строим запрос в зависимости от роли пользователя
     let result
 
     if (currentUser.role === "admin" && verified !== undefined) {
       // Админы могут изменять поле verified
+      console.log(`Admin updating user with verified: ${verified}`)
       result = await sql`
         UPDATE users 
         SET name = ${name},
@@ -59,6 +61,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       `
     } else {
       // Операторы не могут изменять поле verified
+      console.log(`Non-admin updating user without verified field`)
       result = await sql`
         UPDATE users 
         SET name = ${name},
@@ -76,7 +79,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 })
     }
 
-    console.log(`User ${userId} updated successfully`)
+    console.log(`User ${userId} updated successfully:`, result[0])
 
     return NextResponse.json({
       success: true,
@@ -111,7 +114,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     console.log(`Deleting user ${userId}`)
 
     // Сначала удаляем связанные сессии
-    await sql`DELETE FROM user_sessions WHERE telegram_id = (SELECT telegram_id FROM users WHERE id = ${userId})`
+    await sql`DELETE FROM user_sessions WHERE user_id = ${userId}`
 
     // Затем удаляем пользователя
     const result = await sql`
