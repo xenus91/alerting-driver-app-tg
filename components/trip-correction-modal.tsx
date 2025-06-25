@@ -13,6 +13,7 @@ import { RefreshCw, Save, Send, Plus, Trash2 } from "lucide-react"
 interface CorrectionData {
   phone: string
   trip_identifier: string
+  original_trip_identifier?: string // Добавляем для отслеживания изменений
   vehicle_number: string
   planned_loading_time: string
   point_type: "P" | "D"
@@ -64,7 +65,12 @@ export function TripCorrectionModal({
       const data = await response.json()
 
       if (data.success) {
-        setCorrections(data.data)
+        // Добавляем original_trip_identifier для отслеживания изменений
+        const correctionsWithOriginal = data.data.map((item: CorrectionData) => ({
+          ...item,
+          original_trip_identifier: item.trip_identifier,
+        }))
+        setCorrections(correctionsWithOriginal)
       } else {
         setError(data.error || "Failed to load driver details")
       }
@@ -267,7 +273,22 @@ export function TripCorrectionModal({
                   </Button>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4 mb-4">
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <label className="text-sm font-medium">Номер рейса</label>
+                    <Input
+                      value={tripCorrections[0]?.trip_identifier || ""}
+                      onChange={(e) => {
+                        // Обновляем для всех точек этого рейса
+                        const updatedCorrections = corrections.map((c) =>
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, trip_identifier: e.target.value }
+                            : c,
+                        )
+                        setCorrections(updatedCorrections)
+                      }}
+                    />
+                  </div>
                   <div>
                     <label className="text-sm font-medium">Транспорт</label>
                     <Input
@@ -275,7 +296,9 @@ export function TripCorrectionModal({
                       onChange={(e) => {
                         // Обновляем для всех точек этого рейса
                         const updatedCorrections = corrections.map((c) =>
-                          c.trip_identifier === tripIdentifier ? { ...c, vehicle_number: e.target.value } : c,
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, vehicle_number: e.target.value }
+                            : c,
                         )
                         setCorrections(updatedCorrections)
                       }}
@@ -289,7 +312,9 @@ export function TripCorrectionModal({
                       onChange={(e) => {
                         const isoDate = formatDateTimeForSave(e.target.value)
                         const updatedCorrections = corrections.map((c) =>
-                          c.trip_identifier === tripIdentifier ? { ...c, planned_loading_time: isoDate } : c,
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, planned_loading_time: isoDate }
+                            : c,
                         )
                         setCorrections(updatedCorrections)
                       }}
@@ -301,7 +326,9 @@ export function TripCorrectionModal({
                       value={tripCorrections[0]?.driver_comment || ""}
                       onChange={(e) => {
                         const updatedCorrections = corrections.map((c) =>
-                          c.trip_identifier === tripIdentifier ? { ...c, driver_comment: e.target.value } : c,
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, driver_comment: e.target.value }
+                            : c,
                         )
                         setCorrections(updatedCorrections)
                       }}

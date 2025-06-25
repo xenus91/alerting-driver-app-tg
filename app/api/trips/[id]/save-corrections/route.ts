@@ -15,13 +15,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     await sql`BEGIN`
 
     try {
-      // Группируем корректировки по trip_identifier
-      const tripGroups = new Map()
+      // Группируем корректировки по original_trip_identifier для обновления
+      const originalTripGroups = new Map()
 
       for (const correction of corrections) {
-        if (!tripGroups.has(correction.trip_identifier)) {
-          tripGroups.set(correction.trip_identifier, {
-            trip_identifier: correction.trip_identifier,
+        const originalKey = correction.original_trip_identifier || correction.trip_identifier
+        if (!originalTripGroups.has(originalKey)) {
+          originalTripGroups.set(originalKey, {
+            original_trip_identifier: originalKey,
+            new_trip_identifier: correction.trip_identifier,
             vehicle_number: correction.vehicle_number,
             planned_loading_time: correction.planned_loading_time,
             driver_comment: correction.driver_comment,
@@ -30,7 +32,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
 
         if (correction.point_id) {
-          tripGroups.get(correction.trip_identifier).points.push({
+          originalTripGroups.get(originalKey).points.push({
             point_type: correction.point_type,
             point_num: correction.point_num,
             point_id: correction.point_id,
@@ -39,25 +41,26 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
 
       // Обновляем данные сообщений
-      for (const [tripIdentifier, tripData] of tripGroups) {
+      for (const [originalTripIdentifier, tripData] of originalTripGroups) {
         await sql`
           UPDATE trip_messages 
-          SET vehicle_number = ${tripData.vehicle_number},
+          SET trip_identifier = ${tripData.new_trip_identifier},
+              vehicle_number = ${tripData.vehicle_number},
               planned_loading_time = ${tripData.planned_loading_time},
               driver_comment = ${tripData.driver_comment || null}
           WHERE trip_id = ${tripId} 
             AND phone = ${phone} 
-            AND trip_identifier = ${tripIdentifier}
+            AND trip_identifier = ${originalTripIdentifier}
         `
 
-        // Удаляем старые точки для этого рейса
+        // Удаляем старые точки для этого рейса (используем original_trip_identifier)
         await sql`
           DELETE FROM trip_points 
           WHERE trip_id = ${tripId} 
-            AND trip_identifier = ${tripIdentifier}
+            AND trip_identifier = ${originalTripIdentifier}
         `
 
-        // Добавляем новые точки
+        // Добавляем новые точки с новым trip_identifier
         for (const point of tripData.points) {
           // Получаем ID точки из таблицы points
           const pointResult = await sql`
@@ -67,7 +70,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           if (pointResult.length > 0) {
             await sql`
               INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
-              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripIdentifier})
+              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier})
             `
           }
         }
@@ -75,12 +78,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       await sql`COMMIT`
 
-      console.log(`Corrections saved successfully for ${tripGroups.size} trips`)
+      console.log(`Corrections saved successfully for ${originalTripGroups.size} trips`)
 
       return NextResponse.json({
         success: true,
         message: "Corrections saved successfully",
-        updatedTrips: tripGroups.size,
+        updatedTrips: originalTripGroups.size,
       })
     } catch (error) {
       await sql`ROLLBACK`
