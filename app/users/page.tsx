@@ -151,12 +151,26 @@ export default function UsersPage() {
 
     setIsUpdating(true)
     try {
+      // Подготавливаем данные для отправки
+      const updateData: any = {
+        name: editingUser.name,
+        first_name: editingUser.first_name,
+        last_name: editingUser.last_name,
+        carpark: editingUser.carpark,
+        role: editingUser.role,
+      }
+
+      // Добавляем verified только для администраторов
+      if (isAdmin) {
+        updateData.verified = editingUser.verified
+      }
+
       const response = await fetch(`/api/users/${editingUser.id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(editingUser),
+        body: JSON.stringify(updateData),
       })
 
       const data = await response.json()
