@@ -8,10 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X, Check, ChevronsUpDown } from "lucide-react"
-import { cn } from "@/lib/utils"
+import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X } from "lucide-react"
 
 interface CorrectionData {
   phone: string
@@ -124,14 +121,12 @@ export function TripCorrectionModal({
   }
 
   const addNewTrip = () => {
-    // Берем время из первого существующего рейса или текущее время
-    const defaultTime = corrections.length > 0 ? corrections[0].planned_loading_time : new Date().toISOString()
-
+    // Генерируем новый номер рейса
     const newTrip: CorrectionData = {
       phone,
       trip_identifier: "", // Пустое поле вместо автогенерации
       vehicle_number: "",
-      planned_loading_time: defaultTime,
+      planned_loading_time: new Date().toISOString(),
       point_type: "P",
       point_num: 1,
       point_id: "",
@@ -226,42 +221,27 @@ export function TripCorrectionModal({
     }
   }
 
-  // ИСПРАВЛЕННАЯ функция форматирования времени
+  // Исправленная функция форматирования времени БЕЗ преобразования часовых поясов
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
-
     try {
-      console.log("Formatting datetime:", dateString)
-
-      // Если это ISO строка с временной зоной или Z
+      // Если это ISO строка с временной зоной
       if (dateString.includes("T")) {
         // Создаем дату из строки
         const date = new Date(dateString)
 
-        // Проверяем, что дата валидна
-        if (isNaN(date.getTime())) {
-          console.log("Invalid date:", dateString)
-          return ""
-        }
-
-        // Форматируем для datetime-local input (локальное время)
+        // Получаем локальные компоненты времени
         const year = date.getFullYear()
         const month = String(date.getMonth() + 1).padStart(2, "0")
         const day = String(date.getDate()).padStart(2, "0")
         const hours = String(date.getHours()).padStart(2, "0")
         const minutes = String(date.getMinutes()).padStart(2, "0")
 
-        const formatted = `${year}-${month}-${day}T${hours}:${minutes}`
-        console.log("Formatted datetime:", formatted)
-        return formatted
+        return `${year}-${month}-${day}T${hours}:${minutes}`
       }
 
-      // Если это другой формат
+      // Если это другой формат, пробуем преобразовать
       const date = new Date(dateString)
-      if (isNaN(date.getTime())) {
-        return ""
-      }
-
       const year = date.getFullYear()
       const month = String(date.getMonth() + 1).padStart(2, "0")
       const day = String(date.getDate()).padStart(2, "0")
@@ -269,8 +249,7 @@ export function TripCorrectionModal({
       const minutes = String(date.getMinutes()).padStart(2, "0")
 
       return `${year}-${month}-${day}T${hours}:${minutes}`
-    } catch (error) {
-      console.error("Error formatting datetime:", error, dateString)
+    } catch {
       return ""
     }
   }
@@ -285,67 +264,6 @@ export function TripCorrectionModal({
     } catch {
       return dateString
     }
-  }
-
-  // Компонент для поиска точек
-  const PointSelector = ({
-    value,
-    onValueChange,
-    placeholder,
-  }: {
-    value: string
-    onValueChange: (value: string) => void
-    placeholder: string
-  }) => {
-    const [open, setOpen] = useState(false)
-    const [searchValue, setSearchValue] = useState("")
-
-    const filteredPoints = availablePoints.filter(
-      (point) =>
-        point.point_id.toLowerCase().includes(searchValue.toLowerCase()) ||
-        point.point_name.toLowerCase().includes(searchValue.toLowerCase()),
-    )
-
-    const selectedPoint = availablePoints.find((point) => point.point_id === value)
-
-    return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-            {selectedPoint ? `${selectedPoint.point_id} - ${selectedPoint.point_name}` : placeholder}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-full p-0">
-          <Command>
-            <CommandInput
-              placeholder="Поиск по ID или названию..."
-              value={searchValue}
-              onValueChange={setSearchValue}
-            />
-            <CommandList>
-              <CommandEmpty>Точки не найдены.</CommandEmpty>
-              <CommandGroup>
-                {filteredPoints.map((point) => (
-                  <CommandItem
-                    key={point.point_id}
-                    value={point.point_id}
-                    onSelect={(currentValue) => {
-                      onValueChange(currentValue === value ? "" : currentValue)
-                      setOpen(false)
-                      setSearchValue("")
-                    }}
-                  >
-                    <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
-                    {point.point_id} - {point.point_name}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    )
   }
 
   // Группируем корректировки по trip_identifier
@@ -547,11 +465,21 @@ export function TripCorrectionModal({
                             />
                           </TableCell>
                           <TableCell>
-                            <PointSelector
+                            <Select
                               value={correction.point_id}
                               onValueChange={(value) => updateCorrection(globalIndex, "point_id", value)}
-                              placeholder="Выберите точку"
-                            />
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Выберите точку" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {availablePoints.map((point) => (
+                                  <SelectItem key={point.point_id} value={point.point_id}>
+                                    {point.point_id} - {point.point_name}
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
                           </TableCell>
                           <TableCell>
                             <Button

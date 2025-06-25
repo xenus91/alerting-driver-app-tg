@@ -50,6 +50,10 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  // Состояния для поиска
+  const [driverSearchOpen, setDriverSearchOpen] = useState(false)
+  const [pointSearchOpen, setPointSearchOpen] = useState<{ [key: string]: boolean }>({})
+
   // Загружаем данные при открытии модального окна
   useEffect(() => {
     if (isOpen) {
@@ -60,6 +64,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
       setSelectedDriver("")
       setError(null)
       setSuccess(null)
+      setPointSearchOpen({})
     }
   }, [isOpen])
 
@@ -277,127 +282,45 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     return phone
   }
 
-  // Компонент для поиска водителей
-  const DriverSelector = () => {
-    const [open, setOpen] = useState(false)
-    const [searchValue, setSearchValue] = useState("")
+  // Функция поиска водителей
+  const filterDrivers = (searchValue: string) => {
+    if (!searchValue) return drivers
 
-    const filteredDrivers = drivers.filter((driver) => {
-      const displayName = getDriverDisplayName(driver).toLowerCase()
-      const phone = formatPhone(driver.phone).toLowerCase()
-      const search = searchValue.toLowerCase()
-
-      return displayName.includes(search) || phone.includes(search) || driver.phone.includes(search)
+    const search = searchValue.toLowerCase()
+    return drivers.filter((driver) => {
+      const fullName = (driver.full_name || driver.first_name || driver.name || "").toLowerCase()
+      const phone = driver.phone.toLowerCase()
+      return fullName.includes(search) || phone.includes(search)
     })
-
-    const selectedDriverData = drivers.find((driver) => driver.phone === selectedDriver)
-
-    return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-            {selectedDriverData
-              ? `${getDriverDisplayName(selectedDriverData)} - ${formatPhone(selectedDriverData.phone)}`
-              : "Выберите водителя для отправки рейса"}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-full p-0">
-          <Command>
-            <CommandInput
-              placeholder="Поиск по имени или телефону..."
-              value={searchValue}
-              onValueChange={setSearchValue}
-            />
-            <CommandList>
-              <CommandEmpty>Водители не найдены.</CommandEmpty>
-              <CommandGroup>
-                {filteredDrivers.map((driver) => (
-                  <CommandItem
-                    key={driver.phone}
-                    value={driver.phone}
-                    onSelect={(currentValue) => {
-                      setSelectedDriver(currentValue === selectedDriver ? "" : currentValue)
-                      setOpen(false)
-                      setSearchValue("")
-                    }}
-                  >
-                    <Check
-                      className={cn("mr-2 h-4 w-4", selectedDriver === driver.phone ? "opacity-100" : "opacity-0")}
-                    />
-                    <div className="flex items-center justify-between w-full">
-                      <span>{getDriverDisplayName(driver)}</span>
-                      <span className="text-sm text-gray-500 ml-4">{formatPhone(driver.phone)}</span>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    )
   }
 
-  // Компонент для поиска точек
-  const PointSelector = ({
-    value,
-    onValueChange,
-    placeholder,
-  }: {
-    value: string
-    onValueChange: (value: string) => void
-    placeholder: string
-  }) => {
-    const [open, setOpen] = useState(false)
-    const [searchValue, setSearchValue] = useState("")
+  // Функция поиска точек
+  const filterPoints = (searchValue: string) => {
+    if (!searchValue) return availablePoints
 
-    const filteredPoints = availablePoints.filter(
-      (point) =>
-        point.point_id.toLowerCase().includes(searchValue.toLowerCase()) ||
-        point.point_name.toLowerCase().includes(searchValue.toLowerCase()),
-    )
+    const search = searchValue.toLowerCase()
+    return availablePoints.filter((point) => {
+      const pointId = point.point_id.toLowerCase()
+      const pointName = (point.point_name || "").toLowerCase()
+      return pointId.includes(search) || pointName.includes(search)
+    })
+  }
 
-    const selectedPoint = availablePoints.find((point) => point.point_id === value)
+  const getSelectedDriverName = () => {
+    const driver = drivers.find((d) => d.phone === selectedDriver)
+    return driver ? getDriverDisplayName(driver) : "Выберите водителя"
+  }
 
-    return (
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={open} className="w-full justify-between">
-            {selectedPoint ? `${selectedPoint.point_id} - ${selectedPoint.point_name}` : placeholder}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-full p-0">
-          <Command>
-            <CommandInput
-              placeholder="Поиск по ID или названию..."
-              value={searchValue}
-              onValueChange={setSearchValue}
-            />
-            <CommandList>
-              <CommandEmpty>Точки не найдены.</CommandEmpty>
-              <CommandGroup>
-                {filteredPoints.map((point) => (
-                  <CommandItem
-                    key={point.point_id}
-                    value={point.point_id}
-                    onSelect={(currentValue) => {
-                      onValueChange(currentValue === value ? "" : currentValue)
-                      setOpen(false)
-                      setSearchValue("")
-                    }}
-                  >
-                    <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
-                    {point.point_id} - {point.point_name}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    )
+  const getSelectedPointName = (pointId: string) => {
+    const point = availablePoints.find((p) => p.point_id === pointId)
+    return point ? `${point.point_id} - ${point.point_name}` : "Выберите точку"
+  }
+
+  const togglePointSearch = (key: string) => {
+    setPointSearchOpen((prev) => ({
+      ...prev,
+      [key]: !prev[key],
+    }))
   }
 
   return (
@@ -429,13 +352,58 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Выбор водителя */}
+            {/* Выбор водителя с поиском */}
             <div className="border rounded-lg p-4 bg-blue-50">
               <div className="flex items-center gap-2 mb-3">
                 <User className="h-4 w-4 text-blue-600" />
                 <h3 className="font-medium text-blue-900">Выбор водителя</h3>
               </div>
-              <DriverSelector />
+
+              <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={driverSearchOpen}
+                    className="w-full justify-between"
+                  >
+                    {getSelectedDriverName()}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-full p-0" align="start">
+                  <Command>
+                    <CommandInput placeholder="Поиск по имени или телефону..." />
+                    <CommandList>
+                      <CommandEmpty>Водители не найдены.</CommandEmpty>
+                      <CommandGroup>
+                        {filterDrivers("").map((driver) => (
+                          <CommandItem
+                            key={driver.phone}
+                            value={`${getDriverDisplayName(driver)} ${driver.phone}`}
+                            onSelect={() => {
+                              setSelectedDriver(driver.phone)
+                              setDriverSearchOpen(false)
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedDriver === driver.phone ? "opacity-100" : "opacity-0",
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span>{getDriverDisplayName(driver)}</span>
+                              <span className="text-sm text-gray-500">{formatPhone(driver.phone)}</span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+
               {drivers.length === 0 && (
                 <p className="text-sm text-gray-500 mt-2">Нет доступных верифицированных водителей</p>
               )}
@@ -525,62 +493,107 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {trip.points.map((point, pointIndex) => (
-                      <TableRow key={pointIndex}>
-                        <TableCell>
-                          <Select
-                            value={point.point_type}
-                            onValueChange={(value: "P" | "D") =>
-                              updatePoint(tripIndex, pointIndex, "point_type", value)
-                            }
-                          >
-                            <SelectTrigger className="w-20">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              <SelectItem value="P">
-                                <Badge variant="outline" className="bg-blue-100 text-blue-600">
-                                  P
-                                </Badge>
-                              </SelectItem>
-                              <SelectItem value="D">
-                                <Badge variant="outline" className="bg-green-100 text-green-600">
-                                  D
-                                </Badge>
-                              </SelectItem>
-                            </SelectContent>
-                          </Select>
-                        </TableCell>
-                        <TableCell>
-                          <Input
-                            type="number"
-                            value={point.point_num}
-                            onChange={(e) =>
-                              updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))
-                            }
-                            className="w-16"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <PointSelector
-                            value={point.point_id}
-                            onValueChange={(value) => updatePoint(tripIndex, pointIndex, "point_id", value)}
-                            placeholder="Выберите точку"
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Button
-                            onClick={() => removePoint(tripIndex, pointIndex)}
-                            variant="outline"
-                            size="sm"
-                            className="text-red-600"
-                            disabled={trip.points.length === 1}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
+                    {trip.points.map((point, pointIndex) => {
+                      const searchKey = `${tripIndex}-${pointIndex}`
+                      return (
+                        <TableRow key={pointIndex}>
+                          <TableCell>
+                            <Select
+                              value={point.point_type}
+                              onValueChange={(value: "P" | "D") =>
+                                updatePoint(tripIndex, pointIndex, "point_type", value)
+                              }
+                            >
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="P">
+                                  <Badge variant="outline" className="bg-blue-100 text-blue-600">
+                                    P
+                                  </Badge>
+                                </SelectItem>
+                                <SelectItem value="D">
+                                  <Badge variant="outline" className="bg-green-100 text-green-600">
+                                    D
+                                  </Badge>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              value={point.point_num}
+                              onChange={(e) =>
+                                updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))
+                              }
+                              className="w-16"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Popover
+                              open={pointSearchOpen[searchKey] || false}
+                              onOpenChange={() => togglePointSearch(searchKey)}
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={pointSearchOpen[searchKey] || false}
+                                  className="w-full justify-between"
+                                >
+                                  {point.point_id ? getSelectedPointName(point.point_id) : "Выберите точку"}
+                                  <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-full p-0" align="start">
+                                <Command>
+                                  <CommandInput placeholder="Поиск по коду или названию..." />
+                                  <CommandList>
+                                    <CommandEmpty>Точки не найдены.</CommandEmpty>
+                                    <CommandGroup>
+                                      {filterPoints("").map((availablePoint) => (
+                                        <CommandItem
+                                          key={availablePoint.point_id}
+                                          value={`${availablePoint.point_id} ${availablePoint.point_name}`}
+                                          onSelect={() => {
+                                            updatePoint(tripIndex, pointIndex, "point_id", availablePoint.point_id)
+                                            togglePointSearch(searchKey)
+                                          }}
+                                        >
+                                          <Check
+                                            className={cn(
+                                              "mr-2 h-4 w-4",
+                                              point.point_id === availablePoint.point_id ? "opacity-100" : "opacity-0",
+                                            )}
+                                          />
+                                          <div className="flex flex-col">
+                                            <span className="font-medium">{availablePoint.point_id}</span>
+                                            <span className="text-sm text-gray-500">{availablePoint.point_name}</span>
+                                          </div>
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              onClick={() => removePoint(tripIndex, pointIndex)}
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600"
+                              disabled={trip.points.length === 1}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
                   </TableBody>
                 </Table>
               </div>
