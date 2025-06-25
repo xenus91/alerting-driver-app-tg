@@ -152,6 +152,9 @@ importers:
       sonner:
         specifier: latest
         version: 2.0.5(react-dom@18.0.0(react@18.0.0))(react@18.0.0)
+      sql-template-strings:
+        specifier: latest
+        version: 2.2.2
       tailwind-merge:
         specifier: ^2.5.5
         version: 2.5.5
@@ -1680,6 +1683,10 @@ packages:
   source-map-js@1.2.1:
     resolution: {integrity: sha512-UXWMKhLOwVKb728IUtQPXxfYU+usdybtUrK/8uGE8CQMvrhOpwvzDBwj0QhSL7MQc7vIsISBG8VQ8+IDQxpfQA==}
     engines: {node: '>=0.10.0'}
+
+  sql-template-strings@2.2.2:
+    resolution: {integrity: sha512-UXhXR2869FQaD+GMly8jAMCRZ94nU5KcrFetZfWEMd+LVVG6y0ExgHAhatEcKZ/wk8YcKPdi+hiD2wm75lq3/Q==}
+    engines: {node: '>=4.0.0'}
 
   ssf@0.11.2:
     resolution: {integrity: sha512-+idbmIXoYET47hH+d7dfm2epdOMUDjqcB4648sTZ+t2JwoyBFL/insLfB/racrDmsKB3diwsDA696pZMieAC5g==}
@@ -3296,6 +3303,8 @@ snapshots:
       react-dom: 18.0.0(react@18.0.0)
 
   source-map-js@1.2.1: {}
+
+  sql-template-strings@2.2.2: {}
 
   ssf@0.11.2:
     dependencies:
