@@ -1,4 +1,4 @@
--- Добавляем поле verified в таблицу users
+-- Добавляем поле verified �� таблицу users
 ALTER TABLE users ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT true;
 
 -- Устанавливаем verified = true для всех существующих пользователей с завершенной регистрацией

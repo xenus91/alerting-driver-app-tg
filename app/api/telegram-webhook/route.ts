@@ -911,7 +911,7 @@ export async function POST(request: NextRequest) {
       }
 
       if (existingUser.registration_state === "completed") {
-        // Пользователь уже зарегистрирован
+        // Пользоват��ль уже зарегистрирован
         const registeredMessage =
           `👋 Здравствуйте, ${existingUser.first_name}!\n\n` +
           `✅ Вы уже зарегистрированы в системе уведомлений.\n\n` +

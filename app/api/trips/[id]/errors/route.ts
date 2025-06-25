@@ -71,7 +71,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         tm.phone,
         tm.error_message,
         tm.created_at,
-        u.name as user_name
+        u.full_name as user_name
       FROM trip_messages tm
       LEFT JOIN users u ON tm.phone = u.phone
       WHERE tm.trip_id = ${tripId}

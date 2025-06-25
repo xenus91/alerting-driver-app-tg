@@ -97,7 +97,7 @@ TELEGRAM_BOT_TOKEN=1234567890:ABCdefGHIjklMNOpqrsTUVwxyz`
           <CollapsibleTrigger asChild>
             <Button variant="ghost" size="sm">
               {showSteps ? <ChevronDown className="h-4 w-4 mr-2" /> : <ChevronRight className="h-4 w-4 mr-2" />}
-              Подробн��е инструкции
+              Подро��н��е инструкции
             </Button>
           </CollapsibleTrigger>
           <CollapsibleContent>

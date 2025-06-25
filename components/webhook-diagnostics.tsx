@@ -93,7 +93,7 @@ export default function WebhookDiagnostics() {
         {/* Результаты диагностики */}
         {diagnostics && (
           <div className="space-y-3">
-            <div className="text-sm font-medium">📊 Результаты диагностики:</div>
+            <div className="text-sm font-medium">📊 Резу��ьтаты диагностики:</div>
 
             <div className="grid gap-2 text-xs">
               <div className="flex justify-between items-center">

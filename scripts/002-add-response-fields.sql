@@ -7,7 +7,7 @@ ADD COLUMN IF NOT EXISTS response_at TIMESTAMP;
 -- Создаем индекс для быстрого поиска по статусу ответа
 CREATE INDEX IF NOT EXISTS idx_campaign_messages_response_status ON campaign_messages(response_status);
 
--- Обновляем существующие записи
+-- Обно��ляем существующие записи
 UPDATE campaign_messages 
 SET response_status = 'pending' 
 WHERE response_status IS NULL;

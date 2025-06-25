@@ -71,7 +71,7 @@ export async function GET(request: Request) {
       currentUser = sessions[0]
     }
 
-    // Определяем фильтр в зависимости от роли пользователя
+    // Определяем фильтр в зависимост�� от роли пользователя
     let usersQuery
 
     if (currentUser.role === "operator" && currentUser.carpark) {
