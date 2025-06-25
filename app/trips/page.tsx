@@ -6,7 +6,18 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
-import { RefreshCw, Eye, Truck, Calendar, CheckCircle, XCircle, Clock, MoreVertical, Trash2 } from "lucide-react"
+import {
+  RefreshCw,
+  Eye,
+  Truck,
+  Calendar,
+  CheckCircle,
+  XCircle,
+  Clock,
+  MoreVertical,
+  Trash2,
+  AlertTriangle,
+} from "lucide-react"
 
 interface TripData {
   id: number
@@ -23,11 +34,23 @@ interface TripData {
   carpark?: string
 }
 
+interface TripError {
+  id: number
+  phone: string
+  error_message: string
+  created_at: string
+}
+
 export default function TripsPage() {
   const [trips, setTrips] = useState<TripData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+
+  // Состояния для диалога ошибок
+  const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
+  const [tripErrors, setTripErrors] = useState<TripError[]>([])
+  const [loadingErrors, setLoadingErrors] = useState(false)
 
   const fetchTrips = async () => {
     setIsLoading(true)
@@ -42,6 +65,37 @@ export default function TripsPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const fetchTripErrors = async (tripId: number) => {
+    setLoadingErrors(true)
+    try {
+      const response = await fetch(`/api/trips/${tripId}/errors`)
+      const data = await response.json()
+      if (data.success) {
+        setTripErrors(data.errors)
+      }
+    } catch (error) {
+      console.error("Error fetching trip errors:", error)
+    } finally {
+      setLoadingErrors(false)
+    }
+  }
+
+  const handleShowErrors = (tripId: number) => {
+    setShowErrorsDialog(tripId)
+    fetchTripErrors(tripId)
+  }
+
+  const formatPhone = (phone: string) => {
+    if (phone.startsWith("380") && phone.length === 12) {
+      // Украинский номер: 380668863317 -> +380 (66) 886-33-17
+      return `+380 (${phone.slice(3, 5)}) ${phone.slice(5, 8)}-${phone.slice(8, 10)}-${phone.slice(10)}`
+    } else if (phone.startsWith("7") && phone.length === 11) {
+      // Российский номер: 79050550020 -> +7 (905) 055-00-20
+      return `+7 (${phone.slice(1, 4)}) ${phone.slice(4, 7)}-${phone.slice(7, 9)}-${phone.slice(9)}`
+    }
+    return phone
   }
 
   useEffect(() => {
@@ -401,7 +455,11 @@ export default function TripsPage() {
                   <div className="flex items-center gap-2 mt-4">
                     {getTripStatusBadge(trip)}
                     {Number(trip.error_messages) > 0 && (
-                      <Badge variant="destructive">
+                      <Badge
+                        variant="destructive"
+                        className="cursor-pointer hover:bg-red-700 transition-colors"
+                        onClick={() => handleShowErrors(trip.id)}
+                      >
                         <XCircle className="h-3 w-3 mr-1" />
                         {trip.error_messages} ошибок
                       </Badge>
@@ -411,6 +469,52 @@ export default function TripsPage() {
               </Card>
             )
           })}
+        </div>
+      )}
+
+      {/* Диалог ошибок */}
+      {showErrorsDialog && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-lg font-semibold flex items-center gap-2">
+                <AlertTriangle className="h-5 w-5 text-red-600" />
+                Ошибки отправки - Рассылка #{showErrorsDialog}
+              </h3>
+              <Button variant="ghost" size="sm" onClick={() => setShowErrorsDialog(null)}>
+                ✕
+              </Button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto">
+              {loadingErrors ? (
+                <div className="flex items-center justify-center py-8">
+                  <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+                  Загрузка ошибок...
+                </div>
+              ) : tripErrors.length === 0 ? (
+                <div className="text-center py-8 text-gray-500">Ошибки не найдены</div>
+              ) : (
+                <div className="space-y-3">
+                  {tripErrors.map((error) => (
+                    <div key={error.id} className="border border-red-200 rounded-lg p-4 bg-red-50">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="font-medium text-gray-900">{formatPhone(error.phone)}</div>
+                          <div className="text-red-600 mt-1">❌ {error.error_message}</div>
+                          <div className="text-sm text-gray-500 mt-2">🕐 {formatDate(error.created_at)}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end mt-4 pt-4 border-t">
+              <Button onClick={() => setShowErrorsDialog(null)}>Закрыть</Button>
+            </div>
+          </div>
         </div>
       )}
 
