@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server"
-import { setTelegramCommands, deleteTelegramCommands } from "@/lib/telegram-commands"
+import { setTelegramCommands, deleteTelegramCommands, setCustomTelegramCommands } from "@/lib/telegram-commands"
 
 export async function POST(request: Request) {
   try {
     const body = await request.json().catch(() => ({}))
     const forceUpdate = body.force || false
+    const customCommands = body.commands
 
     if (forceUpdate) {
       console.log("🔄 Force update requested - deleting all commands first")
@@ -13,13 +14,15 @@ export async function POST(request: Request) {
       await new Promise((resolve) => setTimeout(resolve, 1000))
     }
 
-    const result = await setTelegramCommands()
+    // Use custom commands if provided, otherwise use default
+    const result = customCommands ? await setCustomTelegramCommands(customCommands) : await setTelegramCommands()
 
     return NextResponse.json({
       success: true,
       message: "Telegram bot commands set successfully",
       result: result,
       force_update: forceUpdate,
+      custom_commands: !!customCommands,
     })
   } catch (error) {
     console.error("Error setting Telegram commands:", error)

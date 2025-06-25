@@ -78,3 +78,35 @@ export async function deleteTelegramCommands() {
     throw error
   }
 }
+
+export async function setCustomTelegramCommands(commands: Array<{ command: string; description: string }>) {
+  try {
+    console.log("=== SETTING CUSTOM TELEGRAM COMMANDS ===")
+    console.log("Custom commands to set:", JSON.stringify(commands, null, 2))
+
+    const response = await fetch(`${TELEGRAM_API_URL}/setMyCommands`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        commands: commands,
+      }),
+    })
+
+    const data = await response.json()
+    console.log("Telegram setMyCommands response:", JSON.stringify(data, null, 2))
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to set custom commands")
+    }
+
+    console.log("✅ Custom Telegram bot commands set successfully")
+    console.log("Commands set:", commands)
+
+    return data.result
+  } catch (error) {
+    console.error("❌ Error setting custom Telegram commands:", error)
+    throw error
+  }
+}

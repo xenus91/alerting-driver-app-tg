@@ -4,6 +4,7 @@ import BotDiagnostics from "@/components/bot-diagnostics"
 import AdvancedBotDiagnostics from "@/components/advanced-bot-diagnostics"
 import WebhookDiagnostics from "@/components/webhook-diagnostics"
 import BotSetup from "@/components/bot-setup"
+import TelegramCommandsManager from "@/components/telegram-commands-manager"
 
 export default function BotSettingsPage() {
   return (
@@ -15,6 +16,9 @@ export default function BotSettingsPage() {
 
       {/* Настройка бота */}
       <BotSetup />
+
+      {/* Управление командами */}
+      <TelegramCommandsManager />
 
       {/* Добавить диагностику webhook */}
       <WebhookDiagnostics />
