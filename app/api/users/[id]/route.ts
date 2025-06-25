@@ -4,6 +4,8 @@ import { cookies } from "next/headers"
 
 const sql = neon(process.env.DATABASE_URL!)
 
+export const dynamic = "force-dynamic"
+
 // Функция для получения текущего пользователя
 async function getCurrentUser() {
   const cookieStore = cookies()
@@ -38,33 +40,37 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
 
     console.log(`Updating user ${userId}:`, { name, first_name, last_name, carpark, role, verified })
 
-    // Подготавливаем данные для обновления
-    const updateData: any = {
-      name,
-      first_name,
-      last_name,
-      full_name: first_name && last_name ? `${first_name} ${last_name}` : name,
-      carpark,
-      role,
-    }
+    // Строим запрос в зависимости от роли пользователя
+    let result
 
-    // Только админы могут изменять поле verified
     if (currentUser.role === "admin" && verified !== undefined) {
-      updateData.verified = verified
+      // Админы могут изменять поле verified
+      result = await sql`
+        UPDATE users 
+        SET name = ${name},
+            first_name = ${first_name},
+            last_name = ${last_name},
+            full_name = ${first_name && last_name ? `${first_name} ${last_name}` : name},
+            carpark = ${carpark},
+            role = ${role},
+            verified = ${verified}
+        WHERE id = ${userId}
+        RETURNING *
+      `
+    } else {
+      // Операторы не могут изменять поле verified
+      result = await sql`
+        UPDATE users 
+        SET name = ${name},
+            first_name = ${first_name},
+            last_name = ${last_name},
+            full_name = ${first_name && last_name ? `${first_name} ${last_name}` : name},
+            carpark = ${carpark},
+            role = ${role}
+        WHERE id = ${userId}
+        RETURNING *
+      `
     }
-
-    const result = await sql`
-      UPDATE users 
-      SET name = ${updateData.name},
-          first_name = ${updateData.first_name},
-          last_name = ${updateData.last_name},
-          full_name = ${updateData.full_name},
-          carpark = ${updateData.carpark},
-          role = ${updateData.role}
-          ${currentUser.role === "admin" && verified !== undefined ? sql`, verified = ${updateData.verified}` : sql``}
-      WHERE id = ${userId}
-      RETURNING *
-    `
 
     if (result.length === 0) {
       return NextResponse.json({ error: "Пользователь не найден" }, { status: 404 })
