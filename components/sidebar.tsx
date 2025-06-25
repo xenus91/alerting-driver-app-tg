@@ -14,7 +14,6 @@ import {
   Users,
   Bot,
   FileSpreadsheet,
-  BarChart3,
   MapPin,
   ChevronLeft,
   ChevronRight,
@@ -45,11 +44,6 @@ const menuItems = [
     title: "Пункты",
     href: "/points",
     icon: MapPin,
-  },
-  {
-    title: "Статистика",
-    href: "/stats",
-    icon: BarChart3,
   },
   {
     title: "Настройки бота",
