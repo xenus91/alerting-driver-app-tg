@@ -180,6 +180,36 @@ export default function TelegramCommandsManager() {
 ]`)
   }
 
+  const forceRefreshCommands = async () => {
+    setIsUpdating(true)
+    setResult(null)
+    try {
+      const response = await fetch("/api/force-refresh-telegram-commands", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      })
+      const data = await response.json()
+
+      setResult({
+        success: data.success,
+        message: data.success ? "Команды принудительно обновлены! Перезапустите Telegram." : data.error,
+        type: "force-refresh",
+      })
+
+      if (data.success) {
+        setTimeout(fetchCurrentCommands, 2000)
+      }
+    } catch (error) {
+      setResult({
+        success: false,
+        message: "Ошибка при принудительном обновлении",
+        type: "force-refresh",
+      })
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   useEffect(() => {
     fetchCurrentCommands()
   }, [])
@@ -276,6 +306,23 @@ export default function TelegramCommandsManager() {
                   <>
                     <Bot className="mr-2 h-4 w-4" />
                     Принудительно обновить
+                  </>
+                )}
+              </Button>
+              <Button
+                variant="default"
+                onClick={forceRefreshCommands}
+                disabled={isUpdating || isDeleting}
+                className="w-full bg-orange-600 hover:bg-orange-700"
+              >
+                {isUpdating ? (
+                  <>
+                    <RefreshCw className="mr-2 h-4 w-4 animate-spin" />
+                    Принудительное обновление...
+                  </>
+                ) : (
+                  <>
+                    <Bot className="mr-2 h-4 w-4" />🔄 Принудительное обновление + очистка кэша
                   </>
                 )}
               </Button>
