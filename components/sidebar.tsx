@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import { Button } from "@/components/ui/button"
@@ -24,31 +24,37 @@ const menuItems = [
     title: "Главная",
     href: "/",
     icon: Home,
+    roles: ["admin", "operator"], // доступно всем
   },
   {
     title: "Загрузка файлов",
     href: "/upload",
     icon: Upload,
+    roles: ["admin", "operator"], // доступно всем
   },
   {
     title: "Рассылки",
     href: "/trips",
     icon: MessageSquare,
+    roles: ["admin", "operator"], // доступно всем
   },
   {
     title: "Пользователи",
     href: "/users",
     icon: Users,
+    roles: ["admin", "operator"], // доступно всем
   },
   {
     title: "Пункты",
     href: "/points",
     icon: MapPin,
+    roles: ["admin", "operator"], // доступно всем
   },
   {
     title: "Настройки бота",
     href: "/bot-settings",
     icon: Bot,
+    roles: ["admin"], // только для админов
   },
 ]
 
@@ -60,6 +66,26 @@ interface SidebarProps {
 
 export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const [currentUser, setCurrentUser] = useState<{ role: string } | null>(null)
+
+  // Получаем информацию о текущем пользователе
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/auth/me")
+        const data = await response.json()
+        if (data.success) {
+          setCurrentUser(data.user)
+        }
+      } catch (error) {
+        console.error("Error fetching current user:", error)
+      }
+    }
+    fetchCurrentUser()
+  }, [])
+
+  // Фильтруем пункты меню по роли пользователя
+  const filteredMenuItems = menuItems.filter((item) => !currentUser || item.roles.includes(currentUser.role))
 
   return (
     <div className={cn("pb-12 transition-all duration-300", collapsed ? "w-16" : "w-64", className)}>
@@ -77,7 +103,7 @@ export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps
             )}
           </div>
           <div className="space-y-1">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <Link key={item.href} href={item.href}>
                 <Button
                   variant={pathname === item.href ? "secondary" : "ghost"}

@@ -15,6 +15,7 @@ import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Switch } from "@/components/ui/switch"
 import {
   Dialog,
   DialogContent,
@@ -23,6 +24,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Label } from "@/components/ui/label"
 import {
   RefreshCw,
@@ -37,6 +49,7 @@ import {
   ArrowUp,
   ArrowDown,
   Search,
+  Trash2,
 } from "lucide-react"
 
 interface UserInterface {
@@ -61,6 +74,12 @@ interface EditingUser {
   last_name: string
   carpark: string
   role: string
+  verified: boolean
+}
+
+interface CurrentUser {
+  role: string
+  carpark: string
 }
 
 const columnHelper = createColumnHelper<UserInterface>()
@@ -70,11 +89,10 @@ export default function UsersPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [globalFilter, setGlobalFilter] = useState("")
-  // В начале компонента добавить состояние для текущего пользователя
-  const [currentUser, setCurrentUser] = useState<{ role: string; carpark: string } | null>(null)
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
 
-  // Обновить функцию fetchUsers
   const fetchUsers = async () => {
     setIsLoading(true)
     try {
@@ -124,6 +142,7 @@ export default function UsersPage() {
       last_name: user.last_name || "",
       carpark: user.carpark || "",
       role: user.role || "",
+      verified: user.verified,
     })
   }
 
@@ -152,6 +171,27 @@ export default function UsersPage() {
       alert("Ошибка при обновлении пользователя")
     } finally {
       setIsUpdating(false)
+    }
+  }
+
+  const handleDeleteUser = async (userId: number) => {
+    setIsDeleting(true)
+    try {
+      const response = await fetch(`/api/users/${userId}`, {
+        method: "DELETE",
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        await fetchUsers()
+      } else {
+        alert("Ошибка при удалении пользователя")
+      }
+    } catch (error) {
+      console.error("Error deleting user:", error)
+      alert("Ошибка при удалении пользователя")
+    } finally {
+      setIsDeleting(false)
     }
   }
 
@@ -227,13 +267,42 @@ export default function UsersPage() {
         id: "actions",
         header: "Действия",
         cell: (info) => (
-          <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
-            <Edit className="h-4 w-4" />
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
+              <Edit className="h-4 w-4" />
+            </Button>
+            {currentUser?.role === "admin" && (
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button variant="ghost" size="sm" className="text-red-600 hover:text-red-700">
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Удалить пользователя?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Это действие нельзя отменить. Пользователь будет удален навсегда.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Отмена</AlertDialogCancel>
+                    <AlertDialogAction
+                      onClick={() => handleDeleteUser(info.row.original.id)}
+                      className="bg-red-600 hover:bg-red-700"
+                      disabled={isDeleting}
+                    >
+                      {isDeleting ? "Удаление..." : "Удалить"}
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            )}
+          </div>
         ),
       }),
     ],
-    [],
+    [currentUser, isDeleting],
   )
 
   const table = useReactTable({
@@ -275,7 +344,6 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        {/* В заголовке страницы, после описания добавить информацию о фильтрации */}
         <div>
           <h1 className="text-2xl font-bold">Зарегистрированные пользователи</h1>
           <p className="text-muted-foreground">
@@ -460,7 +528,8 @@ export default function UsersPage() {
           <DialogHeader>
             <DialogTitle>Редактирование пользователя</DialogTitle>
             <DialogDescription>
-              Изменение данных пользователя. Поле "Верифицирован" недоступно для редактирования.
+              Изменение данных пользователя.
+              {currentUser?.role !== "admin" && ' Поле "Верифицирован" недоступно для редактирования.'}
             </DialogDescription>
           </DialogHeader>
           {editingUser && (
@@ -505,6 +574,17 @@ export default function UsersPage() {
                   onChange={(e) => setEditingUser({ ...editingUser, role: e.target.value })}
                 />
               </div>
+              {/* Поле verified только для админов */}
+              {currentUser?.role === "admin" && (
+                <div className="flex items-center space-x-2">
+                  <Switch
+                    id="verified"
+                    checked={editingUser.verified}
+                    onCheckedChange={(checked) => setEditingUser({ ...editingUser, verified: checked })}
+                  />
+                  <Label htmlFor="verified">Верифицирован</Label>
+                </div>
+              )}
             </div>
           )}
           <DialogFooter>

@@ -32,13 +32,16 @@ export async function POST(request: NextRequest) {
     const user = users[0]
     console.log("User found:", user)
 
-    // Проверяем роль пользователя
-    if (user.role !== "operator") {
-      console.log("❌ User is not an operator, role:", user.role)
-      return NextResponse.json({ success: false, error: "Доступ запрещен. Требуется роль оператора." }, { status: 403 })
+    // Проверяем роль пользователя (разрешаем operator и admin)
+    if (user.role !== "operator" && user.role !== "admin") {
+      console.log("❌ User is not an operator or admin, role:", user.role)
+      return NextResponse.json(
+        { success: false, error: "Доступ запрещен. Требуется роль оператора или администратора." },
+        { status: 403 },
+      )
     }
 
-    console.log("✅ User is operator, creating session")
+    console.log("✅ User has valid role:", user.role)
 
     // Создаем сессию
     const sessionToken = crypto.randomBytes(32).toString("hex")
