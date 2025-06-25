@@ -308,6 +308,12 @@ function normalizePhone(phone: string): string | null {
   } else if (cleaned.length === 10 && /^\d{10}$/.test(cleaned)) {
     // 9050550020 -> 79050550020
     return "7" + cleaned
+  } else if (cleaned.startsWith("+380") && cleaned.length === 13) {
+    // +380668863317 -> 380668863317 (украинские номера)
+    return cleaned.slice(1)
+  } else if (cleaned.startsWith("380") && cleaned.length === 12) {
+    // 380668863317 -> 380668863317 (украинские номера)
+    return cleaned
   }
 
   console.warn(`Invalid phone format: "${phone}" (cleaned: "${cleaned}")`)
@@ -351,9 +357,11 @@ export function validateExcelData(rows: ExcelRow[]): { valid: ExcelRow[]; errors
       continue
     }
 
-    // Проверяем формат номера (БЕЗ знака +)
-    if (!row.phone.match(/^7\d{10}$/)) {
-      errors.push(`Строка ${i + 2}: неверный формат номера телефона "${row.phone}" (ожидается 7XXXXXXXXXX)`)
+    // Проверяем формат номера (поддерживаем российские и украинские)
+    if (!row.phone.match(/^(7\d{10}|380\d{9})$/)) {
+      errors.push(
+        `Строка ${i + 2}: неверный формат номера телефона "${row.phone}" (ожидается 7XXXXXXXXXX или 380XXXXXXXXX)`,
+      )
       continue
     }
 
@@ -424,6 +432,8 @@ export function createExampleExcelFile(): ArrayBuffer {
     ["79050550020", "12345631", "В 123 ВВ 45", "20.06.2025 10:00", "D", 2, "0029", "тест"],
     ["79161234567", "12345632", "А 456 АА 77", "21.06.2025 14:00", "P", 1, "8117", "срочно"],
     ["79161234567", "12345632", "А 456 АА 77", "21.06.2025 14:00", "D", 1, "0124", "срочно"],
+    ["380668863317", "12345633", "УА 123 КВ", "22.06.2025 09:00", "P", 1, "8117", "украина"],
+    ["380668863317", "12345633", "УА 123 КВ", "22.06.2025 09:00", "D", 1, "0124", "украина"],
   ]
 
   const worksheet = XLSX.utils.aoa_to_sheet(data)

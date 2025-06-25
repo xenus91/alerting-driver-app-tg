@@ -18,6 +18,7 @@ interface UploadResult {
   notFoundPoints?: number
   notFoundPhonesList?: string[]
   notVerifiedPhonesList?: string[]
+  notFoundPointsList?: string[] // Добавляем список не найденных пунктов
   readyTrips?: Array<{
     phone: string
     trip_identifier: string
@@ -99,6 +100,9 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
   const formatPhone = (phone: string) => {
     if (phone.startsWith("7") && phone.length === 11) {
       return `+7 (${phone.slice(1, 4)}) ${phone.slice(4, 7)}-${phone.slice(7, 9)}-${phone.slice(9, 11)}`
+    }
+    if (phone.startsWith("380") && phone.length === 12) {
+      return `+380 (${phone.slice(3, 5)}) ${phone.slice(5, 8)}-${phone.slice(8, 10)}-${phone.slice(10, 12)}`
     }
     return phone
   }
@@ -254,6 +258,23 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                       </span>
                       <Badge variant="destructive">{result.notFoundPoints}</Badge>
                     </div>
+                    {result.notFoundPointsList && result.notFoundPointsList.length > 0 && (
+                      <div className="mt-2">
+                        <details className="cursor-pointer">
+                          <summary className="text-sm font-medium">Показать ID пунктов</summary>
+                          <div className="mt-2 grid grid-cols-3 md:grid-cols-4 lg:grid-cols-6 gap-2">
+                            {result.notFoundPointsList.map((pointId, index) => (
+                              <div
+                                key={index}
+                                className="text-sm font-mono bg-red-50 p-2 rounded border border-red-200 text-center"
+                              >
+                                <strong>{pointId}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        </details>
+                      </div>
+                    )}
                   </AlertDescription>
                 </Alert>
               )}

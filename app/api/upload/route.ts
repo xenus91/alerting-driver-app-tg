@@ -62,8 +62,12 @@ export async function POST(request: NextRequest) {
       details: [] as any[],
       notFoundPhones: [] as string[],
       notVerifiedPhones: [] as string[],
+      notFoundPointsList: [] as string[], // Добавляем список не найденных пунктов
       validTripData: [] as any[],
     }
+
+    // Множество для отслеживания уникальных не найденных пунктов
+    const notFoundPointsSet = new Set<string>()
 
     // Проверяем каждый сгруппированный рейс БЕЗ создания trip
     for (const tripData of groupedTrips) {
@@ -89,11 +93,12 @@ export async function POST(request: NextRequest) {
 
         // Проверяем наличие всех пунктов
         let allPointsExist = true
+
         for (const loadingPoint of tripData.loading_points) {
           const point = pointsMap.get(loadingPoint.point_id)
           if (!point) {
             console.warn(`Point not found: ${loadingPoint.point_id}`)
-            results.pointNotFound++
+            notFoundPointsSet.add(loadingPoint.point_id) // Добавляем в множество
             allPointsExist = false
           }
         }
@@ -102,7 +107,7 @@ export async function POST(request: NextRequest) {
           const point = pointsMap.get(unloadingPoint.point_id)
           if (!point) {
             console.warn(`Point not found: ${unloadingPoint.point_id}`)
-            results.pointNotFound++
+            notFoundPointsSet.add(unloadingPoint.point_id) // Добавляем в множество
             allPointsExist = false
           }
         }
@@ -121,9 +126,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Преобразуем множество в массив и сортируем
+    results.notFoundPointsList = Array.from(notFoundPointsSet).sort()
+    results.pointNotFound = results.notFoundPointsList.length
+
     console.log(
       `Processing complete. Ready to send: ${results.processed}, Not found phones: ${results.phoneNotFound}, Not verified phones: ${results.phoneNotVerified}, Not found points: ${results.pointNotFound}`,
     )
+    console.log(`Not found points list: ${results.notFoundPointsList.join(", ")}`)
 
     return NextResponse.json({
       success: true,
@@ -136,6 +146,7 @@ export async function POST(request: NextRequest) {
       notFoundPoints: results.pointNotFound,
       notFoundPhonesList: results.notFoundPhones,
       notVerifiedPhonesList: results.notVerifiedPhones,
+      notFoundPointsList: results.notFoundPointsList, // Добавляем список не найденных пунктов
       readyTrips: results.validTripData.map((trip) => ({
         phone: trip.phone,
         trip_identifier: trip.trip_identifier,
