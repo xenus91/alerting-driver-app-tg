@@ -328,15 +328,20 @@ async function updateUserRegistrationStep(telegramId: number, step: string, data
   }
 }
 
-async function setUserPendingAction(userId: number, actionType: string, relatedData?: any) {
+async function setUserPendingAction(userId: number, actionType: string, relatedMessageId?: number, actionData?: any) {
   try {
-    const dataString = relatedData ? JSON.stringify(relatedData) : null
+    const dataString = actionData ? JSON.stringify(actionData) : null
+    console.log(
+      `Setting pending action for user ${userId}: ${actionType}, messageId: ${relatedMessageId}, data: ${dataString}`,
+    )
+
     const result = await sql`
-      INSERT INTO user_pending_actions (user_id, action_type, related_message_id)
-      VALUES (${userId}, ${actionType}, ${dataString})
+      INSERT INTO user_pending_actions (user_id, action_type, related_message_id, action_data)
+      VALUES (${userId}, ${actionType}, ${relatedMessageId || null}, ${dataString})
       ON CONFLICT (user_id) DO UPDATE SET
         action_type = EXCLUDED.action_type,
         related_message_id = EXCLUDED.related_message_id,
+        action_data = EXCLUDED.action_data,
         created_at = CURRENT_TIMESTAMP
       RETURNING *
     `
@@ -460,12 +465,10 @@ export async function POST(request: NextRequest) {
             routePoints = [selectedPoint]
             stepMessage = `✅ Точка отправления: <b>${selectedPoint.point_id} ${selectedPoint.point_name}</b>\n\n🎯 Теперь выберите точку назначения:`
 
-            await setUserPendingAction(user.id, "building_route_continue", { points: routePoints })
+            await setUserPendingAction(user.id, "building_route_continue", null, { points: routePoints })
           } else if (pendingAction?.action_type === "building_route_continue") {
             // Добавляем следующую точку
-            const existingData = pendingAction.related_message_id
-              ? JSON.parse(pendingAction.related_message_id)
-              : { points: [] }
+            const existingData = pendingAction.action_data ? JSON.parse(pendingAction.action_data) : { points: [] }
             routePoints = [...existingData.points, selectedPoint]
 
             stepMessage = `🗺️ <b>Маршрут строится:</b>\n\n`
@@ -480,7 +483,7 @@ export async function POST(request: NextRequest) {
               stepMessage += `\n🎯 Выберите следующую точку:`
             }
 
-            await setUserPendingAction(user.id, "building_route_continue", { points: routePoints })
+            await setUserPendingAction(user.id, "building_route_continue", null, { points: routePoints })
           }
 
           // Отвечаем на callback query
@@ -574,7 +577,7 @@ export async function POST(request: NextRequest) {
             throw new Error("No route building in progress")
           }
 
-          const routeData = JSON.parse(pendingAction.related_message_id)
+          const routeData = JSON.parse(pendingAction.action_data)
           const routePoints = routeData.points
 
           if (routePoints.length < 2) {
@@ -837,7 +840,7 @@ export async function POST(request: NextRequest) {
           }
 
           // Устанавливаем pending action для ожидания причины
-          // Используем messageId или любой ID для связи
+          // Используем messageId для связи
           await setUserPendingAction(user.id, "awaiting_rejection_reason", messageId)
 
           // Отвечаем на callback query (игнорируем ошибки старых запросов)
@@ -938,7 +941,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Устанавливаем pending action для начала построения маршрута
-        await setUserPendingAction(existingUser.id, "building_route_start", { points: [] })
+        await setUserPendingAction(existingUser.id, "building_route_start", null, { points: [] })
 
         const welcomeMessage = `🗺️ <b>Построение маршрута</b>\n\n` + `📍 Выберите точку отправления из списка ниже:`
 
