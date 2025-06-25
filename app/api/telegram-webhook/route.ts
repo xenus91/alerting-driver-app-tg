@@ -461,7 +461,7 @@ export async function POST(request: NextRequest) {
       // Обработка подтверждения рейса
       if (data?.startsWith("confirm_")) {
         const messageId = Number.parseInt(data.split("_")[1])
-        console.log(`Processing confirmation for message ${messageId}`)
+        console.log(`🟢 Processing confirmation for message ${messageId}`)
 
         try {
           // Получаем информацию о сообщении напрямую
@@ -510,7 +510,8 @@ export async function POST(request: NextRequest) {
 
           console.log(`Updated ${updateResult.length} messages for phone ${phone}`)
 
-          // Проверяем завершение рассылки
+          // 🔄 ВАЖНО: Проверяем завершение рассылки после подтверждения
+          console.log(`🔄 Checking trip completion after confirmation...`)
           await checkAndUpdateTripCompletion(trip_id)
 
           // Отвечаем на callback query (игнорируем ошибки старых запросов)
@@ -548,7 +549,7 @@ export async function POST(request: NextRequest) {
       // Обработка отклонения рейса - сразу запрашиваем комментарий
       if (data?.startsWith("reject_")) {
         const messageId = Number.parseInt(data.split("_")[1])
-        console.log(`Processing rejection for message ${messageId}`)
+        console.log(`🔴 Processing rejection for message ${messageId}`)
 
         try {
           // Получаем пользователя
@@ -727,7 +728,8 @@ export async function POST(request: NextRequest) {
 
           console.log(`Updated ${updateResult.length} messages for phone ${phone}`)
 
-          // Проверяем завершение рассылки
+          // 🔄 ВАЖНО: Проверяем завершение рассылки после отклонения
+          console.log(`🔄 Checking trip completion after rejection...`)
           await checkAndUpdateTripCompletion(trip_id)
 
           // Удаляем pending action
@@ -976,7 +978,7 @@ export async function GET() {
 
   return NextResponse.json({
     status:
-      "Telegram webhook endpoint is working with FULL REGISTRATION LOGIC + CALLBACK HANDLING + ERROR RESILIENCE + AUTO TRIP COMPLETION",
+      "Telegram webhook endpoint is working with FULL REGISTRATION LOGIC + CALLBACK HANDLING + ERROR RESILIENCE + AUTO TRIP COMPLETION + ENHANCED LOGGING",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
     vercel_url: process.env.VERCEL_URL,
