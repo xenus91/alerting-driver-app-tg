@@ -84,7 +84,7 @@ interface PopoverStates {
   created_at: boolean
 }
 
-// Отдельный компонент для поиска с собственным состоянием
+// Отдельный компонент для поиска с собственным состоянием и отладкой
 const SearchInputComponent = React.memo(
   ({
     field,
@@ -99,35 +99,50 @@ const SearchInputComponent = React.memo(
   }) => {
     const [localValue, setLocalValue] = useState("")
     const timeoutRef = useRef<NodeJS.Timeout>()
+    const renderCountRef = useRef(0)
+
+    renderCountRef.current++
+    console.log(`🔍 [SearchInput-${field}] Render #${renderCountRef.current}, localValue: "${localValue}"`)
 
     const handleChange = (value: string) => {
+      console.log(`📝 [SearchInput-${field}] handleChange called with: "${value}"`)
       setLocalValue(value)
 
       // Debounce обновление родительского состояния
       if (timeoutRef.current) {
+        console.log(`⏰ [SearchInput-${field}] Clearing existing timeout`)
         clearTimeout(timeoutRef.current)
       }
 
       timeoutRef.current = setTimeout(() => {
+        console.log(`🚀 [SearchInput-${field}] Debounced update to parent: "${value}"`)
         onSearchChange(value)
       }, 150)
     }
 
     const handleClear = () => {
+      console.log(`🧹 [SearchInput-${field}] handleClear called`)
       setLocalValue("")
       if (timeoutRef.current) {
+        console.log(`⏰ [SearchInput-${field}] Clearing timeout on clear`)
         clearTimeout(timeoutRef.current)
       }
       onClear()
     }
 
+    // Отслеживаем изменения localValue
+    useEffect(() => {
+      console.log(`🔄 [SearchInput-${field}] localValue changed to: "${localValue}"`)
+    }, [localValue, field])
+
     useEffect(() => {
       return () => {
+        console.log(`🗑️ [SearchInput-${field}] Component unmounting, cleaning timeout`)
         if (timeoutRef.current) {
           clearTimeout(timeoutRef.current)
         }
       }
-    }, [])
+    }, [field])
 
     return (
       <div className="relative">
@@ -136,14 +151,23 @@ const SearchInputComponent = React.memo(
           placeholder={placeholder}
           value={localValue}
           onChange={(e) => {
+            console.log(`⌨️ [SearchInput-${field}] onChange event: "${e.target.value}"`)
             e.stopPropagation()
             handleChange(e.target.value)
           }}
           onKeyDown={(e) => {
+            console.log(`🔤 [SearchInput-${field}] onKeyDown: ${e.key}`)
             e.stopPropagation()
           }}
           onClick={(e) => {
+            console.log(`🖱️ [SearchInput-${field}] onClick`)
             e.stopPropagation()
+          }}
+          onFocus={(e) => {
+            console.log(`🎯 [SearchInput-${field}] onFocus`)
+          }}
+          onBlur={(e) => {
+            console.log(`😴 [SearchInput-${field}] onBlur`)
           }}
           className="h-8 pl-9 pr-8"
           autoComplete="off"
@@ -152,6 +176,7 @@ const SearchInputComponent = React.memo(
           <button
             type="button"
             onClick={(e) => {
+              console.log(`❌ [SearchInput-${field}] Clear button clicked`)
               e.stopPropagation()
               e.preventDefault()
               handleClear()
@@ -279,22 +304,33 @@ export default function PointsPage() {
     }))
   }, [])
 
-  // Функции фильтрации
+  // Функции фильтрации с отладкой
   const handleFilterChange = useCallback((field: keyof ColumnFilters, value: string, checked: boolean) => {
+    console.log(`🔧 [Parent] handleFilterChange: ${field} - ${value} - ${checked}`)
     setColumnFilters((prev) => ({
       ...prev,
       [field]: checked ? [...prev[field], value] : prev[field].filter((v) => v !== value),
     }))
   }, [])
 
-  const handleFilterSearchChange = useCallback((field: keyof FilterSearches, value: string) => {
-    setFilterSearches((prev) => ({
-      ...prev,
-      [field]: value,
-    }))
-  }, [])
+  const handleFilterSearchChange = useCallback(
+    (field: keyof FilterSearches, value: string) => {
+      console.log(`🔍 [Parent] handleFilterSearchChange called: ${field} = "${value}"`)
+      console.log(`📊 [Parent] Current filterSearches before update:`, filterSearches)
+      setFilterSearches((prev) => {
+        const newState = {
+          ...prev,
+          [field]: value,
+        }
+        console.log(`📊 [Parent] New filterSearches after update:`, newState)
+        return newState
+      })
+    },
+    [filterSearches],
+  )
 
   const clearFilter = useCallback((field: keyof ColumnFilters) => {
+    console.log(`🧹 [Parent] clearFilter called for: ${field}`)
     setColumnFilters((prev) => ({
       ...prev,
       [field]: [],
@@ -306,6 +342,7 @@ export default function PointsPage() {
   }, [])
 
   const clearSearchOnly = useCallback((field: keyof FilterSearches) => {
+    console.log(`🧹 [Parent] clearSearchOnly called for: ${field}`)
     setFilterSearches((prev) => ({
       ...prev,
       [field]: "",
