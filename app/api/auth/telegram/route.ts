@@ -2,6 +2,8 @@ import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 import crypto from "crypto"
 
+export const dynamic = "force-dynamic"
+
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest) {
@@ -63,6 +65,7 @@ export async function POST(request: NextRequest) {
         telegram_id: user.telegram_id,
         name: user.full_name || user.first_name || user.name,
         role: user.role,
+        carpark: user.carpark,
       },
     })
 
