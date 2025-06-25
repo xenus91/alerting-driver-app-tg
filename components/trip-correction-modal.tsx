@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Save, Send, Plus, Trash2 } from "lucide-react"
+import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle } from "lucide-react"
 
 interface CorrectionData {
   phone: string
@@ -183,11 +183,11 @@ export function TripCorrectionModal({
       const data = await response.json()
 
       if (data.success) {
-        setSuccess("Корректировка отправлена водителю!")
+        setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
         onCorrectionSent()
         setTimeout(() => {
           onClose()
-        }, 2000)
+        }, 3000)
       } else {
         setError(data.error || "Failed to send correction")
       }
@@ -238,6 +238,14 @@ export function TripCorrectionModal({
         <DialogHeader>
           <DialogTitle>Корректировка рейсов для {driverName}</DialogTitle>
         </DialogHeader>
+
+        <Alert className="border-orange-200 bg-orange-50">
+          <AlertTriangle className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800">
+            <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен. Водителю
+            потребуется заново подтвердить скорректированные рейсы.
+          </AlertDescription>
+        </Alert>
 
         {error && (
           <Alert variant="destructive">

@@ -13,6 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`Primary message ID: ${messageId}`)
     console.log(`Phone: ${phone}`)
     console.log(`All message IDs: ${messageIds}`)
+    console.log(`Is correction: ${isCorrection}`)
 
     // Получаем информацию о пользователе
     const userResult = await sql`
@@ -69,18 +70,37 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const tripId = messagesResult[0].trip_id
 
-    // Получаем все точки для всех рейсов водителя
+    // Получаем все точки для всех рейсов водителя с координатами
     const tripsData = []
 
     for (const message of messagesResult) {
-      // Получаем точки для каждого рейса
+      // Получаем точки для каждого рейса с координатами
       const pointsResult = await sql`
-        SELECT tp.*, p.point_name, p.point_id as point_short_id, p.door_open_1, p.door_open_2, p.door_open_3
+        SELECT 
+          tp.*, 
+          p.point_name, 
+          p.point_id as point_short_id, 
+          p.door_open_1, 
+          p.door_open_2, 
+          p.door_open_3,
+          p.latitude,
+          p.longitude
         FROM trip_points tp
         JOIN points p ON tp.point_id = p.id
         WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${message.trip_identifier}
         ORDER BY tp.point_type DESC, tp.point_num
       `
+
+      console.log(
+        `Points for trip ${message.trip_identifier}:`,
+        pointsResult.map((p) => ({
+          id: p.point_short_id,
+          name: p.point_name,
+          lat: p.latitude,
+          lng: p.longitude,
+          type: p.point_type,
+        })),
+      )
 
       const loading_points = []
       const unloading_points = []
@@ -92,6 +112,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           door_open_1: point.door_open_1,
           door_open_2: point.door_open_2,
           door_open_3: point.door_open_3,
+          latitude: point.latitude,
+          longitude: point.longitude,
         }
 
         if (point.point_type === "P") {
@@ -123,22 +145,30 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     )
 
     // Обновляем статус всех сообщений водителя
+    // Если это корректировка, сбрасываем статус подтверждения
     const updateResult = await sql`
       UPDATE trip_messages 
       SET status = 'sent', 
           sent_at = ${new Date().toISOString()},
-          error_message = NULL
+          error_message = NULL,
+          response_status = ${isCorrection ? null : "response_status"},
+          response_time = ${isCorrection ? null : "response_time"}
       WHERE id = ANY(${messageIds})
       RETURNING *
     `
 
     console.log(`Updated ${updateResult.length} messages status to sent`)
 
+    if (isCorrection) {
+      console.log(`Reset response status for correction - messages need new confirmation`)
+    }
+
     return NextResponse.json({
       success: true,
-      message: "Combined message resent successfully",
+      message: isCorrection ? "Correction sent successfully" : "Combined message resent successfully",
       messageIds: messageIds,
       updatedMessages: updateResult.length,
+      isCorrection: isCorrection,
     })
   } catch (error) {
     console.error("Error resending combined message:", error)
