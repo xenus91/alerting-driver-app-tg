@@ -39,6 +39,7 @@ interface TripError {
   phone: string
   error_message: string
   created_at: string
+  user_name?: string
 }
 
 export default function TripsPage() {
@@ -96,6 +97,59 @@ export default function TripsPage() {
       return `+7 (${phone.slice(1, 4)}) ${phone.slice(4, 7)}-${phone.slice(7, 9)}-${phone.slice(9)}`
     }
     return phone
+  }
+
+  // Функция для расшифровки ошибок Telegram API
+  const translateTelegramError = (errorMessage: string, userName?: string) => {
+    const userNameText = userName ? userName : "Пользователь"
+
+    if (errorMessage.includes("bot was blocked by the user")) {
+      return {
+        userFriendly: `🤖 Пользователь ${userNameText} заблокировал бота или удалил чат с ним.`,
+        instruction: "Пользователю необходимо повторно открыть бота и отправить /start",
+      }
+    }
+
+    if (errorMessage.includes("chat not found")) {
+      return {
+        userFriendly: `👻 Пользователь ${userNameText} не найден в Telegram или не начинал диалог с ботом.`,
+        instruction: "Пользователю необходимо найти бота в Telegram и отправить /start",
+      }
+    }
+
+    if (errorMessage.includes("user is deactivated")) {
+      return {
+        userFriendly: `🚫 Аккаунт пользователя ${userNameText} деактивирован в Telegram.`,
+        instruction: "Пользователю необходимо восстановить свой аккаунт в Telegram",
+      }
+    }
+
+    if (errorMessage.includes("Too Many Requests")) {
+      return {
+        userFriendly: `⏰ Превышен лимит запросов к Telegram API.`,
+        instruction: "Повторите отправку через несколько минут",
+      }
+    }
+
+    if (errorMessage.includes("message is too long")) {
+      return {
+        userFriendly: `📏 Сообщение для пользователя ${userNameText} слишком длинное.`,
+        instruction: "Сократите текст сообщения и повторите отправку",
+      }
+    }
+
+    if (errorMessage.includes("Bad Request: invalid phone number")) {
+      return {
+        userFriendly: `📱 Неверный формат номера телефона пользователя ${userNameText}.`,
+        instruction: "Проверьте правильность номера телефона в базе данных",
+      }
+    }
+
+    // Если ошибка не распознана, возвращаем общее сообщение
+    return {
+      userFriendly: `❌ Ошибка отправки сообщения пользователю ${userNameText}.`,
+      instruction: "Обратитесь к администратору для решения проблемы",
+    }
   }
 
   useEffect(() => {
@@ -475,7 +529,7 @@ export default function TripsPage() {
       {/* Диалог ошибок */}
       {showErrorsDialog && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
+          <div className="bg-white p-6 rounded-lg max-w-3xl w-full mx-4 max-h-[80vh] overflow-hidden flex flex-col">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold flex items-center gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-600" />
@@ -495,18 +549,42 @@ export default function TripsPage() {
               ) : tripErrors.length === 0 ? (
                 <div className="text-center py-8 text-gray-500">Ошибки не найдены</div>
               ) : (
-                <div className="space-y-3">
-                  {tripErrors.map((error) => (
-                    <div key={error.id} className="border border-red-200 rounded-lg p-4 bg-red-50">
-                      <div className="flex items-start justify-between">
-                        <div className="flex-1">
-                          <div className="font-medium text-gray-900">{formatPhone(error.phone)}</div>
-                          <div className="text-red-600 mt-1">❌ {error.error_message}</div>
-                          <div className="text-sm text-gray-500 mt-2">🕐 {formatDate(error.created_at)}</div>
+                <div className="space-y-4">
+                  {tripErrors.map((error) => {
+                    const translation = translateTelegramError(error.error_message, error.user_name)
+                    return (
+                      <div key={error.id} className="border border-red-200 rounded-lg p-4 bg-red-50">
+                        <div className="space-y-3">
+                          {/* Заголовок с телефоном и именем */}
+                          <div className="font-medium text-gray-900">
+                            {formatPhone(error.phone)}
+                            {error.user_name && <span className="text-gray-600"> ({error.user_name})</span>}
+                          </div>
+
+                          {/* Понятное объяснение ошибки */}
+                          <div className="text-gray-800">{translation.userFriendly}</div>
+
+                          {/* Инструкция по исправлению */}
+                          <div className="text-blue-700 bg-blue-50 p-2 rounded text-sm">
+                            💡 {translation.instruction}
+                          </div>
+
+                          {/* Техническая ошибка */}
+                          <details className="text-sm">
+                            <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+                              📋 Техническая ошибка
+                            </summary>
+                            <div className="mt-2 text-gray-600 font-mono text-xs bg-gray-100 p-2 rounded">
+                              {error.error_message}
+                            </div>
+                          </details>
+
+                          {/* Время ошибки */}
+                          <div className="text-sm text-gray-500">🕐 {formatDate(error.created_at)}</div>
                         </div>
                       </div>
-                    </div>
-                  ))}
+                    )
+                  })}
                 </div>
               )}
             </div>
