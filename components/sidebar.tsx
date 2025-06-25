@@ -3,6 +3,7 @@
 import { useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import { useAuth } from "@/components/auth/auth-provider"
 import { Button } from "@/components/ui/button"
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
 import { cn } from "@/lib/utils"
@@ -24,31 +25,37 @@ const menuItems = [
     title: "Главная",
     href: "/",
     icon: Home,
+    roles: ["admin", "operator"], // доступно всем
   },
   {
     title: "Загрузка файлов",
     href: "/upload",
     icon: Upload,
+    roles: ["admin", "operator"],
   },
   {
     title: "Рассылки",
     href: "/trips",
     icon: MessageSquare,
+    roles: ["admin", "operator"],
   },
   {
     title: "Пользователи",
     href: "/users",
     icon: Users,
+    roles: ["admin", "operator"],
   },
   {
     title: "Пункты",
     href: "/points",
     icon: MapPin,
+    roles: ["admin", "operator"],
   },
   {
     title: "Настройки бота",
     href: "/bot-settings",
     icon: Bot,
+    roles: ["admin"], // только для админов
   },
 ]
 
@@ -60,6 +67,10 @@ interface SidebarProps {
 
 export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps) {
   const pathname = usePathname()
+  const { user } = useAuth()
+
+  // Фильтруем пункты меню по роли пользователя
+  const filteredMenuItems = menuItems.filter((item) => !user?.role || item.roles.includes(user.role))
 
   return (
     <div className={cn("pb-12 transition-all duration-300", collapsed ? "w-16" : "w-64", className)}>
@@ -77,7 +88,7 @@ export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps
             )}
           </div>
           <div className="space-y-1">
-            {menuItems.map((item) => (
+            {filteredMenuItems.map((item) => (
               <Link key={item.href} href={item.href}>
                 <Button
                   variant={pathname === item.href ? "secondary" : "ghost"}
