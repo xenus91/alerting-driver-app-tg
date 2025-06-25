@@ -39,7 +39,7 @@ export default function VercelAuthFix() {
                 <Badge variant="destructive">Шаг 1</Badge>
                 <span className="font-semibold">Откройте Vercel Dashboard</span>
               </div>
-              <p className="text-sm text-muted-foreground mb-2">Перейдите в настройки вашего проекта в Vercel</p>
+              <p className="text-sm text-muted-foreground mb-2">Пере��дите в настройки вашего проекта в Vercel</p>
               <Button variant="outline" size="sm" asChild>
                 <a href={dashboardUrl} target="_blank" rel="noopener noreferrer">
                   <ExternalLink className="h-3 w-3 mr-1" />

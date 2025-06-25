@@ -33,9 +33,9 @@ export async function POST(request: NextRequest) {
     console.log("User found:", user)
 
     // Проверяем роль пользователя
-    if (user.role !== "operator") {
+    if (user.role !== "operator" && user.role !== "admin") {
       console.log("❌ User is not an operator, role:", user.role)
-      return NextResponse.json({ success: false, error: "Доступ запрещен. Требуется роль оператора." }, { status: 403 })
+      return NextResponse.json({ success: false, error: "Доступ запрещен. Требуется роль оператора или администратора." }, { status: 403 })
     }
 
     console.log("✅ User is operator, creating session")

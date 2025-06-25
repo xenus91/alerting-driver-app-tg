@@ -87,7 +87,7 @@ export default function CampaignResponses({ campaignId, campaignName }: Campaign
           <div>
             <CardTitle className="flex items-center gap-2">
               <MessageSquare className="h-5 w-5" />
-              Ответы пользователей
+              Ответы пользов��телей
             </CardTitle>
             <CardDescription>Кампания: {campaignName}</CardDescription>
           </div>

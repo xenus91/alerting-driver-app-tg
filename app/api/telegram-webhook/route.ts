@@ -408,7 +408,7 @@ export async function POST(request: NextRequest) {
           // Сначала отвечаем на callback query (игнорируем ошибки старых запросов)
           await answerCallbackQuery(callbackQuery.id, `Выбран автопарк ${carpark}`)
 
-          // Скрываем кнопки (убираем reply_markup)
+          // ��крываем кнопки (убираем reply_markup)
           if (messageId) {
             await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
             console.log("✅ Buttons hidden after carpark selection")
