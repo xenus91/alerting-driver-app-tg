@@ -1,6 +1,8 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 
+export const dynamic = "force-dynamic"
+
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest) {
@@ -13,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     // Проверяем сессию
     const sessions = await sql`
-      SELECT s.*, u.id, u.telegram_id, u.name, u.full_name, u.role
+      SELECT s.*, u.id, u.telegram_id, u.name, u.full_name, u.role, u.carpark
       FROM user_sessions s
       JOIN users u ON s.user_id = u.id
       WHERE s.session_token = ${sessionToken} AND s.expires_at > NOW()
@@ -32,6 +34,7 @@ export async function GET(request: NextRequest) {
         telegram_id: session.telegram_id,
         name: session.full_name || session.name,
         role: session.role,
+        carpark: session.carpark,
       },
     })
   } catch (error) {
