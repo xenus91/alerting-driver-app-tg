@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server"
+import { getTrips, updateTripStatus } from "@/lib/database"
 import { neon } from "@neondatabase/serverless"
 import { cookies } from "next/headers"
 
@@ -6,86 +7,64 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
-    // Получаем информацию о текущем пользователе из сессии
+    // Получаем session_token из cookies
     const cookieStore = await cookies()
-    const sessionCookie = cookieStore.get("session")
+    const sessionToken = cookieStore.get("session_token")?.value
 
-    if (!sessionCookie) {
+    if (!sessionToken) {
       return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
-    // Получаем данные текущего пользователя
-    const currentUserResult = await sql`
-      SELECT id, role, carpark 
-      FROM users 
-      WHERE telegram_id = ${Number.parseInt(sessionCookie.value)}
+    // Получаем данные текущего пользователя через сессию
+    const sessions = await sql`
+      SELECT s.*, u.id, u.telegram_id, u.name, u.full_name, u.role, u.carpark
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token = ${sessionToken} AND s.expires_at > NOW()
     `
 
-    if (currentUserResult.length === 0) {
-      return NextResponse.json({ success: false, error: "Пользователь не найден" }, { status: 404 })
+    if (sessions.length === 0) {
+      return NextResponse.json({ success: false, error: "Сессия истекла" }, { status: 401 })
     }
 
-    const currentUser = currentUserResult[0]
+    const currentUser = sessions[0]
 
-    // Получаем поездки с учетом роли пользователя
-    let tripsQuery
+    // Получаем все поездки
+    const allTrips = await getTrips()
+
+    // Фильтруем поездки в зависимости от роли пользователя
+    let filteredTrips
 
     if (currentUser.role === "operator" && currentUser.carpark) {
       // Операторы видят только поездки пользователей из своего автопарка
-      tripsQuery = sql`
-        SELECT 
-          t.id,
-          t.trip_identifier,
-          t.trip_date,
-          t.trip_time,
-          t.status,
-          t.created_at,
-          t.updated_at,
-          u.name as user_name,
-          u.phone as user_phone,
-          u.telegram_id as user_telegram_id,
-          u.carpark as user_carpark,
-          COUNT(tp.id) as points_count,
-          COUNT(tm.id) as messages_count
-        FROM trips t
-        JOIN users u ON t.user_id = u.id
-        LEFT JOIN trip_points tp ON t.id = tp.trip_id
-        LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-        WHERE u.carpark = ${currentUser.carpark}
-        GROUP BY t.id, u.name, u.phone, u.telegram_id, u.carpark
-        ORDER BY t.created_at DESC
+      // Нужно получить пользователей из автопарка и их поездки
+      const carparkUsers = await sql`
+        SELECT id FROM users WHERE carpark = ${currentUser.carpark}
       `
+      const carparkUserIds = carparkUsers.map((u) => u.id)
+
+      filteredTrips = allTrips.filter((trip) => carparkUserIds.includes(trip.user_id))
     } else {
       // Администраторы видят все поездки
-      tripsQuery = sql`
-        SELECT 
-          t.id,
-          t.trip_identifier,
-          t.trip_date,
-          t.trip_time,
-          t.status,
-          t.created_at,
-          t.updated_at,
-          u.name as user_name,
-          u.phone as user_phone,
-          u.telegram_id as user_telegram_id,
-          u.carpark as user_carpark,
-          COUNT(tp.id) as points_count,
-          COUNT(tm.id) as messages_count
-        FROM trips t
-        JOIN users u ON t.user_id = u.id
-        LEFT JOIN trip_points tp ON t.id = tp.trip_id
-        LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-        GROUP BY t.id, u.name, u.phone, u.telegram_id, u.carpark
-        ORDER BY t.created_at DESC
-      `
+      filteredTrips = allTrips
     }
 
-    const trips = await tripsQuery
+    // Проверяем и обновляем статусы завершенных рассылок
+    for (const trip of filteredTrips) {
+      const totalResponses = Number(trip.confirmed_responses) + Number(trip.rejected_responses)
+      const sentMessages = Number(trip.sent_messages)
+
+      // Если все отправленные сообщения получили ответы и статус не "completed"
+      if (sentMessages > 0 && totalResponses === sentMessages && trip.status !== "completed") {
+        console.log(`Updating trip ${trip.id} status to completed`)
+        await updateTripStatus(trip.id, "completed")
+        trip.status = "completed" // Обновляем в текущем результате
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      trips: trips,
+      trips: filteredTrips,
       currentUser: {
         role: currentUser.role,
         carpark: currentUser.carpark,
@@ -96,12 +75,9 @@ export async function GET() {
     return NextResponse.json(
       {
         success: false,
-        error: "Ошибка при получении поездок",
-        details: error instanceof Error ? error.message : "Неизвестная ошибка",
+        error: "Ошибка при получении рассылок",
       },
       { status: 500 },
     )
   }
 }
-
-export const dynamic = "force-dynamic"

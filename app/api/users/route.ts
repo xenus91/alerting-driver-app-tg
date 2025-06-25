@@ -6,26 +6,27 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
-    // Получаем информацию о текущем пользователе из сессии
+    // Получаем session_token из cookies
     const cookieStore = await cookies()
-    const sessionCookie = cookieStore.get("session")
+    const sessionToken = cookieStore.get("session_token")?.value
 
-    if (!sessionCookie) {
+    if (!sessionToken) {
       return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
-    // Получаем данные текущего пользователя
-    const currentUserResult = await sql`
-      SELECT id, role, carpark 
-      FROM users 
-      WHERE telegram_id = ${Number.parseInt(sessionCookie.value)}
+    // Получаем данные текущего пользователя через сессию
+    const sessions = await sql`
+      SELECT s.*, u.id, u.telegram_id, u.name, u.full_name, u.role, u.carpark
+      FROM user_sessions s
+      JOIN users u ON s.user_id = u.id
+      WHERE s.session_token = ${sessionToken} AND s.expires_at > NOW()
     `
 
-    if (currentUserResult.length === 0) {
-      return NextResponse.json({ success: false, error: "Пользователь не найден" }, { status: 404 })
+    if (sessions.length === 0) {
+      return NextResponse.json({ success: false, error: "Сессия истекла" }, { status: 401 })
     }
 
-    const currentUser = currentUserResult[0]
+    const currentUser = sessions[0]
 
     // Определяем фильтр в зависимости от роли пользователя
     let usersQuery
@@ -69,3 +70,5 @@ export async function GET() {
     )
   }
 }
+
+export const dynamic = "force-dynamic"
