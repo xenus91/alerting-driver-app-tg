@@ -20,7 +20,9 @@ import {
   ArrowUpDown,
   ArrowUp,
   ArrowDown,
+  Edit,
 } from "lucide-react"
+import { TripCorrectionModal } from "@/components/trip-correction-modal"
 
 interface TripMessage {
   id: number
@@ -112,6 +114,11 @@ export default function TripDetailPage() {
   const [resendingPhone, setResendingPhone] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [correctionModal, setCorrectionModal] = useState<{
+    isOpen: boolean
+    phone: string
+    driverName: string
+  } | null>(null)
 
   // Проверяем можно ли удалить рассылку (все подтверждены или завершены)
   const canDeleteTrip = () => {
@@ -1064,6 +1071,21 @@ export default function TripDetailPage() {
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
+                        <Button
+                          onClick={() =>
+                            setCorrectionModal({
+                              isOpen: true,
+                              phone: driver.phone,
+                              driverName: driver.full_name || driver.first_name || "Неизвестный",
+                            })
+                          }
+                          variant="outline"
+                          size="sm"
+                          className="mb-1 w-full"
+                        >
+                          <Edit className="h-3 w-3 mr-2" />
+                          Корректировка
+                        </Button>
                         {driver.overall_response_status === "confirmed" ? (
                           <Button
                             disabled
@@ -1122,6 +1144,19 @@ export default function TripDetailPage() {
             </div>
           </div>
         </div>
+      )}
+      {correctionModal && (
+        <TripCorrectionModal
+          isOpen={correctionModal.isOpen}
+          onClose={() => setCorrectionModal(null)}
+          tripId={tripId}
+          phone={correctionModal.phone}
+          driverName={correctionModal.driverName}
+          onCorrectionSent={() => {
+            fetchMessages()
+            setCorrectionModal(null)
+          }}
+        />
       )}
     </div>
   )

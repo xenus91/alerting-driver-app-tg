@@ -6,7 +6,7 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const messageId = Number.parseInt(params.id)
-  const { phone, messageIds } = await request.json()
+  const { phone, messageIds, isCorrection = false } = await request.json()
 
   try {
     console.log(`=== RESENDING COMBINED MESSAGE ===`)
@@ -118,7 +118,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       user.telegram_id,
       tripsData,
       user.first_name || "Водитель",
-      messageId, // Используем ID первого сообщения для callback
+      messageId,
+      isCorrection, // Передаем флаг корректировки
     )
 
     // Обновляем статус всех сообщений водителя
