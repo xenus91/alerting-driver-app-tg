@@ -8,9 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X, Check, ChevronsUpDown } from "lucide-react"
+import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X, Check, ChevronsUpDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface CorrectionData {
@@ -327,34 +326,40 @@ export function TripCorrectionModal({
           </Button>
         </PopoverTrigger>
         <PopoverContent className="w-[300px] p-0">
-          <Command>
-            <CommandInput
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Поиск по коду или названию..."
               value={searchState.search}
-              onValueChange={(search) => setPointSearchState(pointKey, { search })}
+              onChange={(e) => setPointSearchState(pointKey, { search: e.target.value })}
             />
-            <CommandList>
-              <CommandEmpty>Точки не найдены.</CommandEmpty>
-              <CommandGroup>
-                {filteredPoints.map((point) => (
-                  <CommandItem
-                    key={point.point_id}
-                    value={point.point_id}
-                    onSelect={() => {
-                      onChange(point.point_id)
-                      setPointSearchState(pointKey, { open: false, search: "" })
-                    }}
-                  >
-                    <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
-                    <div className="flex flex-col">
-                      <span className="font-medium">{point.point_id}</span>
-                      <span className="text-sm text-muted-foreground">{point.point_name}</span>
-                    </div>
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
+          </div>
+          <div className="max-h-[200px] overflow-auto">
+            {filteredPoints.length === 0 ? (
+              <div className="py-6 text-center text-sm">Точки не найдены.</div>
+            ) : (
+              filteredPoints.map((point) => (
+                <div
+                  key={point.point_id}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    value === point.point_id && "bg-accent text-accent-foreground",
+                  )}
+                  onClick={() => {
+                    onChange(point.point_id)
+                    setPointSearchState(pointKey, { open: false, search: "" })
+                  }}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
+                  <div className="flex flex-col">
+                    <span className="font-medium">{point.point_id}</span>
+                    <span className="text-sm text-muted-foreground">{point.point_name}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </PopoverContent>
       </Popover>
     )
