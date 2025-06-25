@@ -12,14 +12,15 @@ interface TripData {
   id: number
   created_at: string
   status: string
-  total_messages: number
-  sent_messages: number
-  error_messages: number
-  confirmed_responses: number
-  rejected_responses: number
-  pending_responses: number
+  total_messages: string | number
+  sent_messages: string | number
+  error_messages: string | number
+  confirmed_responses: string | number
+  rejected_responses: string | number
+  pending_responses: string | number
   first_sent_at?: string
   last_sent_at?: string
+  carpark?: string
 }
 
 export default function TripsPage() {
@@ -51,14 +52,29 @@ export default function TripsPage() {
     return new Date(dateString).toLocaleString("ru-RU")
   }
 
-  const calculateSentPercentage = (sent: number, total: number) => {
-    return total > 0 ? Math.round((sent / total) * 100) : 0
+  const calculateSentPercentage = (sent: string | number, total: string | number) => {
+    const sentNum = Number(sent)
+    const totalNum = Number(total)
+    return totalNum > 0 ? Math.round((sentNum / totalNum) * 100) : 0
   }
 
-  const calculateResponsePercentage = (confirmed: number, rejected: number, sent: number) => {
-    if (sent === 0) return 0
-    const totalResponses = confirmed + rejected
-    const percentage = (totalResponses / sent) * 100
+  const calculateResponsePercentage = (
+    confirmed: string | number,
+    rejected: string | number,
+    sent: string | number,
+  ) => {
+    const confirmedNum = Number(confirmed)
+    const rejectedNum = Number(rejected)
+    const sentNum = Number(sent)
+
+    if (sentNum === 0) return 0
+    const totalResponses = confirmedNum + rejectedNum
+    const percentage = (totalResponses / sentNum) * 100
+
+    console.log(
+      `Response calculation: confirmed=${confirmedNum}, rejected=${rejectedNum}, sent=${sentNum}, totalResponses=${totalResponses}, percentage=${percentage}`,
+    )
+
     // Ограничиваем максимальное значение 100%
     return Math.min(Math.round(percentage), 100)
   }
@@ -72,12 +88,16 @@ export default function TripsPage() {
   }
 
   const getTripStatus = (trip: TripData) => {
-    const totalResponses = trip.confirmed_responses + trip.rejected_responses
+    const confirmedNum = Number(trip.confirmed_responses)
+    const rejectedNum = Number(trip.rejected_responses)
+    const sentNum = Number(trip.sent_messages)
+    const totalNum = Number(trip.total_messages)
+    const totalResponses = confirmedNum + rejectedNum
 
-    if (trip.sent_messages === 0) return "Не отправлена"
-    if (trip.status === "completed" || totalResponses === trip.sent_messages) return "Завершена"
-    if (trip.sent_messages < trip.total_messages) return "Отправляется"
-    if (trip.status === "active" && trip.pending_responses > 0) return "Ожидает ответов"
+    if (sentNum === 0) return "Не отправлена"
+    if (trip.status === "completed" || totalResponses === sentNum) return "Завершена"
+    if (sentNum < totalNum) return "Отправляется"
+    if (trip.status === "active" && Number(trip.pending_responses) > 0) return "Ожидает ответов"
     return "Активна"
   }
 
@@ -141,11 +161,13 @@ export default function TripsPage() {
 
   // Проверяем можно ли удалить рассылку
   const canDeleteTrip = (trip: TripData) => {
-    const totalResponses = trip.confirmed_responses + trip.rejected_responses
-    return (
-      trip.sent_messages > 0 &&
-      (totalResponses === trip.sent_messages || trip.status === "completed" || trip.error_messages > 0)
-    )
+    const confirmedNum = Number(trip.confirmed_responses)
+    const rejectedNum = Number(trip.rejected_responses)
+    const sentNum = Number(trip.sent_messages)
+    const errorNum = Number(trip.error_messages)
+    const totalResponses = confirmedNum + rejectedNum
+
+    return sentNum > 0 && (totalResponses === sentNum || trip.status === "completed" || errorNum > 0)
   }
 
   const handleDeleteTrip = async (tripId: number) => {
@@ -233,6 +255,9 @@ export default function TripsPage() {
                               {getTimeSinceSent(trip.first_sent_at)}
                             </span>
                           )}
+                          {trip.carpark && (
+                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">Автопарк: {trip.carpark}</span>
+                          )}
                         </CardDescription>
                       </div>
                     </div>
@@ -277,7 +302,7 @@ export default function TripsPage() {
                     </div>
                     {/* Подтверждено - кликабельное */}
                     <div className="text-center">
-                      {trip.confirmed_responses > 0 ? (
+                      {Number(trip.confirmed_responses) > 0 ? (
                         <Link
                           href={`/trips/${trip.id}?filter=confirmed`}
                           className="block hover:opacity-80 transition-opacity"
@@ -299,7 +324,7 @@ export default function TripsPage() {
 
                     {/* Отклонено - кликабельное */}
                     <div className="text-center">
-                      {trip.rejected_responses > 0 ? (
+                      {Number(trip.rejected_responses) > 0 ? (
                         <Link
                           href={`/trips/${trip.id}?filter=rejected`}
                           className="block hover:opacity-80 transition-opacity"
@@ -321,7 +346,7 @@ export default function TripsPage() {
 
                     {/* Ожидают - кликабельное */}
                     <div className="text-center">
-                      {trip.pending_responses > 0 ? (
+                      {Number(trip.pending_responses) > 0 ? (
                         <Link
                           href={`/trips/${trip.id}?filter=pending`}
                           className="block hover:opacity-80 transition-opacity"
@@ -359,7 +384,10 @@ export default function TripsPage() {
                     <div>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">Прогресс ответов</span>
-                        <span className="text-sm text-muted-foreground">{responsePercentage}%</span>
+                        <span className="text-sm text-muted-foreground">
+                          {responsePercentage}% ({Number(trip.confirmed_responses) + Number(trip.rejected_responses)}/
+                          {trip.sent_messages})
+                        </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
                         <div
@@ -372,7 +400,7 @@ export default function TripsPage() {
 
                   <div className="flex items-center gap-2 mt-4">
                     {getTripStatusBadge(trip)}
-                    {trip.error_messages > 0 && (
+                    {Number(trip.error_messages) > 0 && (
                       <Badge variant="destructive">
                         <XCircle className="h-3 w-3 mr-1" />
                         {trip.error_messages} ошибок
