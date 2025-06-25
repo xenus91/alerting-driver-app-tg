@@ -224,32 +224,35 @@ export function TripCorrectionModal({
   // Исправленная функция форматирования времени БЕЗ преобразования часовых поясов
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
+
     try {
-      // Если это ISO строка с временной зоной
+      // Если это ISO строка, парсим её вручную без создания Date объекта
       if (dateString.includes("T")) {
-        // Создаем дату из строки
-        const date = new Date(dateString)
+        // Извлекаем дату и время из ISO строки вручную
+        const [datePart, timePart] = dateString.split("T")
+        const timeWithoutSeconds = timePart.split(":").slice(0, 2).join(":")
 
-        // Получаем локальные компоненты времени
-        const year = date.getFullYear()
-        const month = String(date.getMonth() + 1).padStart(2, "0")
-        const day = String(date.getDate()).padStart(2, "0")
-        const hours = String(date.getHours()).padStart(2, "0")
-        const minutes = String(date.getMinutes()).padStart(2, "0")
-
-        return `${year}-${month}-${day}T${hours}:${minutes}`
+        return `${datePart}T${timeWithoutSeconds}`
       }
 
-      // Если это другой формат, пробуем преобразовать
-      const date = new Date(dateString)
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, "0")
-      const day = String(date.getDate()).padStart(2, "0")
-      const hours = String(date.getHours()).padStart(2, "0")
-      const minutes = String(date.getMinutes()).padStart(2, "0")
+      // Если это строка в другом формате, пробуем распарсить
+      if (dateString.includes("/") || dateString.includes("-")) {
+        // Пытаемся найти паттерн даты и времени
+        const dateMatch = dateString.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
+        const timeMatch = dateString.match(/(\d{1,2}):(\d{2})/)
 
-      return `${year}-${month}-${day}T${hours}:${minutes}`
-    } catch {
+        if (dateMatch && timeMatch) {
+          const [, day, month, year] = dateMatch
+          const [, hours, minutes] = timeMatch
+
+          return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hours.padStart(2, "0")}:${minutes}`
+        }
+      }
+
+      // Если ничего не подошло, возвращаем пустую строку
+      return ""
+    } catch (error) {
+      console.error("Error formatting date:", error, "Input:", dateString)
       return ""
     }
   }
