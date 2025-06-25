@@ -29,28 +29,19 @@ export async function GET() {
 
     const currentUser = sessions[0]
 
-    // Получаем все поездки
-    const allTrips = await getTrips()
-
-    // Фильтруем поездки в зависимости от роли пользователя
-    let filteredTrips
+    // Получаем поездки с учетом роли пользователя
+    let trips
 
     if (currentUser.role === "operator" && currentUser.carpark) {
-      // Операторы видят только поездки пользователей из своего автопарка
-      // Нужно получить пользователей из автопарка и их поездки
-      const carparkUsers = await sql`
-        SELECT id FROM users WHERE carpark = ${currentUser.carpark}
-      `
-      const carparkUserIds = carparkUsers.map((u) => u.id)
-
-      filteredTrips = allTrips.filter((trip) => carparkUserIds.includes(trip.user_id))
+      // Операторы видят только поездки из своего автопарка
+      trips = await getTrips(currentUser.carpark)
     } else {
       // Администраторы видят все поездки
-      filteredTrips = allTrips
+      trips = await getTrips()
     }
 
     // Проверяем и обновляем статусы завершенных рассылок
-    for (const trip of filteredTrips) {
+    for (const trip of trips) {
       const totalResponses = Number(trip.confirmed_responses) + Number(trip.rejected_responses)
       const sentMessages = Number(trip.sent_messages)
 
@@ -64,7 +55,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      trips: filteredTrips,
+      trips: trips,
       currentUser: {
         role: currentUser.role,
         carpark: currentUser.carpark,

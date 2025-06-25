@@ -24,6 +24,7 @@ export interface Trip {
   vehicle_number?: string
   planned_loading_time?: string
   driver_comment?: string
+  carpark?: string // Добавляем поле carpark
   created_at: string
   status: string
 }
@@ -213,12 +214,14 @@ export async function getUsersWithVerificationByPhones(phones: string[]) {
   }
 }
 
-export async function createTrip() {
+// Обновляем функцию createTrip для сохранения carpark
+export async function createTrip(carpark?: string) {
   try {
     const result = await sql`
-      INSERT INTO trips (status) VALUES ('active')
+      INSERT INTO trips (status, carpark) VALUES ('active', ${carpark || null})
       RETURNING *
     `
+    console.log(`Created trip with carpark: ${carpark}`)
     return result[0] as Trip
   } catch (error) {
     console.error("Error creating trip:", error)
@@ -552,23 +555,47 @@ export async function getTripMessages(tripId: number) {
   }
 }
 
-export async function getTrips() {
+// Обновляем функцию getTrips для фильтрации по carpark
+export async function getTrips(carparkFilter?: string) {
   try {
-    const result = await sql`
-      SELECT t.*, 
-             COUNT(tm.id) as total_messages,
-             COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
-             COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
-             COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
-             COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
-             COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
-             MIN(tm.sent_at) as first_sent_at,
-             MAX(tm.sent_at) as last_sent_at
-      FROM trips t
-      LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-      GROUP BY t.id
-      ORDER BY t.created_at DESC
-    `
+    let query
+
+    if (carparkFilter) {
+      query = sql`
+        SELECT t.*, 
+               COUNT(tm.id) as total_messages,
+               COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
+               COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
+               COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
+               COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
+               COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
+               MIN(tm.sent_at) as first_sent_at,
+               MAX(tm.sent_at) as last_sent_at
+        FROM trips t
+        LEFT JOIN trip_messages tm ON t.id = tm.trip_id
+        WHERE t.carpark = ${carparkFilter}
+        GROUP BY t.id
+        ORDER BY t.created_at DESC
+      `
+    } else {
+      query = sql`
+        SELECT t.*, 
+               COUNT(tm.id) as total_messages,
+               COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
+               COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
+               COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
+               COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
+               COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
+               MIN(tm.sent_at) as first_sent_at,
+               MAX(tm.sent_at) as last_sent_at
+        FROM trips t
+        LEFT JOIN trip_messages tm ON t.id = tm.trip_id
+        GROUP BY t.id
+        ORDER BY t.created_at DESC
+      `
+    }
+
+    const result = await query
     return result
   } catch (error) {
     console.error("Error getting trips:", error)
@@ -591,8 +618,8 @@ export async function getAllUsers() {
 }
 
 // Функции для обратной совместимости (старые названия)
-export async function createCampaign() {
-  return createTrip()
+export async function createCampaign(carpark?: string) {
+  return createTrip(carpark)
 }
 
 export async function createCampaignMessage(
@@ -618,8 +645,8 @@ export async function getCampaignMessages(tripId: number) {
   return getTripMessages(tripId)
 }
 
-export async function getCampaigns() {
-  return getTrips()
+export async function getCampaigns(carparkFilter?: string) {
+  return getTrips(carparkFilter)
 }
 
 export async function getTripDataForMessages(tripId: number) {
