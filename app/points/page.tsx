@@ -84,7 +84,7 @@ interface PopoverStates {
   created_at: boolean
 }
 
-// Отдельный компонент для поиска с собственным состоянием и отладкой
+// Отдельный компонент для поиска - ВЫНЕСЕН НАРУЖУ
 const SearchInputComponent = React.memo(
   ({
     field,
@@ -313,21 +313,19 @@ export default function PointsPage() {
     }))
   }, [])
 
-  const handleFilterSearchChange = useCallback(
-    (field: keyof FilterSearches, value: string) => {
-      console.log(`🔍 [Parent] handleFilterSearchChange called: ${field} = "${value}"`)
-      console.log(`📊 [Parent] Current filterSearches before update:`, filterSearches)
-      setFilterSearches((prev) => {
-        const newState = {
-          ...prev,
-          [field]: value,
-        }
-        console.log(`📊 [Parent] New filterSearches after update:`, newState)
-        return newState
-      })
-    },
-    [filterSearches],
-  )
+  // УБИРАЕМ filterSearches из зависимостей чтобы не вызывать перерендер
+  const handleFilterSearchChange = useCallback((field: keyof FilterSearches, value: string) => {
+    console.log(`🔍 [Parent] handleFilterSearchChange called: ${field} = "${value}"`)
+    setFilterSearches((prev) => {
+      console.log(`📊 [Parent] Current filterSearches before update:`, prev)
+      const newState = {
+        ...prev,
+        [field]: value,
+      }
+      console.log(`📊 [Parent] New filterSearches after update:`, newState)
+      return newState
+    })
+  }, []) // Убрали filterSearches из зависимостей!
 
   const clearFilter = useCallback((field: keyof ColumnFilters) => {
     console.log(`🧹 [Parent] clearFilter called for: ${field}`)
@@ -405,6 +403,25 @@ export default function PointsPage() {
 
     return filtered
   }, [points, columnFilters, sortField, sortDirection, getFieldValue])
+
+  // Мемоизированные компоненты поиска для каждого поля
+  const searchComponents = useMemo(() => {
+    const components: Record<string, React.ReactElement> = {}
+    const fields: SortField[] = ["point_id", "point_name", "adress", "coordinates", "time_windows", "created_at"]
+
+    fields.forEach((field) => {
+      components[field] = (
+        <SearchInputComponent
+          key={`search-${field}`}
+          field={field}
+          onSearchChange={(value) => handleFilterSearchChange(field, value)}
+          onClear={() => clearSearchOnly(field)}
+        />
+      )
+    })
+
+    return components
+  }, [handleFilterSearchChange, clearSearchOnly])
 
   const handleOpenDialog = (point?: Point) => {
     if (point) {
@@ -608,11 +625,7 @@ export default function PointsPage() {
                 )}
               </div>
 
-              <SearchInputComponent
-                field={field}
-                onSearchChange={(value) => handleFilterSearchChange(field, value)}
-                onClear={() => clearSearchOnly(field)}
-              />
+              {searchComponents[field]}
 
               <div className="max-h-48 overflow-y-auto space-y-2">
                 {getFilteredOptions().map((option) => (
