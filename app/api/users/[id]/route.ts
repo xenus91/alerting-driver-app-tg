@@ -18,7 +18,7 @@ async function getCurrentUser() {
     const result = await sql`
       SELECT u.*, us.expires_at
       FROM users u
-      JOIN user_sessions us ON u.telegram_id = us.telegram_id
+      JOIN user_sessions us ON u.id = us.user_id
       WHERE us.session_token = ${sessionToken.value}
         AND us.expires_at > NOW()
       LIMIT 1
@@ -132,7 +132,7 @@ export async function DELETE(request: NextRequest, { params }: { params: { id: s
     const userToDelete = userCheck[0]
 
     // Удаляем связанные данные
-    await sql`DELETE FROM user_sessions WHERE telegram_id = ${userToDelete.telegram_id}`
+    await sql`DELETE FROM user_sessions WHERE user_id = ${userId}`
     await sql`DELETE FROM user_pending_actions WHERE user_id = ${userId}`
 
     // Удаляем пользователя
