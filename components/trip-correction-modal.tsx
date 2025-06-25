@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle } from "lucide-react"
+import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X } from "lucide-react"
 
 interface CorrectionData {
   phone: string
@@ -120,8 +120,34 @@ export function TripCorrectionModal({
     setCorrections([...corrections, newPoint])
   }
 
+  const addNewTrip = () => {
+    // Генерируем новый номер рейса
+    const existingTripNumbers = Object.keys(groupedCorrections).map((id) => Number.parseInt(id) || 0)
+    const maxTripNumber = Math.max(...existingTripNumbers, 4000000)
+    const newTripIdentifier = (maxTripNumber + 1).toString()
+
+    const newTrip: CorrectionData = {
+      phone,
+      trip_identifier: newTripIdentifier,
+      vehicle_number: "",
+      planned_loading_time: new Date().toISOString(),
+      point_type: "P",
+      point_num: 1,
+      point_id: "",
+      driver_comment: "",
+      message_id: corrections[0]?.message_id || 0,
+    }
+
+    setCorrections([...corrections, newTrip])
+  }
+
   const removePoint = (index: number) => {
     const updated = corrections.filter((_, i) => i !== index)
+    setCorrections(updated)
+  }
+
+  const removeTrip = (tripIdentifier: string) => {
+    const updated = corrections.filter((c) => c.trip_identifier !== tripIdentifier)
     setCorrections(updated)
   }
 
@@ -199,21 +225,39 @@ export function TripCorrectionModal({
     }
   }
 
+  // Исправленная функция форматирования времени БЕЗ преобразования часовых поясов
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
     try {
-      // Преобразуем в формат для input datetime-local
+      // Если это ISO строка, парсим её как локальное время
+      if (dateString.includes("T")) {
+        // Убираем Z и информацию о часовом поясе, чтобы интерпретировать как локальное время
+        const cleanDateString = dateString.replace(/[TZ].*$/, "T").slice(0, 16)
+        return cleanDateString
+      }
+
+      // Если это другой формат, пробуем преобразовать
       const date = new Date(dateString)
-      return date.toISOString().slice(0, 16)
+      // Используем локальное время без преобразования
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, "0")
+      const day = String(date.getDate()).padStart(2, "0")
+      const hours = String(date.getHours()).padStart(2, "0")
+      const minutes = String(date.getMinutes()).padStart(2, "0")
+
+      return `${year}-${month}-${day}T${hours}:${minutes}`
     } catch {
       return dateString
     }
   }
 
+  // Исправленная функция сохранения времени БЕЗ преобразования часовых поясов
   const formatDateTimeForSave = (dateString: string) => {
     if (!dateString) return ""
     try {
-      return new Date(dateString).toISOString()
+      // Добавляем секунды и миллисекунды, но НЕ добавляем Z (UTC)
+      // Это сохранит время как локальное
+      return dateString + ":00.000"
     } catch {
       return dateString
     }
@@ -266,19 +310,39 @@ export function TripCorrectionModal({
           </div>
         ) : (
           <div className="space-y-6">
+            <div className="flex justify-end">
+              <Button onClick={addNewTrip} variant="outline" className="text-green-600">
+                <Plus className="h-4 w-4 mr-2" />
+                Добавить новый рейс
+              </Button>
+            </div>
+
             {Object.entries(groupedCorrections).map(([tripIdentifier, tripCorrections]) => (
               <div key={tripIdentifier} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold">Рейс {tripIdentifier}</h3>
-                  <Button
-                    onClick={() => addNewPoint(tripIdentifier)}
-                    variant="outline"
-                    size="sm"
-                    className="text-blue-600"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Добавить точку
-                  </Button>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => addNewPoint(tripIdentifier)}
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Добавить точку
+                    </Button>
+                    {Object.keys(groupedCorrections).length > 1 && (
+                      <Button
+                        onClick={() => removeTrip(tripIdentifier)}
+                        variant="outline"
+                        size="sm"
+                        className="text-red-600"
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Удалить рейс
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
                 <div className="grid grid-cols-4 gap-4 mb-4">
@@ -318,10 +382,10 @@ export function TripCorrectionModal({
                       type="datetime-local"
                       value={formatDateTime(tripCorrections[0]?.planned_loading_time || "")}
                       onChange={(e) => {
-                        const isoDate = formatDateTimeForSave(e.target.value)
+                        const formattedDate = formatDateTimeForSave(e.target.value)
                         const updatedCorrections = corrections.map((c) =>
                           c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                            ? { ...c, planned_loading_time: isoDate }
+                            ? { ...c, planned_loading_time: formattedDate }
                             : c,
                         )
                         setCorrections(updatedCorrections)

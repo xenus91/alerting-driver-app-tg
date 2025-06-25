@@ -28,6 +28,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             planned_loading_time: correction.planned_loading_time,
             driver_comment: correction.driver_comment,
             points: [],
+            is_new_trip: !correction.original_trip_identifier, // Новый рейс если нет original
           })
         }
 
@@ -40,18 +41,42 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
       }
 
-      // Обновляем данные сообщений
+      // Обрабатываем каждый рейс
       for (const [originalTripIdentifier, tripData] of originalTripGroups) {
-        await sql`
-          UPDATE trip_messages 
-          SET trip_identifier = ${tripData.new_trip_identifier},
-              vehicle_number = ${tripData.vehicle_number},
-              planned_loading_time = ${tripData.planned_loading_time},
-              driver_comment = ${tripData.driver_comment || null}
-          WHERE trip_id = ${tripId} 
-            AND phone = ${phone} 
-            AND trip_identifier = ${originalTripIdentifier}
-        `
+        if (tripData.is_new_trip) {
+          // Создаем новое сообщение для нового рейса
+          await sql`
+            INSERT INTO trip_messages (
+              trip_id, phone, message, telegram_id, response_status,
+              trip_identifier, vehicle_number, planned_loading_time, driver_comment
+            )
+            SELECT 
+              ${tripId}, 
+              ${phone}, 
+              'Новый рейс', 
+              telegram_id, 
+              'pending',
+              ${tripData.new_trip_identifier},
+              ${tripData.vehicle_number},
+              ${tripData.planned_loading_time},
+              ${tripData.driver_comment || null}
+            FROM users 
+            WHERE phone = ${phone}
+            LIMIT 1
+          `
+        } else {
+          // Обновляем существующее сообщение
+          await sql`
+            UPDATE trip_messages 
+            SET trip_identifier = ${tripData.new_trip_identifier},
+                vehicle_number = ${tripData.vehicle_number},
+                planned_loading_time = ${tripData.planned_loading_time},
+                driver_comment = ${tripData.driver_comment || null}
+            WHERE trip_id = ${tripId} 
+              AND phone = ${phone} 
+              AND trip_identifier = ${originalTripIdentifier}
+          `
+        }
 
         // Удаляем старые точки для этого рейса (используем original_trip_identifier)
         await sql`
