@@ -71,7 +71,10 @@ export default function UsersPage() {
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
   const [globalFilter, setGlobalFilter] = useState("")
+  // В начале компонента добавить состояние для текущего пользователя
+  const [currentUser, setCurrentUser] = useState<{ role: string; carpark: string } | null>(null)
 
+  // Обновить функцию fetchUsers
   const fetchUsers = async () => {
     setIsLoading(true)
     try {
@@ -79,6 +82,7 @@ export default function UsersPage() {
       const data = await response.json()
       if (data.success) {
         setUsers(data.users)
+        setCurrentUser(data.currentUser)
       }
     } catch (error) {
       console.error("Error fetching users:", error)
@@ -271,9 +275,14 @@ export default function UsersPage() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
+        {/* В заголовке страницы, после описания добавить информацию о фильтрации */}
         <div>
           <h1 className="text-2xl font-bold">Зарегистрированные пользователи</h1>
-          <p className="text-muted-foreground">Пользователи, которые зарегистрировались в Telegram боте</p>
+          <p className="text-muted-foreground">
+            {currentUser?.role === "operator"
+              ? `Водители автопарка ${currentUser.carpark}`
+              : "Пользователи, которые зарегистрировались в Telegram боте"}
+          </p>
         </div>
         <div className="flex gap-2">
           <Button onClick={fetchUsers} disabled={isLoading} variant="outline">
