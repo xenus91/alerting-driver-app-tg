@@ -84,6 +84,7 @@ export interface UserPendingAction {
   user_id: number
   action_type: string
   related_message_id?: number
+  action_data?: string
   created_at: string
 }
 
@@ -475,14 +476,25 @@ export async function updateMessageResponse(messageId: number, responseStatus: s
   }
 }
 
-export async function setUserPendingAction(userId: number, actionType: string, relatedMessageId?: number) {
+export async function setUserPendingAction(
+  userId: number,
+  actionType: string,
+  relatedMessageId?: number,
+  actionData?: any,
+) {
   try {
+    const dataString = actionData ? JSON.stringify(actionData) : null
+    console.log(
+      `Setting pending action for user ${userId}: ${actionType}, messageId: ${relatedMessageId}, data: ${dataString}`,
+    )
+
     const result = await sql`
-      INSERT INTO user_pending_actions (user_id, action_type, related_message_id)
-      VALUES (${userId}, ${actionType}, ${relatedMessageId || null})
+      INSERT INTO user_pending_actions (user_id, action_type, related_message_id, action_data)
+      VALUES (${userId}, ${actionType}, ${relatedMessageId || null}, ${dataString})
       ON CONFLICT (user_id) DO UPDATE SET
         action_type = EXCLUDED.action_type,
         related_message_id = EXCLUDED.related_message_id,
+        action_data = EXCLUDED.action_data,
         created_at = CURRENT_TIMESTAMP
       RETURNING *
     `
