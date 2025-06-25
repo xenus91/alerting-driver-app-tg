@@ -17,6 +17,7 @@ import {
   MapPin,
   ChevronLeft,
   ChevronRight,
+  Key,
 } from "lucide-react"
 
 interface CurrentUser {
@@ -54,6 +55,12 @@ const menuItems = [
     href: "/points",
     icon: MapPin,
     roles: ["admin", "operator"],
+  },
+  {
+    title: "API Ключи",
+    href: "/api-keys",
+    icon: Key,
+    roles: ["admin"], // Только для администраторов
   },
   {
     title: "Настройки бота",
