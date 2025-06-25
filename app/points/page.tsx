@@ -1,6 +1,6 @@
 "use client"
 
-import type React from "react"
+import React from "react"
 
 import { useState, useEffect, useMemo, useRef, useCallback } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -84,6 +84,94 @@ interface PopoverStates {
   created_at: boolean
 }
 
+// Отдельный компонент для поиска с собственным состоянием
+const SearchInputComponent = React.memo(
+  ({
+    field,
+    placeholder = "Поиск...",
+    onSearchChange,
+    onClear,
+  }: {
+    field: string
+    placeholder?: string
+    onSearchChange: (value: string) => void
+    onClear: () => void
+  }) => {
+    const [localValue, setLocalValue] = useState("")
+    const timeoutRef = useRef<NodeJS.Timeout>()
+
+    const handleChange = (value: string) => {
+      setLocalValue(value)
+
+      // Debounce обновление родительского состояния
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+
+      timeoutRef.current = setTimeout(() => {
+        onSearchChange(value)
+      }, 150)
+    }
+
+    const handleClear = () => {
+      setLocalValue("")
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+      onClear()
+    }
+
+    useEffect(() => {
+      return () => {
+        if (timeoutRef.current) {
+          clearTimeout(timeoutRef.current)
+        }
+      }
+    }, [])
+
+    return (
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+        <Input
+          placeholder={placeholder}
+          value={localValue}
+          onChange={(e) => {
+            e.stopPropagation()
+            handleChange(e.target.value)
+          }}
+          onKeyDown={(e) => {
+            e.stopPropagation()
+          }}
+          onClick={(e) => {
+            e.stopPropagation()
+          }}
+          className="h-8 pl-9 pr-8"
+          autoComplete="off"
+        />
+        {localValue.length > 0 && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              e.preventDefault()
+              handleClear()
+            }}
+            onMouseDown={(e) => {
+              e.preventDefault()
+            }}
+            className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            tabIndex={-1}
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+    )
+  },
+)
+
+SearchInputComponent.displayName = "SearchInputComponent"
+
 export default function PointsPage() {
   const [points, setPoints] = useState<Point[]>([])
   const [isLoading, setIsLoading] = useState(true)
@@ -131,9 +219,6 @@ export default function PointsPage() {
     time_windows: false,
     created_at: false,
   })
-
-  // Refs для input'ов - стабильный объект
-  const inputRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const fetchPoints = async () => {
     setIsLoading(true)
@@ -355,6 +440,7 @@ export default function PointsPage() {
           point_name: formData.point_name.trim(),
           door_open_1: formData.door_open_1.trim() || null,
           door_open_2: formData.door_open_2.trim() || null,
+          door_open_3: formData.door_open_3.trim() || null,
           latitude: formData.latitude.trim() || null,
           longitude: formData.longitude.trim() || null,
           adress: formData.adress.trim() || null,
@@ -415,174 +501,111 @@ export default function PointsPage() {
     return point.latitude && point.longitude
   }
 
-  // Компонент поля поиска - мемоизированный для предотвращения пересоздания
-  const SearchInput = useMemo(() => {
-    return ({ field, placeholder = "Поиск..." }: { field: keyof FilterSearches; placeholder?: string }) => {
-      const value = filterSearches[field]
-      const hasValue = value.length > 0
+  // Компонент заголовка колонки
+  const ColumnHeader = ({
+    field,
+    children,
+    className = "",
+  }: {
+    field: SortField
+    children: React.ReactNode
+    className?: string
+  }) => {
+    const isActive = sortField === field
+    const hasActiveFilter = columnFilters[field].length > 0
+    const isPopoverOpen = popoverStates[field]
 
-      return (
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
-          <Input
-            key={`search-${field}`} // Добавляем key для стабильности
-            ref={(el) => {
-              if (el) {
-                inputRefs.current[field] = el
-              }
-            }}
-            placeholder={placeholder}
-            value={value}
-            onChange={(e) => {
-              e.stopPropagation()
-              handleFilterSearchChange(field, e.target.value)
-            }}
-            onKeyDown={(e) => {
-              e.stopPropagation()
-            }}
-            onClick={(e) => {
-              e.stopPropagation()
-            }}
-            className="h-8 pl-9 pr-8"
-            autoComplete="off"
-          />
-          {hasValue && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation()
-                e.preventDefault()
-                clearSearchOnly(field)
-              }}
-              onMouseDown={(e) => {
-                e.preventDefault() // Предотвращаем потерю фокуса
-              }}
-              className="absolute right-2 top-1/2 transform -translate-y-1/2 p-1 rounded-sm hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-              tabIndex={-1} // Убираем из tab order
-            >
-              <X className="h-3 w-3" />
-            </button>
-          )}
-        </div>
-      )
+    const getSortIcon = () => {
+      if (!isActive) return <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />
+      if (sortDirection === "asc") return <ArrowUp className="h-3 w-3" />
+      if (sortDirection === "desc") return <ArrowDown className="h-3 w-3" />
+      return <ArrowUpDown className="h-3 w-3 opacity-50" />
     }
-  }, [filterSearches, handleFilterSearchChange, clearSearchOnly])
 
-  // Компонент заголовка колонки с сортировкой и фильтрацией - мемоизированный
-  const ColumnHeader = useMemo(() => {
-    return ({
-      field,
-      children,
-      className = "",
-    }: {
-      field: SortField
-      children: React.ReactNode
-      className?: string
-    }) => {
-      const isActive = sortField === field
-      const hasActiveFilter = columnFilters[field].length > 0
-      const isPopoverOpen = popoverStates[field]
+    const getFilteredOptions = () => {
+      const options = filterOptions[field] || []
+      const search = filterSearches[field].toLowerCase()
+      return search ? options.filter((option) => option.toLowerCase().includes(search)) : options
+    }
 
-      const getSortIcon = () => {
-        if (!isActive) return <ArrowUpDown className="h-3 w-3 opacity-0 group-hover:opacity-100" />
-        if (sortDirection === "asc") return <ArrowUp className="h-3 w-3" />
-        if (sortDirection === "desc") return <ArrowDown className="h-3 w-3" />
-        return <ArrowUpDown className="h-3 w-3 opacity-50" />
-      }
+    return (
+      <div className={`flex items-center justify-between group ${className}`}>
+        <button
+          className="flex items-center gap-1 hover:text-foreground text-left flex-1"
+          onClick={() => handleSort(field)}
+        >
+          <span>{children}</span>
+          {getSortIcon()}
+        </button>
 
-      const getFilteredOptions = () => {
-        const options = filterOptions[field] || []
-        const search = filterSearches[field].toLowerCase()
-        return search ? options.filter((option) => option.toLowerCase().includes(search)) : options
-      }
-
-      return (
-        <div className={`flex items-center justify-between group ${className}`} key={`header-${field}`}>
-          <button
-            className="flex items-center gap-1 hover:text-foreground text-left flex-1"
-            onClick={() => handleSort(field)}
-          >
-            <span>{children}</span>
-            {getSortIcon()}
-          </button>
-
-          <Popover open={isPopoverOpen} onOpenChange={(open) => handlePopoverOpen(field, open)}>
-            <PopoverTrigger asChild>
-              <button
-                className={`ml-2 p-1 rounded hover:bg-muted ${
-                  hasActiveFilter ? "text-blue-600" : "opacity-0 group-hover:opacity-100"
-                }`}
-              >
-                <Filter className="h-3 w-3" />
-              </button>
-            </PopoverTrigger>
-            <PopoverContent className="w-64" align="start" key={`popover-${field}`}>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h4 className="font-medium text-sm">Фильтр</h4>
-                  {(columnFilters[field].length > 0 || filterSearches[field]) && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        clearFilter(field)
-                      }}
-                      onMouseDown={(e) => {
-                        e.preventDefault()
-                      }}
-                      className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
-                      tabIndex={-1}
-                    >
-                      Сбросить всё
-                    </Button>
-                  )}
-                </div>
-
-                <SearchInput field={field} />
-
-                <div className="max-h-48 overflow-y-auto space-y-2">
-                  {getFilteredOptions().map((option) => (
-                    <div key={`${field}-${option}`} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`${field}-${option}`}
-                        checked={columnFilters[field].includes(option)}
-                        onCheckedChange={(checked) => {
-                          handleFilterChange(field, option, checked as boolean)
-                        }}
-                      />
-                      <label
-                        htmlFor={`${field}-${option}`}
-                        className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
-                      >
-                        {option}
-                      </label>
-                    </div>
-                  ))}
-                </div>
-
-                {getFilteredOptions().length === 0 && (
-                  <p className="text-sm text-muted-foreground text-center py-2">Ничего не найдено</p>
+        <Popover open={isPopoverOpen} onOpenChange={(open) => handlePopoverOpen(field, open)}>
+          <PopoverTrigger asChild>
+            <button
+              className={`ml-2 p-1 rounded hover:bg-muted ${
+                hasActiveFilter ? "text-blue-600" : "opacity-0 group-hover:opacity-100"
+              }`}
+            >
+              <Filter className="h-3 w-3" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-64" align="start">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <h4 className="font-medium text-sm">Фильтр</h4>
+                {(columnFilters[field].length > 0 || filterSearches[field]) && (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      clearFilter(field)
+                    }}
+                    onMouseDown={(e) => {
+                      e.preventDefault()
+                    }}
+                    className="h-6 px-2 text-xs text-muted-foreground hover:text-foreground"
+                    tabIndex={-1}
+                  >
+                    Сбросить всё
+                  </Button>
                 )}
               </div>
-            </PopoverContent>
-          </Popover>
-        </div>
-      )
-    }
-  }, [
-    sortField,
-    sortDirection,
-    columnFilters,
-    popoverStates,
-    filterOptions,
-    filterSearches,
-    handleSort,
-    handlePopoverOpen,
-    clearFilter,
-    handleFilterChange,
-    SearchInput,
-  ])
+
+              <SearchInputComponent
+                field={field}
+                onSearchChange={(value) => handleFilterSearchChange(field, value)}
+                onClear={() => clearSearchOnly(field)}
+              />
+
+              <div className="max-h-48 overflow-y-auto space-y-2">
+                {getFilteredOptions().map((option) => (
+                  <div key={`${field}-${option}`} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={`${field}-${option}`}
+                      checked={columnFilters[field].includes(option)}
+                      onCheckedChange={(checked) => {
+                        handleFilterChange(field, option, checked as boolean)
+                      }}
+                    />
+                    <label
+                      htmlFor={`${field}-${option}`}
+                      className="text-sm leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer flex-1"
+                    >
+                      {option}
+                    </label>
+                  </div>
+                ))}
+              </div>
+
+              {getFilteredOptions().length === 0 && (
+                <p className="text-sm text-muted-foreground text-center py-2">Ничего не найдено</p>
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
