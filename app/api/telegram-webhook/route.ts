@@ -504,6 +504,24 @@ export async function POST(request: NextRequest) {
           // Формируем кнопки
           const buttons = []
 
+          // Кнопка "Завершить" если уже есть минимум 2 точки - ВВЕРХУ
+          if (routePoints.length >= 2) {
+            buttons.push([
+              {
+                text: "✅ Завершить построение маршрута",
+                callback_data: "route_finish",
+              },
+            ])
+          }
+
+          // Кнопка отмены - ВВЕРХУ
+          buttons.push([
+            {
+              text: "❌ Отменить",
+              callback_data: "route_cancel",
+            },
+          ])
+
           // Кнопки с точками (по 2 в ряд)
           for (let i = 0; i < availablePoints.length; i += 2) {
             const row = []
@@ -519,24 +537,6 @@ export async function POST(request: NextRequest) {
             }
             buttons.push(row)
           }
-
-          // Кнопка "Завершить" если уже есть минимум 2 точки
-          if (routePoints.length >= 2) {
-            buttons.push([
-              {
-                text: "✅ Завершить построение маршрута",
-                callback_data: "route_finish",
-              },
-            ])
-          }
-
-          // Кнопка отмены
-          buttons.push([
-            {
-              text: "❌ Отменить",
-              callback_data: "route_cancel",
-            },
-          ])
 
           await sendMessageWithButtons(chatId, stepMessage, buttons)
 
@@ -948,6 +948,15 @@ export async function POST(request: NextRequest) {
         // Формируем кнопки с точками (по 2 в ряд)
         const buttons = []
 
+        // Кнопка отмены ВВЕРХУ
+        buttons.push([
+          {
+            text: "❌ Отменить",
+            callback_data: "route_cancel",
+          },
+        ])
+
+        // Затем кнопки с точками (по 2 в ряд)
         for (let i = 0; i < allPoints.length; i += 2) {
           const row = []
           row.push({
@@ -962,14 +971,6 @@ export async function POST(request: NextRequest) {
           }
           buttons.push(row)
         }
-
-        // Кнопка отмены
-        buttons.push([
-          {
-            text: "❌ Отменить",
-            callback_data: "route_cancel",
-          },
-        ])
 
         await sendMessageWithButtons(chatId, welcomeMessage, buttons)
 
