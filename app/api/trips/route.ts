@@ -31,7 +31,7 @@ export async function GET() {
   try {
     const currentUser = await getCurrentUser()
     if (!currentUser) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
     console.log(
@@ -80,7 +80,7 @@ export async function GET() {
 
     return NextResponse.json({
       success: true,
-      data: trips,
+      trips: trips, // Возвращаем trips, а не data
       currentUser: {
         role: currentUser.role,
         carpark: currentUser.carpark,
@@ -90,6 +90,7 @@ export async function GET() {
     console.error("Error getting trips:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Ошибка при получении поездок",
         details: error instanceof Error ? error.message : "Неизвестная ошибка",
       },
@@ -102,7 +103,7 @@ export async function DELETE(request: Request) {
   try {
     const currentUser = await getCurrentUser()
     if (!currentUser) {
-      return NextResponse.json({ error: "Не авторизован" }, { status: 401 })
+      return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
     const { tripId } = await request.json()
@@ -124,6 +125,7 @@ export async function DELETE(request: Request) {
     console.error("Error deleting trip:", error)
     return NextResponse.json(
       {
+        success: false,
         error: "Ошибка при удалении поездки",
         details: error instanceof Error ? error.message : "Неизвестная ошибка",
       },

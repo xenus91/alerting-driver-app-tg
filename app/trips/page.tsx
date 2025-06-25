@@ -33,11 +33,18 @@ export default function TripsPage() {
     try {
       const response = await fetch("/api/trips")
       const data = await response.json()
-      if (data.success) {
+
+      console.log("API response:", data) // Для отладки
+
+      if (data.success && Array.isArray(data.trips)) {
         setTrips(data.trips)
+      } else {
+        console.error("Invalid trips data:", data)
+        setTrips([]) // Устанавливаем пустой массив как fallback
       }
     } catch (error) {
       console.error("Error fetching trips:", error)
+      setTrips([]) // Устанавливаем пустой массив при ошибке
     } finally {
       setIsLoading(false)
     }
