@@ -1,18 +1,69 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-// Добавить импорт нового компонента
-// import WebhookDiagnostics from "@/components/webhook-diagnostics"
-import { Upload, MessageSquare, Users, Bot, TrendingUp, FileSpreadsheet, AlertCircle, ExternalLink } from "lucide-react"
+import {
+  Upload,
+  MessageSquare,
+  Users,
+  Bot,
+  TrendingUp,
+  FileSpreadsheet,
+  AlertCircle,
+  ExternalLink,
+  Loader2,
+} from "lucide-react"
+
+interface Stats {
+  activeTrips: number
+  registeredUsers: number
+  sentMessages: number
+}
+
+interface CurrentUser {
+  role: string
+  carpark?: string
+}
 
 export default function HomePage() {
   const isLiteEnvironment = typeof window !== "undefined" && window.location.hostname.includes("lite.vusercontent.net")
   const [testResult, setTestResult] = useState<any>(null)
   const [isTestingCallback, setIsTestingCallback] = useState(false)
+  const [stats, setStats] = useState<Stats>({ activeTrips: 0, registeredUsers: 0, sentMessages: 0 })
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+  const [isLoadingStats, setIsLoadingStats] = useState(true)
+  const [statsError, setStatsError] = useState<string | null>(null)
+
+  // Загружаем статистику при монтировании компонента
+  useEffect(() => {
+    loadStats()
+  }, [])
+
+  const loadStats = async () => {
+    try {
+      setIsLoadingStats(true)
+      setStatsError(null)
+
+      const response = await fetch("/api/stats")
+      const data = await response.json()
+
+      if (data.success) {
+        setStats(data.stats)
+        setCurrentUser(data.currentUser)
+        console.log("Stats loaded:", data.stats)
+      } else {
+        setStatsError(data.error || "Ошибка при загрузке статистики")
+      }
+    } catch (error) {
+      console.error("Error loading stats:", error)
+      setStatsError("Ошибка при загрузке статистики")
+    } finally {
+      setIsLoadingStats(false)
+    }
+  }
 
   const testCallbackQuery = async () => {
     setIsTestingCallback(true)
@@ -85,66 +136,23 @@ export default function HomePage() {
         </Alert>
       )}
 
-      {/* Исправление URL webhook */}
-      {/* Заменить компонент WebhookUrlFix на WebhookDiagnostics */}
-      {/*{!isLiteEnvironment && <WebhookDiagnostics />}*/}
-
-      {/* Тест callback query */}
-      {/*{!isLiteEnvironment && (*/}
-      {/*  <Card className="border-blue-200 bg-blue-50">*/}
-      {/*    <CardHeader>*/}
-      {/*      <CardTitle className="flex items-center gap-2 text-blue-800">*/}
-      {/*        <TestTube className="h-5 w-5" />*/}
-      {/*        Тест callback query (кнопок)*/}
-      {/*      </CardTitle>*/}
-      {/*      <CardDescription className="text-blue-700">Проверим, работают ли кнопки в Telegram боте</CardDescription>*/}
-      {/*    </CardHeader>*/}
-      {/*    <CardContent className="space-y-4">*/}
-      {/*      <div className="flex gap-2">*/}
-      {/*        <Button onClick={testCallbackQuery} disabled={isTestingCallback} size="sm">*/}
-      {/*          {isTestingCallback ? (*/}
-      {/*            <>*/}
-      {/*              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />*/}
-      {/*              Отправка теста...*/}
-      {/*            </>*/}
-      {/*          ) : (*/}
-      {/*            <>*/}
-      {/*              <TestTube className="h-3 w-3 mr-1" />*/}
-      {/*              Отправить тест callback*/}
-      {/*            </>*/}
-      {/*          )}*/}
-      {/*        </Button>*/}
-      {/*      </div>*/}
-
-      {/*      {testResult && (*/}
-      {/*        <Alert className={testResult.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>*/}
-      {/*          <AlertDescription className={testResult.success ? "text-green-800" : "text-red-800"}>*/}
-      {/*            {testResult.success ? (*/}
-      {/*              <div>*/}
-      {/*                ✅ Тестовое сообщение отправлено! Перейдите в Telegram бота и нажмите кнопку "Тест callback".*/}
-      {/*                Затем проверьте логи Vercel на предмет callback_query.*/}
-      {/*              </div>*/}
-      {/*            ) : (*/}
-      {/*              <div>❌ {testResult.error}</div>*/}
-      {/*            )}*/}
-      {/*          </AlertDescription>*/}
-      {/*        </Alert>*/}
-      {/*      )}*/}
-
-      {/*      <div className="text-xs text-muted-foreground">*/}
-      {/*        <p>*/}
-      {/*          <strong>Как тестировать:</strong>*/}
-      {/*        </p>*/}
-      {/*        <ol className="list-decimal list-inside space-y-1 ml-2">*/}
-      {/*          <li>Нажмите "Отправить тест callback"</li>*/}
-      {/*          <li>Перейдите в Telegram бота</li>*/}
-      {/*          <li>Нажмите кнопку "Тест callback"</li>*/}
-      {/*          <li>Проверьте логи Vercel - должен появиться callback_query</li>*/}
-      {/*        </ol>*/}
-      {/*      </div>*/}
-      {/*    </CardContent>*/}
-      {/*  </Card>*/}
-      {/*)}*/}
+      {/* Информация о текущем пользователе */}
+      {currentUser && (
+        <Alert>
+          <AlertDescription>
+            <strong>Роль:</strong> {currentUser.role === "admin" ? "Администратор" : "Оператор"}
+            {currentUser.carpark && (
+              <>
+                {" • "}
+                <strong>Автопарк:</strong> {currentUser.carpark}
+              </>
+            )}
+            {currentUser.role === "operator" && (
+              <span className="text-muted-foreground ml-2">(статистика только для вашего автопарка)</span>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Быстрые действия */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
@@ -173,8 +181,12 @@ export default function HomePage() {
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">Рассылок в процессе</p>
+            <div className="text-2xl font-bold flex items-center gap-2">
+              {isLoadingStats ? <Loader2 className="h-5 w-5 animate-spin" /> : stats.activeTrips}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {currentUser?.role === "operator" ? "Рассылок вашего автопарка" : "Рассылок в процессе"}
+            </p>
           </CardContent>
         </Card>
 
@@ -184,8 +196,12 @@ export default function HomePage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">Пользователей в системе</p>
+            <div className="text-2xl font-bold flex items-center gap-2">
+              {isLoadingStats ? <Loader2 className="h-5 w-5 animate-spin" /> : stats.registeredUsers}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {currentUser?.role === "operator" ? "Водителей вашего автопарка" : "Пользователей в системе"}
+            </p>
           </CardContent>
         </Card>
 
@@ -195,11 +211,28 @@ export default function HomePage() {
             <MessageSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">0</div>
-            <p className="text-xs text-muted-foreground">За все время</p>
+            <div className="text-2xl font-bold flex items-center gap-2">
+              {isLoadingStats ? <Loader2 className="h-5 w-5 animate-spin" /> : stats.sentMessages}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {currentUser?.role === "operator" ? "Сообщений вашего автопарка" : "За все время"}
+            </p>
           </CardContent>
         </Card>
       </div>
+
+      {/* Ошибка загрузки статистики */}
+      {statsError && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="flex items-center justify-between">
+            <span>{statsError}</span>
+            <Button variant="outline" size="sm" onClick={loadStats}>
+              Попробовать снова
+            </Button>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Инструкции */}
       <Card>
@@ -212,17 +245,6 @@ export default function HomePage() {
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {/*<div className="flex items-start gap-3">*/}
-            {/*  <div className="flex h-6 w-6 items-center justify-center rounded-full bg-red-100 text-xs font-medium text-red-600">*/}
-            {/*    ⚠️*/}
-            {/*  </div>*/}
-            {/*  <div>*/}
-            {/*    <h4 className="font-medium text-red-600">Сначала исправьте webhook URL!</h4>*/}
-            {/*    <p className="text-sm text-muted-foreground">*/}
-            {/*      Ваш webhook настроен на старое развертывание. Используйте компонент выше для исправления.*/}
-            {/*    </p>*/}
-            {/*  </div>*/}
-            {/*</div>*/}
             <div className="flex items-start gap-3">
               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-green-100 text-xs font-medium text-green-600">
                 ✅

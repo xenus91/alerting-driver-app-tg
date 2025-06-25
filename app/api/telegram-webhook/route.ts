@@ -1,5 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+import { checkAndUpdateTripCompletion } from "@/lib/database"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -509,6 +510,9 @@ export async function POST(request: NextRequest) {
 
           console.log(`Updated ${updateResult.length} messages for phone ${phone}`)
 
+          // Проверяем завершение рассылки
+          await checkAndUpdateTripCompletion(trip_id)
+
           // Отвечаем на callback query (игнорируем ошибки старых запросов)
           await answerCallbackQuery(callbackQuery.id, "Спасибо! Рейс подтвержден!")
 
@@ -722,6 +726,9 @@ export async function POST(request: NextRequest) {
           `
 
           console.log(`Updated ${updateResult.length} messages for phone ${phone}`)
+
+          // Проверяем завершение рассылки
+          await checkAndUpdateTripCompletion(trip_id)
 
           // Удаляем pending action
           await deleteUserPendingAction(existingUser.id)
@@ -968,7 +975,8 @@ export async function GET() {
   console.log("GET request to telegram-webhook endpoint")
 
   return NextResponse.json({
-    status: "Telegram webhook endpoint is working with FULL REGISTRATION LOGIC + CALLBACK HANDLING + ERROR RESILIENCE",
+    status:
+      "Telegram webhook endpoint is working with FULL REGISTRATION LOGIC + CALLBACK HANDLING + ERROR RESILIENCE + AUTO TRIP COMPLETION",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
     vercel_url: process.env.VERCEL_URL,

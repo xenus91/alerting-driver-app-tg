@@ -245,6 +245,42 @@ export async function updateTripStatus(tripId: number, status: string) {
   }
 }
 
+// Новая функция для проверки и обновления статуса рассылки
+export async function checkAndUpdateTripCompletion(tripId: number) {
+  try {
+    console.log(`Checking completion status for trip ${tripId}`)
+
+    // Проверяем, все ли сообщения получили ответы
+    const result = await sql`
+      SELECT 
+        COUNT(*) as total_messages,
+        COUNT(CASE WHEN response_status IN ('confirmed', 'rejected') THEN 1 END) as responded_messages,
+        COUNT(CASE WHEN response_status = 'pending' THEN 1 END) as pending_messages
+      FROM trip_messages 
+      WHERE trip_id = ${tripId} AND status = 'sent'
+    `
+
+    const stats = result[0]
+    console.log(`Trip ${tripId} stats:`, stats)
+
+    // Если все отправленные сообщения получили ответы
+    if (stats.total_messages > 0 && stats.pending_messages === 0) {
+      console.log(`All messages responded for trip ${tripId}, updating status to completed`)
+
+      await updateTripStatus(tripId, "completed")
+
+      console.log(`Trip ${tripId} marked as completed`)
+      return true
+    } else {
+      console.log(`Trip ${tripId} still has ${stats.pending_messages} pending responses`)
+      return false
+    }
+  } catch (error) {
+    console.error("Error checking trip completion:", error)
+    throw error
+  }
+}
+
 export async function createTripMessage(
   tripId: number,
   phone: string,
@@ -458,6 +494,7 @@ export async function updateMessageStatus(messageId: number, status: string, err
   }
 }
 
+// Обновляем функцию updateMessageResponse для автоматической проверки завершения
 export async function updateMessageResponse(messageId: number, responseStatus: string, responseComment?: string) {
   try {
     const result = await sql`
@@ -468,7 +505,15 @@ export async function updateMessageResponse(messageId: number, responseStatus: s
       WHERE id = ${messageId}
       RETURNING *
     `
-    return result[0] as TripMessage
+
+    const updatedMessage = result[0] as TripMessage
+
+    // Автоматически проверяем завершение рассылки
+    if (updatedMessage.trip_id) {
+      await checkAndUpdateTripCompletion(updatedMessage.trip_id)
+    }
+
+    return updatedMessage
   } catch (error) {
     console.error("Error updating message response:", error)
     throw error

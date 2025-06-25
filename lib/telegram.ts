@@ -529,6 +529,80 @@ export async function editMessageReplyMarkup(chatId: number, messageId: number, 
   }
 }
 
+export function formatTripMessage(
+  tripData: {
+    trip_identifier: string
+    vehicle_number: string
+    planned_loading_time: string
+    driver_comment: string
+  },
+  loadingPoints: Array<{
+    point_name: string
+    door_open_1?: string
+    door_open_2?: string
+    door_open_3?: string
+    latitude?: number | string
+    longitude?: number | string
+  }>,
+  unloadingPoints: Array<{
+    point_name: string
+    door_open_1?: string
+    door_open_2?: string
+    door_open_3?: string
+    latitude?: number | string
+    longitude?: number | string
+  }>,
+  firstName: string,
+): string {
+  // Генерируем красивое сообщение
+  let message = `🌅 <b>Доброго времени суток!</b>\n\n`
+  message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
+  message += `🚛 На Вас запланирован рейс <b>${tripData.trip_identifier}</b>\n`
+  message += `🚗 Транспорт: <b>${tripData.vehicle_number}</b>\n`
+  message += `⏰ Плановое время погрузки: <b>${tripData.planned_loading_time}</b>\n\n`
+
+  // Пункты погрузки
+  if (loadingPoints.length > 0) {
+    message += `📦 <b>Погрузка:</b>\n`
+    loadingPoints.forEach((point, index) => {
+      message += `${index + 1}) <b>${point.point_name}</b>\n`
+    })
+    message += `\n`
+  }
+
+  // Пункты разгрузки
+  if (unloadingPoints.length > 0) {
+    message += `📤 <b>Разгрузка:</b>\n`
+    unloadingPoints.forEach((point, index) => {
+      message += `${index + 1}) <b>${point.point_name}</b>\n`
+
+      // Окна приемки для пункта разгрузки
+      const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
+      if (windows.length > 0) {
+        message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
+      }
+      message += `\n`
+    })
+  }
+
+  // Комментарий
+  if (tripData.driver_comment && tripData.driver_comment.trim()) {
+    message += `💬 <b>Комментарий по рейсу:</b>\n<i>${tripData.driver_comment}</i>\n\n`
+  }
+
+  // Строим маршрут: сначала все точки погрузки, потом все точки разгрузки
+  const routePoints = [...loadingPoints, ...unloadingPoints]
+  const routeUrl = buildRouteUrl(routePoints)
+
+  if (routeUrl) {
+    message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
+  }
+
+  message += `🙏 <b>Просьба подтвердить рейс</b>`
+
+  return message
+}
+
 export async function sendTelegramMessage(chatId: number, text: string, messageId?: number) {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
   const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
