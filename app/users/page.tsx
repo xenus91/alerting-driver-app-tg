@@ -1,14 +1,20 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useMemo } from "react"
+import {
+  useReactTable,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getSortedRowModel,
+  createColumnHelper,
+  flexRender,
+} from "@tanstack/react-table"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import {
   Dialog,
   DialogContent,
@@ -18,8 +24,20 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Label } from "@/components/ui/label"
-import { RefreshCw, Users, Phone, Calendar, ExternalLink, Edit, Save, X, ChevronDown, Check } from "lucide-react"
-import { cn } from "@/lib/utils"
+import {
+  RefreshCw,
+  Users,
+  Phone,
+  Calendar,
+  ExternalLink,
+  Edit,
+  Save,
+  X,
+  ArrowUpDown,
+  ArrowUp,
+  ArrowDown,
+  Search,
+} from "lucide-react"
 
 interface UserInterface {
   id: number
@@ -45,36 +63,14 @@ interface EditingUser {
   role: string
 }
 
-interface ColumnFilters {
-  name: string
-  phone: string
-  telegram_id: string
-  carpark: string
-  role: string
-  verified: string
-  registration_state: string
-}
+const columnHelper = createColumnHelper<UserInterface>()
 
 export default function UsersPage() {
   const [users, setUsers] = useState<UserInterface[]>([])
-  const [filteredUsers, setFilteredUsers] = useState<UserInterface[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [editingUser, setEditingUser] = useState<EditingUser | null>(null)
   const [isUpdating, setIsUpdating] = useState(false)
-
-  // Фильтры для колонок
-  const [columnFilters, setColumnFilters] = useState<ColumnFilters>({
-    name: "",
-    phone: "",
-    telegram_id: "",
-    carpark: "",
-    role: "",
-    verified: "",
-    registration_state: "",
-  })
-
-  // Состояния открытых поповеров
-  const [openPopovers, setOpenPopovers] = useState<Record<string, boolean>>({})
+  const [globalFilter, setGlobalFilter] = useState("")
 
   const fetchUsers = async () => {
     setIsLoading(true)
@@ -95,50 +91,6 @@ export default function UsersPage() {
     fetchUsers()
   }, [])
 
-  // Применение фильтров
-  useEffect(() => {
-    let filtered = users
-
-    // Фильтр по имени
-    if (columnFilters.name) {
-      filtered = filtered.filter((user) =>
-        (user.full_name || user.name || "").toLowerCase().includes(columnFilters.name.toLowerCase()),
-      )
-    }
-
-    // Фильтр по телефону
-    if (columnFilters.phone) {
-      filtered = filtered.filter((user) => user.phone.includes(columnFilters.phone))
-    }
-
-    // Фильтр по Telegram ID
-    if (columnFilters.telegram_id) {
-      filtered = filtered.filter((user) => user.telegram_id.toString().includes(columnFilters.telegram_id))
-    }
-
-    // Фильтр по автопарку
-    if (columnFilters.carpark && columnFilters.carpark !== "all") {
-      filtered = filtered.filter((user) => user.carpark === columnFilters.carpark)
-    }
-
-    // Фильтр по роли
-    if (columnFilters.role && columnFilters.role !== "all") {
-      filtered = filtered.filter((user) => user.role === columnFilters.role)
-    }
-
-    // Фильтр по верификации
-    if (columnFilters.verified && columnFilters.verified !== "all") {
-      filtered = filtered.filter((user) => (columnFilters.verified === "verified" ? user.verified : !user.verified))
-    }
-
-    // Фильтр по состоянию регистрации
-    if (columnFilters.registration_state && columnFilters.registration_state !== "all") {
-      filtered = filtered.filter((user) => user.registration_state === columnFilters.registration_state)
-    }
-
-    setFilteredUsers(filtered)
-  }, [users, columnFilters])
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("ru-RU")
   }
@@ -158,10 +110,6 @@ export default function UsersPage() {
       completed: "Завершена",
     }
     return translations[state] || state
-  }
-
-  const getUniqueValues = (field: keyof UserInterface) => {
-    return [...new Set(users.map((user) => user[field]).filter(Boolean))].sort()
   }
 
   const handleEditUser = (user: UserInterface) => {
@@ -203,99 +151,121 @@ export default function UsersPage() {
     }
   }
 
-  const updateColumnFilter = (column: keyof ColumnFilters, value: string) => {
-    setColumnFilters((prev) => ({ ...prev, [column]: value }))
-  }
-
-  const clearAllFilters = () => {
-    setColumnFilters({
-      name: "",
-      phone: "",
-      telegram_id: "",
-      carpark: "",
-      role: "",
-      verified: "",
-      registration_state: "",
-    })
-  }
-
-  const hasActiveFilters = Object.values(columnFilters).some((filter) => filter !== "" && filter !== "all")
-
-  const togglePopover = (column: string) => {
-    setOpenPopovers((prev) => ({ ...prev, [column]: !prev[column] }))
-  }
-
-  // Компонент для фильтра с поиском
-  const FilterCombobox = ({
-    column,
-    placeholder,
-    options,
-    value,
-    onValueChange,
-    getDisplayValue,
-  }: {
-    column: string
-    placeholder: string
-    options: string[]
-    value: string
-    onValueChange: (value: string) => void
-    getDisplayValue?: (value: string) => string
-  }) => {
-    const [searchValue, setSearchValue] = useState("")
-
-    // Фильтруем опции по поисковому запросу
-    const filteredOptions = options.filter((option) =>
-      (getDisplayValue ? getDisplayValue(option) : option).toLowerCase().includes(searchValue.toLowerCase()),
-    )
-
-    return (
-      <Popover open={openPopovers[column]} onOpenChange={() => togglePopover(column)}>
-        <PopoverTrigger asChild>
-          <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-            <ChevronDown className="h-3 w-3" />
+  const columns = useMemo(
+    () => [
+      columnHelper.accessor("full_name", {
+        header: "Пользователь",
+        cell: (info) => {
+          const user = info.row.original
+          return (
+            <div>
+              <div className="font-medium">{user.full_name || user.name || "Неизвестный"}</div>
+              {user.first_name && user.last_name && (
+                <div className="text-xs text-muted-foreground">
+                  {user.first_name} {user.last_name}
+                </div>
+              )}
+            </div>
+          )
+        },
+        filterFn: (row, columnId, value) => {
+          const user = row.original
+          const searchText = (user.full_name || user.name || user.first_name || user.last_name || "").toLowerCase()
+          return searchText.includes(value.toLowerCase())
+        },
+      }),
+      columnHelper.accessor("phone", {
+        header: "Телефон",
+        cell: (info) => (
+          <div className="flex items-center">
+            <Phone className="h-3 w-3 mr-1" />
+            {formatPhone(info.getValue())}
+          </div>
+        ),
+      }),
+      columnHelper.accessor("telegram_id", {
+        header: "Telegram ID",
+        cell: (info) => <span className="font-mono text-sm">{info.getValue()}</span>,
+      }),
+      columnHelper.accessor("carpark", {
+        header: "Автопарк",
+        cell: (info) => info.getValue() || "—",
+      }),
+      columnHelper.accessor("role", {
+        header: "Роль",
+        cell: (info) => info.getValue() || "—",
+      }),
+      columnHelper.accessor("verified", {
+        header: "Верификация",
+        cell: (info) => (
+          <Badge variant={info.getValue() ? "default" : "destructive"}>
+            {info.getValue() ? "Верифицирован" : "Не верифицирован"}
+          </Badge>
+        ),
+        filterFn: (row, columnId, value) => {
+          if (value === "verified") return row.original.verified
+          if (value === "not_verified") return !row.original.verified
+          return true
+        },
+      }),
+      columnHelper.accessor("registration_state", {
+        header: "Состояние",
+        cell: (info) => <Badge variant="outline">{translateRegistrationState(info.getValue())}</Badge>,
+        filterFn: (row, columnId, value) => {
+          return translateRegistrationState(row.original.registration_state).toLowerCase().includes(value.toLowerCase())
+        },
+      }),
+      columnHelper.accessor("created_at", {
+        header: "Регистрация",
+        cell: (info) => <span className="text-xs text-muted-foreground">{formatDate(info.getValue())}</span>,
+      }),
+      columnHelper.display({
+        id: "actions",
+        header: "Действия",
+        cell: (info) => (
+          <Button variant="ghost" size="sm" onClick={() => handleEditUser(info.row.original)}>
+            <Edit className="h-4 w-4" />
           </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-64 p-0" align="start">
-          <Command>
-            <CommandInput
-              placeholder={`Поиск ${placeholder.toLowerCase()}...`}
-              value={searchValue}
-              onValueChange={setSearchValue}
-            />
-            <CommandList>
-              <CommandEmpty>Ничего не найдено</CommandEmpty>
-              <CommandGroup>
-                <CommandItem
-                  onSelect={() => {
-                    onValueChange("all")
-                    togglePopover(column)
-                    setSearchValue("")
-                  }}
-                >
-                  <Check
-                    className={cn("mr-2 h-4 w-4", value === "all" || value === "" ? "opacity-100" : "opacity-0")}
-                  />
-                  Все
-                </CommandItem>
-                {filteredOptions.map((option) => (
-                  <CommandItem
-                    key={option}
-                    onSelect={() => {
-                      onValueChange(option)
-                      togglePopover(column)
-                      setSearchValue("")
-                    }}
-                  >
-                    <Check className={cn("mr-2 h-4 w-4", value === option ? "opacity-100" : "opacity-0")} />
-                    {getDisplayValue ? getDisplayValue(option) : option}
-                  </CommandItem>
-                ))}
-              </CommandGroup>
-            </CommandList>
-          </Command>
-        </PopoverContent>
-      </Popover>
-    )
+        ),
+      }),
+    ],
+    [],
+  )
+
+  const table = useReactTable({
+    data: users,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    globalFilterFn: (row, columnId, filterValue) => {
+      const user = row.original
+      const searchableText = [
+        user.full_name || user.name || "",
+        user.first_name || "",
+        user.last_name || "",
+        user.phone || "",
+        user.telegram_id?.toString() || "",
+        user.carpark || "",
+        user.role || "",
+        user.verified ? "верифицирован" : "не верифицирован",
+        translateRegistrationState(user.registration_state),
+      ]
+        .join(" ")
+        .toLowerCase()
+
+      return searchableText.includes(filterValue.toLowerCase())
+    },
+    state: {
+      globalFilter,
+    },
+    onGlobalFilterChange: setGlobalFilter,
+  })
+
+  const getSortIcon = (isSorted: false | "asc" | "desc") => {
+    if (isSorted === "asc") return <ArrowUp className="h-3 w-3" />
+    if (isSorted === "desc") return <ArrowDown className="h-3 w-3" />
+    return <ArrowUpDown className="h-3 w-3" />
   }
 
   return (
@@ -376,19 +346,30 @@ export default function UsersPage() {
           <div className="flex items-center justify-between">
             <div>
               <CardTitle>
-                Пользователи ({filteredUsers.length}
-                {hasActiveFilters && ` из ${users.length}`})
+                Пользователи ({table.getFilteredRowModel().rows.length}
+                {globalFilter && ` из ${users.length}`})
               </CardTitle>
               <CardDescription>
-                {hasActiveFilters ? "Отфильтрованные пользователи" : "Все зарегистрированные пользователи"}
+                {globalFilter ? "Результаты поиска" : "Все зарегистрированные пользователи"}
               </CardDescription>
             </div>
-            {hasActiveFilters && (
-              <Button variant="outline" size="sm" onClick={clearAllFilters}>
+            {globalFilter && (
+              <Button variant="outline" size="sm" onClick={() => setGlobalFilter("")}>
                 <X className="h-4 w-4 mr-1" />
-                Очистить фильтры
+                Очистить поиск
               </Button>
             )}
+          </div>
+
+          {/* Глобальный поиск */}
+          <div className="flex items-center space-x-2">
+            <Search className="h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Поиск по всем полям..."
+              value={globalFilter ?? ""}
+              onChange={(event) => setGlobalFilter(event.target.value)}
+              className="max-w-sm"
+            />
           </div>
         </CardHeader>
         <CardContent>
@@ -397,13 +378,13 @@ export default function UsersPage() {
               <RefreshCw className="h-6 w-6 animate-spin mr-2" />
               Загрузка пользователей...
             </div>
-          ) : filteredUsers.length === 0 ? (
+          ) : table.getFilteredRowModel().rows.length === 0 ? (
             <div className="text-center py-8">
-              {hasActiveFilters ? (
+              {globalFilter ? (
                 <div>
                   <Users className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
                   <p className="text-muted-foreground">Пользователи не найдены</p>
-                  <p className="text-sm text-muted-foreground">Попробуйте изменить фильтры</p>
+                  <p className="text-sm text-muted-foreground">Попробуйте изменить поисковый запрос</p>
                 </div>
               ) : (
                 <div>
@@ -429,165 +410,32 @@ export default function UsersPage() {
             <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
-                  <TableRow>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        Пользователь
-                        <Popover open={openPopovers.name} onOpenChange={() => togglePopover("name")}>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <ChevronDown className="h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64" align="start">
-                            <div className="space-y-2">
-                              <Label>Поиск по имени</Label>
-                              <Input
-                                placeholder="Введите имя..."
-                                value={columnFilters.name}
-                                onChange={(e) => updateColumnFilter("name", e.target.value)}
-                              />
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        Телефон
-                        <Popover open={openPopovers.phone} onOpenChange={() => togglePopover("phone")}>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <ChevronDown className="h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64" align="start">
-                            <div className="space-y-2">
-                              <Label>Поиск по телефону</Label>
-                              <Input
-                                placeholder="Введите номер..."
-                                value={columnFilters.phone}
-                                onChange={(e) => updateColumnFilter("phone", e.target.value)}
-                              />
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        Telegram ID
-                        <Popover open={openPopovers.telegram_id} onOpenChange={() => togglePopover("telegram_id")}>
-                          <PopoverTrigger asChild>
-                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
-                              <ChevronDown className="h-3 w-3" />
-                            </Button>
-                          </PopoverTrigger>
-                          <PopoverContent className="w-64" align="start">
-                            <div className="space-y-2">
-                              <Label>Поиск по ID</Label>
-                              <Input
-                                placeholder="Введите ID..."
-                                value={columnFilters.telegram_id}
-                                onChange={(e) => updateColumnFilter("telegram_id", e.target.value)}
-                              />
-                            </div>
-                          </PopoverContent>
-                        </Popover>
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        Автопарк
-                        <FilterCombobox
-                          column="carpark"
-                          placeholder="автопарк"
-                          options={getUniqueValues("carpark")}
-                          value={columnFilters.carpark}
-                          onValueChange={(value) => updateColumnFilter("carpark", value)}
-                        />
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        Роль
-                        <FilterCombobox
-                          column="role"
-                          placeholder="роль"
-                          options={getUniqueValues("role")}
-                          value={columnFilters.role}
-                          onValueChange={(value) => updateColumnFilter("role", value)}
-                        />
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        Верификация
-                        <FilterCombobox
-                          column="verified"
-                          placeholder="верификацию"
-                          options={["verified", "not_verified"]}
-                          value={columnFilters.verified}
-                          onValueChange={(value) => updateColumnFilter("verified", value)}
-                          getDisplayValue={(value) =>
-                            value === "verified" ? "Верифицированные" : "Не верифицированные"
-                          }
-                        />
-                      </div>
-                    </TableHead>
-                    <TableHead>
-                      <div className="flex items-center gap-2">
-                        Состояние
-                        <FilterCombobox
-                          column="registration_state"
-                          placeholder="состояние"
-                          options={getUniqueValues("registration_state")}
-                          value={columnFilters.registration_state}
-                          onValueChange={(value) => updateColumnFilter("registration_state", value)}
-                          getDisplayValue={translateRegistrationState}
-                        />
-                      </div>
-                    </TableHead>
-                    <TableHead>Регистрация</TableHead>
-                    <TableHead>Действия</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredUsers.map((user) => (
-                    <TableRow key={user.id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{user.full_name || user.name || "Неизвестный"}</div>
-                          {user.first_name && user.last_name && (
-                            <div className="text-xs text-muted-foreground">
-                              {user.first_name} {user.last_name}
+                  {table.getHeaderGroups().map((headerGroup) => (
+                    <TableRow key={headerGroup.id}>
+                      {headerGroup.headers.map((header) => (
+                        <TableHead key={header.id}>
+                          {header.isPlaceholder ? null : (
+                            <div
+                              className={`flex items-center gap-2 ${
+                                header.column.getCanSort() ? "cursor-pointer select-none" : ""
+                              }`}
+                              onClick={header.column.getToggleSortingHandler()}
+                            >
+                              {flexRender(header.column.columnDef.header, header.getContext())}
+                              {header.column.getCanSort() && getSortIcon(header.column.getIsSorted())}
                             </div>
                           )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center">
-                          <Phone className="h-3 w-3 mr-1" />
-                          {formatPhone(user.phone)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="font-mono text-sm">{user.telegram_id}</TableCell>
-                      <TableCell>{user.carpark || "—"}</TableCell>
-                      <TableCell>{user.role || "—"}</TableCell>
-                      <TableCell>
-                        <Badge variant={user.verified ? "default" : "destructive"}>
-                          {user.verified ? "Верифицирован" : "Не верифицирован"}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{translateRegistrationState(user.registration_state)}</Badge>
-                      </TableCell>
-                      <TableCell className="text-xs text-muted-foreground">{formatDate(user.created_at)}</TableCell>
-                      <TableCell>
-                        <Button variant="ghost" size="sm" onClick={() => handleEditUser(user)}>
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
+                        </TableHead>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableHeader>
+                <TableBody>
+                  {table.getRowModel().rows.map((row) => (
+                    <TableRow key={row.id}>
+                      {row.getVisibleCells().map((cell) => (
+                        <TableCell key={cell.id}>{flexRender(cell.column.columnDef.cell, cell.getContext())}</TableCell>
+                      ))}
                     </TableRow>
                   ))}
                 </TableBody>
