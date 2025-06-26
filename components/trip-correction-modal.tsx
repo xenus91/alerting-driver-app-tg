@@ -175,6 +175,7 @@ export function TripCorrectionModal({
   onCorrectionSent,
 }: TripCorrectionModalProps) {
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
+  const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string }>>([])
   const [pointSearchStates, setPointSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
   const [isLoading, setIsLoading] = useState(false)
@@ -213,6 +214,7 @@ export function TripCorrectionModal({
       console.error("Error loading driver details:", error)
     } finally {
       setIsLoading(false)
+      setDeletedTrips([])
     }
   }
 
@@ -281,6 +283,9 @@ export function TripCorrectionModal({
   const removeTrip = (tripIdentifier: string) => {
     const updated = corrections.filter((c) => c.trip_identifier !== tripIdentifier)
     setCorrections(updated)
+
+    // Добавляем в список удаленных рейсов
+    setDeletedTrips((prev) => [...prev, tripIdentifier])
   }
 
   const saveCorrections = async () => {
@@ -297,6 +302,7 @@ export function TripCorrectionModal({
         body: JSON.stringify({
           phone,
           corrections,
+          deletedTrips, // Добавляем информацию об удаленных рейсах
         }),
       })
 
@@ -334,7 +340,8 @@ export function TripCorrectionModal({
         body: JSON.stringify({
           phone,
           messageIds,
-          isCorrection: true, // Флаг для обозначения корректировки
+          isCorrection: true,
+          deletedTrips, // Добавляем информацию об удаленных рейсах
         }),
       })
 

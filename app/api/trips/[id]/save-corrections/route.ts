@@ -5,7 +5,7 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const tripId = Number.parseInt(params.id)
-  const { phone, corrections } = await request.json()
+  const { phone, corrections, deletedTrips = [] } = await request.json()
 
   try {
     console.log(`Saving corrections for trip ${tripId}, phone ${phone}`)
@@ -13,6 +13,30 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Начинаем транзакцию
     await sql`BEGIN`
+
+    // Сначала удаляем рейсы, которые были помечены для удаления
+    if (deletedTrips.length > 0) {
+      console.log(`Deleting trips: ${deletedTrips.join(", ")} for phone ${phone}`)
+
+      for (const tripIdentifier of deletedTrips) {
+        // Удаляем из trip_messages
+        await sql`
+          DELETE FROM trip_messages 
+          WHERE trip_id = ${tripId} 
+            AND phone = ${phone} 
+            AND trip_identifier = ${tripIdentifier}
+        `
+
+        // Удаляем из trip_points
+        await sql`
+          DELETE FROM trip_points 
+          WHERE trip_id = ${tripId} 
+            AND trip_identifier = ${tripIdentifier}
+        `
+
+        console.log(`Deleted trip ${tripIdentifier} for phone ${phone}`)
+      }
+    }
 
     try {
       // Группируем корректировки по original_trip_identifier для обновления
@@ -103,12 +127,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       await sql`COMMIT`
 
-      console.log(`Corrections saved successfully for ${originalTripGroups.size} trips`)
+      console.log(
+        `Corrections saved successfully for ${originalTripGroups.size} trips, deleted ${deletedTrips.length} trips`,
+      )
 
       return NextResponse.json({
         success: true,
         message: "Corrections saved successfully",
         updatedTrips: originalTripGroups.size,
+        deletedTrips: deletedTrips.length,
       })
     } catch (error) {
       await sql`ROLLBACK`
