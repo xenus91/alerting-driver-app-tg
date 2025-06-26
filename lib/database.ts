@@ -88,6 +88,18 @@ export interface UserPendingAction {
   created_at: string
 }
 
+// Добавляем интерфейс для подписок
+export interface TripSubscription {
+  id: number
+  trip_id: number
+  user_id: number
+  interval_minutes: number
+  is_active: boolean
+  created_at: string
+  updated_at?: string
+  last_sent_at?: string
+}
+
 export async function createUser(telegramId: number, phone: string, name: string) {
   try {
     const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone
@@ -838,6 +850,53 @@ export async function deleteTrip(tripId: number) {
     console.log(`Trip ${tripId} and related records deleted`)
   } catch (error) {
     console.error("Error deleting trip:", error)
+    throw error
+  }
+}
+
+// Добавляем функции для работы с подписками в конец файла
+export async function createTripSubscription(tripId: number, userId: number, intervalMinutes: number) {
+  try {
+    const result = await sql`
+      INSERT INTO trip_subscriptions (trip_id, user_id, interval_minutes, is_active, created_at)
+      VALUES (${tripId}, ${userId}, ${intervalMinutes}, true, CURRENT_TIMESTAMP)
+      ON CONFLICT (trip_id, user_id) DO UPDATE SET
+        interval_minutes = EXCLUDED.interval_minutes,
+        is_active = true,
+        updated_at = CURRENT_TIMESTAMP
+      RETURNING *
+    `
+    return result[0] as TripSubscription
+  } catch (error) {
+    console.error("Error creating trip subscription:", error)
+    throw error
+  }
+}
+
+export async function getTripSubscription(tripId: number, userId: number) {
+  try {
+    const result = await sql`
+      SELECT * FROM trip_subscriptions 
+      WHERE trip_id = ${tripId} AND user_id = ${userId} AND is_active = true
+    `
+    return result[0] as TripSubscription | undefined
+  } catch (error) {
+    console.error("Error getting trip subscription:", error)
+    throw error
+  }
+}
+
+export async function deactivateTripSubscription(tripId: number, userId: number) {
+  try {
+    const result = await sql`
+      UPDATE trip_subscriptions 
+      SET is_active = false, updated_at = CURRENT_TIMESTAMP
+      WHERE trip_id = ${tripId} AND user_id = ${userId}
+      RETURNING *
+    `
+    return result[0] as TripSubscription | undefined
+  } catch (error) {
+    console.error("Error deactivating trip subscription:", error)
     throw error
   }
 }
