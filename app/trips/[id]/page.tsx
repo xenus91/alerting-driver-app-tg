@@ -112,7 +112,7 @@ export default function TripDetailPage() {
   const [filteredDrivers, setFilteredDrivers] = useState<GroupedDriver[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [resendingPhone, setResendingPhone] = useState<string | null>(null)
-  const [isDeleting, setIsDeleting] = useState(isDeleting)
+  const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [correctionModal, setCorrectionModal] = useState<{
     isOpen: boolean
