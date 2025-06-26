@@ -2,24 +2,24 @@
   "version": 2,
   "functions": {
     "app/api/webhook/route.ts": {
-      "maxDuration": 30
+      "maxDuration": 10
     },
     "app/api/telegram-webhook/route.ts": {
-      "maxDuration": 30
+      "maxDuration": 10
     },
     "app/webhook/telegram/route.ts": {
-      "maxDuration": 30
+      "maxDuration": 10
     },
     "pages/api/tg-webhook.ts": {
-      "maxDuration": 30
+      "maxDuration": 10
     },
     "app/api/send-messages/route.ts": {
       "maxDuration": 30
     },
     "app/api/upload/route.ts": {
-      "maxDuration": 30
+      "maxDuration": 15
     },
-    "app/api/**/*.ts": {
+    "app/api/notifications/send/route.ts": {
       "maxDuration": 30
     }
   },
@@ -63,12 +63,6 @@
     {
       "source": "/api/(.*)",
       "destination": "/api/$1"
-    }
-  ],
-  "crons": [
-    {
-      "path": "/api/cron/subscription-notifications",
-      "schedule": "*/5 * * * *"
     }
   ]
 }

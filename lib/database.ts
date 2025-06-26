@@ -88,16 +88,14 @@ export interface UserPendingAction {
   created_at: string
 }
 
-// Добавляем интерфейс для подписок
 export interface TripSubscription {
   id: number
   trip_id: number
   user_id: number
   interval_minutes: number
+  last_notification_at?: string
   is_active: boolean
   created_at: string
-  updated_at?: string
-  last_sent_at?: string
 }
 
 export async function createUser(telegramId: number, phone: string, name: string) {
@@ -854,18 +852,18 @@ export async function deleteTrip(tripId: number) {
   }
 }
 
-// Добавляем функции для работы с подписками в конец файла
 export async function createTripSubscription(tripId: number, userId: number, intervalMinutes: number) {
   try {
     const result = await sql`
-      INSERT INTO trip_subscriptions (trip_id, user_id, interval_minutes, is_active, created_at)
-      VALUES (${tripId}, ${userId}, ${intervalMinutes}, true, CURRENT_TIMESTAMP)
+      INSERT INTO trip_subscriptions (trip_id, user_id, interval_minutes, is_active)
+      VALUES (${tripId}, ${userId}, ${intervalMinutes}, true)
       ON CONFLICT (trip_id, user_id) DO UPDATE SET
         interval_minutes = EXCLUDED.interval_minutes,
         is_active = true,
-        updated_at = CURRENT_TIMESTAMP
+        created_at = CURRENT_TIMESTAMP
       RETURNING *
     `
+    console.log(`Created trip subscription for trip ${tripId}, user ${userId}`)
     return result[0] as TripSubscription
   } catch (error) {
     console.error("Error creating trip subscription:", error)
@@ -886,17 +884,85 @@ export async function getTripSubscription(tripId: number, userId: number) {
   }
 }
 
-export async function deactivateTripSubscription(tripId: number, userId: number) {
+export async function deleteTripSubscription(tripId: number, userId: number) {
+  try {
+    await sql`
+      UPDATE trip_subscriptions 
+      SET is_active = false 
+      WHERE trip_id = ${tripId} AND user_id = ${userId}
+    `
+    console.log(`Deleted trip subscription for trip ${tripId}, user ${userId}`)
+  } catch (error) {
+    console.error("Error deleting trip subscription:", error)
+    throw error
+  }
+}
+
+export async function getActiveSubscriptions() {
   try {
     const result = await sql`
-      UPDATE trip_subscriptions 
-      SET is_active = false, updated_at = CURRENT_TIMESTAMP
-      WHERE trip_id = ${tripId} AND user_id = ${userId}
-      RETURNING *
+      SELECT ts.*, u.telegram_id, u.first_name, u.full_name
+      FROM trip_subscriptions ts
+      JOIN users u ON ts.user_id = u.id
+      WHERE ts.is_active = true
+      ORDER BY ts.trip_id, ts.created_at
     `
-    return result[0] as TripSubscription | undefined
+    return result as (TripSubscription & { telegram_id: number; first_name?: string; full_name?: string })[]
   } catch (error) {
-    console.error("Error deactivating trip subscription:", error)
+    console.error("Error getting active subscriptions:", error)
+    throw error
+  }
+}
+
+export async function updateSubscriptionLastNotification(subscriptionId: number) {
+  try {
+    await sql`
+      UPDATE trip_subscriptions 
+      SET last_notification_at = CURRENT_TIMESTAMP 
+      WHERE id = ${subscriptionId}
+    `
+  } catch (error) {
+    console.error("Error updating subscription last notification:", error)
+    throw error
+  }
+}
+
+export async function getSubscriptionsDueForNotification() {
+  try {
+    const result = await sql`
+      SELECT ts.*, u.telegram_id, u.first_name, u.full_name,
+             t.status as trip_status,
+             COUNT(tm.id) as total_messages,
+             COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
+             COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
+             COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
+             COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses
+      FROM trip_subscriptions ts
+      JOIN users u ON ts.user_id = u.id
+      JOIN trips t ON ts.trip_id = t.id
+      LEFT JOIN trip_messages tm ON t.id = tm.trip_id
+      WHERE ts.is_active = true
+        AND t.status = 'active'
+        AND (
+          ts.last_notification_at IS NULL 
+          OR ts.last_notification_at < NOW() - INTERVAL '1 minute' * ts.interval_minutes
+        )
+      GROUP BY ts.id, u.telegram_id, u.first_name, u.full_name, t.status
+      HAVING COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) > 0
+    `
+    return result as (TripSubscription & {
+      telegram_id: number
+      first_name?: string
+      full_name?: string
+      trip_status: string
+      total_messages: string
+      sent_messages: string
+      confirmed_responses: string
+      rejected_responses: string
+      pending_responses: string
+    })[]
+  } catch (error) {
+    console.error("Error getting subscriptions due for notification:", error)
     throw error
   }
 }

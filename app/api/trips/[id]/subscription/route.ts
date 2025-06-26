@@ -1,7 +1,5 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
-
-const sql = neon(process.env.DATABASE_URL!)
+import { getTripSubscription } from "@/lib/database"
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
@@ -12,20 +10,17 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
     }
 
     // Получаем текущего пользователя из сессии
-    // Пока используем заглушку - в реальности нужно получать из сессии
-    const userId = 1 // TODO: получать из сессии
+    // В реальном приложении здесь должна быть проверка авторизации
+    const userId = 1 // Временно используем фиксированный ID
 
-    const result = await sql`
-      SELECT * FROM trip_subscriptions 
-      WHERE trip_id = ${tripId} AND user_id = ${userId} AND is_active = true
-    `
+    const subscription = await getTripSubscription(tripId, userId)
 
     return NextResponse.json({
       success: true,
-      subscription: result[0] || null,
+      subscription: subscription || null,
     })
   } catch (error) {
     console.error("Error getting subscription:", error)
-    return NextResponse.json({ success: false, error: "Failed to get subscription" }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Internal server error" }, { status: 500 })
   }
 }
