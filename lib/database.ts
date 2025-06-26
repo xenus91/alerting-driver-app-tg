@@ -442,13 +442,19 @@ export async function getTripPoints(tripId: number) {
   }
 }
 
-export async function updateMessageStatus(messageId: number, status: string, errorMessage?: string) {
+export async function updateMessageStatus(
+  messageId: number,
+  status: string,
+  errorMessage?: string,
+  telegramMessageId?: number,
+) {
   try {
     const result = await sql`
       UPDATE trip_messages 
       SET status = ${status}, 
           error_message = ${errorMessage || null},
-          sent_at = ${status === "sent" ? new Date().toISOString() : null}
+          sent_at = ${status === "sent" ? new Date().toISOString() : null},
+          telegram_message_id = ${telegramMessageId || null}
       WHERE id = ${messageId}
       RETURNING *
     `

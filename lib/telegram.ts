@@ -648,3 +648,31 @@ export async function setWebhook(webhookUrl: string) {
     throw error
   }
 }
+
+export async function deleteMessage(chatId: number, messageId: number) {
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        message_id: messageId,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      console.warn(`Failed to delete message ${messageId} in chat ${chatId}:`, data.description)
+      return false
+    }
+
+    console.log(`Successfully deleted message ${messageId} in chat ${chatId}`)
+    return true
+  } catch (error) {
+    console.error("Error deleting Telegram message:", error)
+    return false
+  }
+}

@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
+import { sendMultipleTripMessageWithButtons, deleteMessage } from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -43,6 +43,26 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         },
         { status: 400 },
       )
+    }
+
+    // Получаем все предыдущие telegram_message_id для удаления
+    const previousMessagesResult = await sql`
+      SELECT telegram_message_id
+      FROM trip_messages
+      WHERE id = ANY(${messageIds}) AND telegram_message_id IS NOT NULL
+    `
+
+    // Удаляем все предыдущие сообщения
+    for (const prevMsg of previousMessagesResult) {
+      if (prevMsg.telegram_message_id) {
+        console.log(`Deleting previous message ${prevMsg.telegram_message_id} for chat ${user.telegram_id}`)
+        try {
+          await deleteMessage(user.telegram_id, prevMsg.telegram_message_id)
+        } catch (deleteError) {
+          console.warn(`Failed to delete message ${prevMsg.telegram_message_id}:`, deleteError)
+          // Продолжаем выполнение даже если не удалось удалить сообщение
+        }
+      }
     }
 
     // Получаем все сообщения водителя для этой рассылки
@@ -155,7 +175,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             sent_at = ${new Date().toISOString()},
             error_message = NULL,
             response_status = 'pending',
-            response_at = NULL
+            response_at = NULL,
+            telegram_message_id = ${telegramResult.message_id}
         WHERE id = ANY(${messageIds})
         RETURNING *
       `
@@ -166,7 +187,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         UPDATE trip_messages 
         SET status = 'sent', 
             sent_at = ${new Date().toISOString()},
-            error_message = NULL
+            error_message = NULL,
+            telegram_message_id = ${telegramResult.message_id}
         WHERE id = ANY(${messageIds})
         RETURNING *
       `
@@ -181,6 +203,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       messageIds: messageIds,
       updatedMessages: updateResult.length,
       isCorrection: isCorrection,
+      telegramMessageId: telegramResult.message_id,
     })
   } catch (error) {
     console.error("Error resending combined message:", error)

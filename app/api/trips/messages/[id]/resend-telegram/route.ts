@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendTripMessageWithButtons } from "@/lib/telegram"
+import { sendTripMessageWithButtons, deleteMessage } from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -13,7 +13,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Получаем информацию о сообщении
     const messageResult = await sql`
-      SELECT tm.*, u.telegram_id, u.first_name, u.full_name
+      SELECT tm.*, u.telegram_id, u.first_name, u.full_name, tm.telegram_message_id
       FROM trip_messages tm
       JOIN users u ON tm.phone = u.phone
       WHERE tm.id = ${messageId}
@@ -40,6 +40,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         },
         { status: 400 },
       )
+    }
+
+    // Удаляем предыдущее сообщение если оно есть
+    if (message.telegram_message_id) {
+      console.log(`Deleting previous message ${message.telegram_message_id} for chat ${message.telegram_id}`)
+      await deleteMessage(message.telegram_id, message.telegram_message_id)
     }
 
     // Получаем точки для рейса с координатами
@@ -115,7 +121,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       UPDATE trip_messages 
       SET status = 'sent', 
           sent_at = ${new Date().toISOString()},
-          error_message = NULL
+          error_message = NULL,
+          telegram_message_id = ${telegramResult.message_id}
       WHERE id = ${messageId}
       RETURNING *
     `
