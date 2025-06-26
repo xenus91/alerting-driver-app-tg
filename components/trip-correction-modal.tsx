@@ -1,5 +1,7 @@
 "use client"
 
+import type React from "react"
+
 import { useState, useEffect } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -279,10 +281,15 @@ export function TripCorrectionModal({
 
   // Функция для управления состоянием поиска точек
   const setPointSearchState = (key: string, state: { open?: boolean; search?: string }) => {
-    setPointSearchStates((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], ...state },
-    }))
+    console.log(`setPointSearchState ${key}:`, state)
+    setPointSearchStates((prev) => {
+      const newState = {
+        ...prev,
+        [key]: { ...prev[key], ...state },
+      }
+      console.log(`New pointSearchStates:`, newState)
+      return newState
+    })
   }
 
   // Функция фильтрации точек
@@ -310,8 +317,37 @@ export function TripCorrectionModal({
     const filteredPoints = filterPoints(searchState.search)
     const selectedPoint = availablePoints.find((p) => p.point_id === value)
 
+    console.log(`PointSelector ${pointKey}:`, {
+      searchState,
+      selectedPoint,
+      filteredPointsCount: filteredPoints.length,
+    })
+
+    const handleOpenChange = (open: boolean) => {
+      console.log(`${pointKey} - handleOpenChange:`, open)
+      if (open) {
+        // При открытии сбрасываем поиск
+        setPointSearchState(pointKey, { open: true, search: "" })
+      } else {
+        // При закрытии также сбрасываем поиск
+        setPointSearchState(pointKey, { open: false, search: "" })
+      }
+    }
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newSearch = e.target.value
+      console.log(`${pointKey} - handleSearchChange:`, newSearch)
+      setPointSearchState(pointKey, { search: newSearch })
+    }
+
+    const handlePointSelect = (pointId: string) => {
+      console.log(`${pointKey} - handlePointSelect:`, pointId)
+      onChange(pointId)
+      setPointSearchState(pointKey, { open: false, search: "" })
+    }
+
     return (
-      <Popover open={searchState.open} onOpenChange={(open) => setPointSearchState(pointKey, { open })}>
+      <Popover open={searchState.open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
           <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
             {selectedPoint ? (
@@ -332,12 +368,22 @@ export function TripCorrectionModal({
               className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
               placeholder="Поиск по коду или названию..."
               value={searchState.search}
-              onChange={(e) => setPointSearchState(pointKey, { search: e.target.value })}
+              onChange={handleSearchChange}
+              autoFocus
+              onFocus={(e) => {
+                console.log(`${pointKey} - input onFocus, value:`, e.target.value)
+                // Не выделяем текст, ставим курсор в конец
+                setTimeout(() => {
+                  e.target.setSelectionRange(e.target.value.length, e.target.value.length)
+                }, 0)
+              }}
             />
           </div>
           <div className="max-h-[200px] overflow-auto">
             {filteredPoints.length === 0 ? (
-              <div className="py-6 text-center text-sm">Точки не найдены.</div>
+              <div className="py-6 text-center text-sm">
+                {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
+              </div>
             ) : (
               filteredPoints.map((point) => (
                 <div
@@ -346,10 +392,7 @@ export function TripCorrectionModal({
                     "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                     value === point.point_id && "bg-accent text-accent-foreground",
                   )}
-                  onClick={() => {
-                    onChange(point.point_id)
-                    setPointSearchState(pointKey, { open: false, search: "" })
-                  }}
+                  onClick={() => handlePointSelect(point.point_id)}
                 >
                   <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
                   <div className="flex flex-col">
