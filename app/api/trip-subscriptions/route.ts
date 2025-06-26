@@ -63,7 +63,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    // Проверяем, существует ли уже подписка
+    // Проверяем, существует ли уже активная подписка
     const existingSubscription = await sql`
       SELECT id FROM trip_subscriptions 
       WHERE trip_id = ${trip_id} AND user_telegram_id = ${user_telegram_id} AND is_active = true
@@ -71,6 +71,20 @@ export async function POST(request: NextRequest) {
 
     if (existingSubscription.length > 0) {
       return NextResponse.json({ success: false, error: "Subscription already exists" }, { status: 400 })
+    }
+
+    // Проверяем, что рассылка существует и не завершена
+    const trip = await sql`
+      SELECT id, status FROM trips 
+      WHERE id = ${trip_id}
+    `
+
+    if (trip.length === 0) {
+      return NextResponse.json({ success: false, error: "Trip not found" }, { status: 404 })
+    }
+
+    if (trip[0].status === "completed") {
+      return NextResponse.json({ success: false, error: "Cannot subscribe to completed trip" }, { status: 400 })
     }
 
     // Создаем новую подписку
@@ -102,10 +116,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: "user_telegram_id and trip_id are required" }, { status: 400 })
     }
 
-    // Деактивируем подписку
+    // Удаляем подписку полностью
     const result = await sql`
-      UPDATE trip_subscriptions 
-      SET is_active = false
+      DELETE FROM trip_subscriptions 
       WHERE user_telegram_id = ${userTelegramId} AND trip_id = ${Number.parseInt(tripId)} AND is_active = true
       RETURNING *
     `
@@ -114,11 +127,12 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Subscription not found" }, { status: 404 })
     }
 
-    console.log(`Deactivated subscription for trip ${tripId}, user ${userTelegramId}`)
+    console.log(`Deleted subscription for trip ${tripId}, user ${userTelegramId}`)
 
     return NextResponse.json({
       success: true,
-      message: "Subscription deactivated",
+      message: "Subscription deleted",
+      deleted: result[0],
     })
   } catch (error) {
     console.error("Error deleting subscription:", error)

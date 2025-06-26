@@ -181,24 +181,6 @@ export default function TripsPage() {
     getCurrentUser()
   }, [])
 
-  useEffect(() => {
-    // Автоматическая проверка подписок при загрузке страницы
-    const autoCheckSubscriptions = async () => {
-      try {
-        await fetch("/api/auto-check-subscriptions")
-      } catch (error) {
-        console.error("Error in auto check subscriptions:", error)
-      }
-    }
-
-    autoCheckSubscriptions()
-
-    // Повторяем проверку каждые 3 минуты
-    const interval = setInterval(autoCheckSubscriptions, 3 * 60 * 1000)
-
-    return () => clearInterval(interval)
-  }, [])
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("ru-RU")
   }
@@ -391,16 +373,29 @@ export default function TripsPage() {
   const handleCheckSubscriptions = async () => {
     setCheckingSubscriptions(true)
     try {
-      const response = await fetch("/api/auto-check-subscriptions")
+      const response = await fetch("/api/cron/check-subscriptions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET_KEY || "test-secret"}`,
+          "Content-Type": "application/json",
+        },
+      })
       const data = await response.json()
       if (data.success) {
         toast({
           title: "Проверка подписок",
           description: `Проверено: ${data.checked}, отправлено: ${data.sent} уведомлений`,
         })
+      } else {
+        throw new Error(data.error)
       }
     } catch (error) {
       console.error("Error checking subscriptions:", error)
+      toast({
+        title: "Ошибка",
+        description: "Не удалось проверить подписки",
+        variant: "destructive",
+      })
     } finally {
       setCheckingSubscriptions(false)
     }
