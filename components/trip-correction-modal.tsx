@@ -1,8 +1,7 @@
 "use client"
 
 import type React from "react"
-
-import { useState, useEffect } from "react"
+import { useState, useEffect, useCallback, memo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -36,6 +35,136 @@ interface TripCorrectionModalProps {
   driverName: string
   onCorrectionSent: () => void
 }
+
+// Мемоизированный компонент для выбора точки с поиском
+const PointSelector = memo(
+  ({
+    value,
+    onChange,
+    pointKey,
+    availablePoints,
+    searchState,
+    onSearchStateChange,
+  }: {
+    value: string
+    onChange: (value: string) => void
+    pointKey: string
+    availablePoints: Array<{ point_id: string; point_name: string }>
+    searchState: { open: boolean; search: string }
+    onSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
+  }) => {
+    // Функция фильтрации точек
+    const filterPoints = useCallback(
+      (searchTerm: string) => {
+        if (!searchTerm) return availablePoints
+
+        const lowerSearch = searchTerm.toLowerCase()
+        return availablePoints.filter(
+          (point) =>
+            point.point_id.toLowerCase().includes(lowerSearch) || point.point_name.toLowerCase().includes(lowerSearch),
+        )
+      },
+      [availablePoints],
+    )
+
+    const filteredPoints = filterPoints(searchState.search)
+    const selectedPoint = availablePoints.find((p) => p.point_id === value)
+
+    console.log(`PointSelector ${pointKey}:`, {
+      searchState,
+      selectedPoint,
+      filteredPointsCount: filteredPoints.length,
+    })
+
+    const handleOpenChange = useCallback(
+      (open: boolean) => {
+        console.log(`${pointKey} - handleOpenChange:`, open)
+        if (open) {
+          // При открытии сбрасываем поиск
+          onSearchStateChange(pointKey, { open: true, search: "" })
+        } else {
+          // При закрытии также сбрасываем поиск
+          onSearchStateChange(pointKey, { open: false, search: "" })
+        }
+      },
+      [pointKey, onSearchStateChange],
+    )
+
+    const handleSearchChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newSearch = e.target.value
+        console.log(`${pointKey} - handleSearchChange:`, newSearch)
+        onSearchStateChange(pointKey, { search: newSearch })
+      },
+      [pointKey, onSearchStateChange],
+    )
+
+    const handlePointSelect = useCallback(
+      (pointId: string) => {
+        console.log(`${pointKey} - handlePointSelect:`, pointId)
+        onChange(pointId)
+        onSearchStateChange(pointKey, { open: false, search: "" })
+      },
+      [pointKey, onChange, onSearchStateChange],
+    )
+
+    return (
+      <Popover open={searchState.open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
+            {selectedPoint ? (
+              <div className="flex flex-col items-start">
+                <span className="font-medium">{selectedPoint.point_id}</span>
+                <span className="text-xs text-muted-foreground">{selectedPoint.point_name}</span>
+              </div>
+            ) : (
+              "Выберите точку..."
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Поиск по коду или названию..."
+              value={searchState.search}
+              onChange={handleSearchChange}
+              autoFocus
+            />
+          </div>
+          <div className="max-h-[200px] overflow-auto">
+            {filteredPoints.length === 0 ? (
+              <div className="py-6 text-center text-sm">
+                {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
+              </div>
+            ) : (
+              filteredPoints.map((point) => (
+                <div
+                  key={point.point_id}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    value === point.point_id && "bg-accent text-accent-foreground",
+                  )}
+                  onClick={() => handlePointSelect(point.point_id)}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
+                  <div className="flex flex-col">
+                    <span className="font-medium">{point.point_id}</span>
+                    <span className="text-sm text-muted-foreground">{point.point_name}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    )
+  },
+)
+
+PointSelector.displayName = "PointSelector"
 
 export function TripCorrectionModal({
   isOpen,
@@ -100,11 +229,13 @@ export function TripCorrectionModal({
     }
   }
 
-  const updateCorrection = (index: number, field: keyof CorrectionData, value: any) => {
-    const updated = [...corrections]
-    updated[index] = { ...updated[index], [field]: value }
-    setCorrections(updated)
-  }
+  const updateCorrection = useCallback((index: number, field: keyof CorrectionData, value: any) => {
+    setCorrections((prev) => {
+      const updated = [...prev]
+      updated[index] = { ...updated[index], [field]: value }
+      return updated
+    })
+  }, [])
 
   const addNewPoint = (tripIdentifier: string) => {
     const tripCorrections = corrections.filter((c) => c.trip_identifier === tripIdentifier)
@@ -279,8 +410,8 @@ export function TripCorrectionModal({
     return `${tripIdentifier}-${pointType}-${pointNum}`
   }
 
-  // Функция для управления состоянием поиска точек
-  const setPointSearchState = (key: string, state: { open?: boolean; search?: string }) => {
+  // Мемоизированная функция для управления состоянием поиска точек
+  const handleSearchStateChange = useCallback((key: string, state: { open?: boolean; search?: string }) => {
     console.log(`setPointSearchState ${key}:`, state)
     setPointSearchStates((prev) => {
       const newState = {
@@ -290,123 +421,7 @@ export function TripCorrectionModal({
       console.log(`New pointSearchStates:`, newState)
       return newState
     })
-  }
-
-  // Функция фильтрации точек
-  const filterPoints = (searchTerm: string) => {
-    if (!searchTerm) return availablePoints
-
-    const lowerSearch = searchTerm.toLowerCase()
-    return availablePoints.filter(
-      (point) =>
-        point.point_id.toLowerCase().includes(lowerSearch) || point.point_name.toLowerCase().includes(lowerSearch),
-    )
-  }
-
-  // Компонент для выбора точки с поиском
-  const PointSelector = ({
-    value,
-    onChange,
-    pointKey,
-  }: {
-    value: string
-    onChange: (value: string) => void
-    pointKey: string
-  }) => {
-    const searchState = pointSearchStates[pointKey] || { open: false, search: "" }
-    const filteredPoints = filterPoints(searchState.search)
-    const selectedPoint = availablePoints.find((p) => p.point_id === value)
-
-    console.log(`PointSelector ${pointKey}:`, {
-      searchState,
-      selectedPoint,
-      filteredPointsCount: filteredPoints.length,
-    })
-
-    const handleOpenChange = (open: boolean) => {
-      console.log(`${pointKey} - handleOpenChange:`, open)
-      if (open) {
-        // При открытии сбрасываем поиск
-        setPointSearchState(pointKey, { open: true, search: "" })
-      } else {
-        // При закрытии также сбрасываем поиск
-        setPointSearchState(pointKey, { open: false, search: "" })
-      }
-    }
-
-    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-      const newSearch = e.target.value
-      console.log(`${pointKey} - handleSearchChange:`, newSearch)
-      setPointSearchState(pointKey, { search: newSearch })
-    }
-
-    const handlePointSelect = (pointId: string) => {
-      console.log(`${pointKey} - handlePointSelect:`, pointId)
-      onChange(pointId)
-      setPointSearchState(pointKey, { open: false, search: "" })
-    }
-
-    return (
-      <Popover open={searchState.open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
-            {selectedPoint ? (
-              <div className="flex flex-col items-start">
-                <span className="font-medium">{selectedPoint.point_id}</span>
-                <span className="text-xs text-muted-foreground">{selectedPoint.point_name}</span>
-              </div>
-            ) : (
-              "Выберите точку..."
-            )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0">
-          <div className="flex items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-            <input
-              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Поиск по коду или названию..."
-              value={searchState.search}
-              onChange={handleSearchChange}
-              autoFocus
-              onFocus={(e) => {
-                console.log(`${pointKey} - input onFocus, value:`, e.target.value)
-                // Не выделяем текст, ставим курсор в конец
-                setTimeout(() => {
-                  e.target.setSelectionRange(e.target.value.length, e.target.value.length)
-                }, 0)
-              }}
-            />
-          </div>
-          <div className="max-h-[200px] overflow-auto">
-            {filteredPoints.length === 0 ? (
-              <div className="py-6 text-center text-sm">
-                {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
-              </div>
-            ) : (
-              filteredPoints.map((point) => (
-                <div
-                  key={point.point_id}
-                  className={cn(
-                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                    value === point.point_id && "bg-accent text-accent-foreground",
-                  )}
-                  onClick={() => handlePointSelect(point.point_id)}
-                >
-                  <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
-                  <div className="flex flex-col">
-                    <span className="font-medium">{point.point_id}</span>
-                    <span className="text-sm text-muted-foreground">{point.point_name}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
-    )
-  }
+  }, [])
 
   // Группируем корректировки по trip_identifier
   const groupedCorrections = corrections.reduce(
@@ -617,6 +632,9 @@ export function TripCorrectionModal({
                               value={correction.point_id}
                               onChange={(value) => updateCorrection(globalIndex, "point_id", value)}
                               pointKey={pointKey}
+                              availablePoints={availablePoints}
+                              searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
+                              onSearchStateChange={handleSearchStateChange}
                             />
                           </TableCell>
                           <TableCell>
