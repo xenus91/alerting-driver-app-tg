@@ -18,11 +18,9 @@ import {
   Trash2,
   AlertTriangle,
   Zap,
-  Bell,
-  BellOff,
 } from "lucide-react"
 import { QuickTripForm } from "@/components/quick-trip-form"
-import { TripSubscriptionModal } from "@/components/trip-subscription-modal"
+import { TripSubscriptionButton } from "@/components/trip-subscription-button"
 
 interface TripData {
   id: number
@@ -47,28 +45,18 @@ interface TripError {
   user_name?: string
 }
 
-interface TripSubscription {
-  trip_id: number
-  interval_minutes: number
-  is_active: boolean
-}
-
 export default function TripsPage() {
   const [trips, setTrips] = useState<TripData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
   const [showQuickTripForm, setShowQuickTripForm] = useState(false)
+  const [currentUser, setCurrentUser] = useState<{ telegram_id?: number } | null>(null)
 
   // Состояния для диалога ошибок
   const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
   const [tripErrors, setTripErrors] = useState<TripError[]>([])
   const [loadingErrors, setLoadingErrors] = useState(false)
-
-  // Состояния для подписок
-  const [subscriptions, setSubscriptions] = useState<Map<number, TripSubscription>>(new Map())
-  const [showSubscriptionModal, setShowSubscriptionModal] = useState<number | null>(null)
-  const [subscribingTripId, setSubscribingTripId] = useState<number | null>(null)
 
   const fetchTrips = async () => {
     setIsLoading(true)
@@ -77,36 +65,11 @@ export default function TripsPage() {
       const data = await response.json()
       if (data.success) {
         setTrips(data.trips)
-        // Загружаем подписки для каждой рассылки
-        await fetchSubscriptions(data.trips)
       }
     } catch (error) {
       console.error("Error fetching trips:", error)
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  const fetchSubscriptions = async (trips: TripData[]) => {
-    try {
-      const subscriptionPromises = trips.map(async (trip) => {
-        const response = await fetch(`/api/trips/${trip.id}/subscription`)
-        const data = await response.json()
-        return { tripId: trip.id, subscription: data.subscription }
-      })
-
-      const results = await Promise.all(subscriptionPromises)
-      const newSubscriptions = new Map()
-
-      results.forEach(({ tripId, subscription }) => {
-        if (subscription) {
-          newSubscriptions.set(tripId, subscription)
-        }
-      })
-
-      setSubscriptions(newSubscriptions)
-    } catch (error) {
-      console.error("Error fetching subscriptions:", error)
     }
   }
 
@@ -128,46 +91,6 @@ export default function TripsPage() {
   const handleShowErrors = (tripId: number) => {
     setShowErrorsDialog(tripId)
     fetchTripErrors(tripId)
-  }
-
-  const handleSubscribe = (tripId: number) => {
-    setShowSubscriptionModal(tripId)
-  }
-
-  const handleUnsubscribe = async (tripId: number) => {
-    setSubscribingTripId(tripId)
-    try {
-      const response = await fetch(`/api/trips/${tripId}/unsubscribe`, {
-        method: "DELETE",
-      })
-
-      const data = await response.json()
-      if (data.success) {
-        // Удаляем подписку из состояния
-        const newSubscriptions = new Map(subscriptions)
-        newSubscriptions.delete(tripId)
-        setSubscriptions(newSubscriptions)
-      } else {
-        alert("Ошибка при отписке: " + data.error)
-      }
-    } catch (error) {
-      console.error("Error unsubscribing:", error)
-      alert("Ошибка при отписке")
-    } finally {
-      setSubscribingTripId(null)
-    }
-  }
-
-  const handleSubscriptionSaved = (tripId: number, intervalMinutes: number) => {
-    // Добавляем подписку в состояние
-    const newSubscriptions = new Map(subscriptions)
-    newSubscriptions.set(tripId, {
-      trip_id: tripId,
-      interval_minutes: intervalMinutes,
-      is_active: true,
-    })
-    setSubscriptions(newSubscriptions)
-    setShowSubscriptionModal(null)
   }
 
   const formatPhone = (phone: string) => {
@@ -236,6 +159,22 @@ export default function TripsPage() {
 
   useEffect(() => {
     fetchTrips()
+  }, [])
+
+  useEffect(() => {
+    const getCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/auth/me")
+        const data = await response.json()
+        if (data.success) {
+          setCurrentUser(data.user)
+        }
+      } catch (error) {
+        console.error("Error getting current user:", error)
+      }
+    }
+
+    getCurrentUser()
   }, [])
 
   const formatDate = (dateString: string) => {
@@ -404,27 +343,6 @@ export default function TripsPage() {
     return sentNum > 0 && (totalResponses === sentNum || trip.status === "completed" || errorNum > 0)
   }
 
-  // Проверяем можно ли подписаться на рассылку
-  const canSubscribeToTrip = (trip: TripData) => {
-    const confirmedNum = Number(trip.confirmed_responses)
-    const rejectedNum = Number(trip.rejected_responses)
-    const sentNum = Number(trip.sent_messages)
-    const totalResponses = confirmedNum + rejectedNum
-
-    // Можно подписаться только на активные рассылки с отправленными сообщениями
-    return sentNum > 0 && totalResponses < sentNum
-  }
-
-  const formatInterval = (minutes: number) => {
-    if (minutes < 60) {
-      return `${minutes}м`
-    } else {
-      const hours = Math.floor(minutes / 60)
-      const remainingMinutes = minutes % 60
-      return remainingMinutes > 0 ? `${hours}ч ${remainingMinutes}м` : `${hours}ч`
-    }
-  }
-
   const handleDeleteTrip = async (tripId: number) => {
     setDeletingTripId(tripId)
     try {
@@ -494,7 +412,6 @@ export default function TripsPage() {
               trip.rejected_responses,
               trip.sent_messages,
             )
-            const subscription = subscriptions.get(trip.id)
 
             return (
               <Card key={trip.id} className={`w-full ${getCardBackgroundColor(trip)}`}>
@@ -524,41 +441,17 @@ export default function TripsPage() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      {/* Кнопка подписки/отписки */}
-                      {subscription ? (
-                        <div className="flex items-center gap-2">
-                          <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                            <Bell className="h-3 w-3 mr-1" />
-                            {formatInterval(subscription.interval_minutes)}
-                          </Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => handleUnsubscribe(trip.id)}
-                            disabled={subscribingTripId === trip.id}
-                          >
-                            <BellOff className="h-4 w-4 mr-1" />
-                            {subscribingTripId === trip.id ? "..." : "Отписаться"}
-                          </Button>
-                        </div>
-                      ) : canSubscribeToTrip(trip) ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleSubscribe(trip.id)}
-                          className="text-blue-600 border-blue-200 hover:bg-blue-50"
-                        >
-                          <Bell className="h-4 w-4 mr-1" />
-                          Подписаться
-                        </Button>
-                      ) : null}
-
                       <Button asChild variant="outline">
                         <Link href={`/trips/${trip.id}`}>
                           <Eye className="h-4 w-4 mr-2" />
                           Детали
                         </Link>
                       </Button>
+                      <TripSubscriptionButton
+                        tripId={trip.id}
+                        userTelegramId={currentUser?.telegram_id}
+                        className="mr-2"
+                      />
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <Button variant="ghost" size="sm">
@@ -807,7 +700,6 @@ export default function TripsPage() {
           </div>
         </div>
       )}
-
       {/* Модальное окно быстрой рассылки */}
       <QuickTripForm
         isOpen={showQuickTripForm}
@@ -817,16 +709,6 @@ export default function TripsPage() {
           setShowQuickTripForm(false)
         }}
       />
-
-      {/* Модальное окно подписки */}
-      {showSubscriptionModal && (
-        <TripSubscriptionModal
-          tripId={showSubscriptionModal}
-          isOpen={true}
-          onClose={() => setShowSubscriptionModal(null)}
-          onSubscriptionSaved={handleSubscriptionSaved}
-        />
-      )}
     </div>
   )
 }

@@ -1,45 +1,157 @@
-import { Bell } from "lucide-react"
+"use client"
 
-interface NavItem {
-  title: string
-  href: string
-  icon: any // Consider using a more specific type for icons
+import { useState, useEffect } from "react"
+import Link from "next/link"
+import { usePathname } from "next/navigation"
+import { Button } from "@/components/ui/button"
+import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet"
+import { cn } from "@/lib/utils"
+import {
+  Menu,
+  Home,
+  Upload,
+  MessageSquare,
+  Users,
+  Bot,
+  FileSpreadsheet,
+  MapPin,
+  ChevronLeft,
+  ChevronRight,
+  Key,
+} from "lucide-react"
+
+interface CurrentUser {
+  role: string
+  carpark: string
 }
 
-const Sidebar = () => {
-  const navItems: NavItem[] = [
-    {
-      title: "Главная",
-      href: "/",
-      icon: null, // Replace with an actual icon if available
-    },
-    {
-      title: "Профиль",
-      href: "/profile",
-      icon: null, // Replace with an actual icon if available
-    },
-    {
-      title: "Уведомления",
-      href: "/notifications",
-      icon: Bell,
-    },
-  ]
+const menuItems = [
+  {
+    title: "Главная",
+    href: "/",
+    icon: Home,
+    roles: ["admin", "operator"], // Доступно всем
+  },
+  {
+    title: "Загрузка файлов",
+    href: "/upload",
+    icon: Upload,
+    roles: ["admin", "operator"],
+  },
+  {
+    title: "Рассылки",
+    href: "/trips",
+    icon: MessageSquare,
+    roles: ["admin", "operator"],
+  },
+  {
+    title: "Пользователи",
+    href: "/users",
+    icon: Users,
+    roles: ["admin", "operator"],
+  },
+  {
+    title: "Пункты",
+    href: "/points",
+    icon: MapPin,
+    roles: ["admin", "operator"],
+  },
+  {
+    title: "API Ключи",
+    href: "/api-keys",
+    icon: Key,
+    roles: ["admin"], // Только для администраторов
+  },
+  {
+    title: "Настройки бота",
+    href: "/bot-settings",
+    icon: Bot,
+    roles: ["admin"], // Только для администраторов
+  },
+]
+
+interface SidebarProps {
+  className?: string
+  collapsed?: boolean
+  onToggle?: () => void
+}
+
+export function Sidebar({ className, collapsed = false, onToggle }: SidebarProps) {
+  const pathname = usePathname()
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null)
+
+  useEffect(() => {
+    const fetchCurrentUser = async () => {
+      try {
+        const response = await fetch("/api/auth/me")
+        const data = await response.json()
+        if (data.success) {
+          setCurrentUser({ role: data.user.role, carpark: data.user.carpark })
+        }
+      } catch (error) {
+        console.error("Error fetching current user:", error)
+      }
+    }
+
+    fetchCurrentUser()
+  }, [])
+
+  // Фильтруем пункты меню по роли пользователя
+  const filteredMenuItems = menuItems.filter((item) => !currentUser || item.roles.includes(currentUser.role))
 
   return (
-    <div className="w-64 bg-gray-100 h-screen p-4">
-      <h1 className="text-2xl font-bold mb-4">Меню</h1>
-      <ul>
-        {navItems.map((item) => (
-          <li key={item.title} className="mb-2">
-            <a href={item.href} className="block p-2 rounded hover:bg-gray-200">
-              {item.icon && <item.icon className="inline-block mr-2" />}
-              {item.title}
-            </a>
-          </li>
-        ))}
-      </ul>
+    <div className={cn("pb-12 transition-all duration-300", collapsed ? "w-16" : "w-64", className)}>
+      <div className="space-y-4 py-4">
+        <div className="px-3 py-2">
+          <div className="flex items-center justify-between mb-4">
+            <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
+              <FileSpreadsheet className="h-6 w-6 text-blue-600" />
+              {!collapsed && <h2 className="text-lg font-semibold">Telegram Bot</h2>}
+            </div>
+            {onToggle && (
+              <Button variant="ghost" size="icon" onClick={onToggle} className="h-8 w-8">
+                {collapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+              </Button>
+            )}
+          </div>
+          <div className="space-y-1">
+            {filteredMenuItems.map((item) => (
+              <Link key={item.href} href={item.href}>
+                <Button
+                  variant={pathname === item.href ? "secondary" : "ghost"}
+                  className={cn(
+                    "w-full justify-start",
+                    pathname === item.href && "bg-blue-100 text-blue-900 hover:bg-blue-100",
+                    collapsed && "px-2",
+                  )}
+                  title={collapsed ? item.title : undefined}
+                >
+                  <item.icon className={cn("h-4 w-4", !collapsed && "mr-2")} />
+                  {!collapsed && item.title}
+                </Button>
+              </Link>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   )
 }
 
-export default Sidebar
+export function MobileSidebar() {
+  const [open, setOpen] = useState(false)
+
+  return (
+    <Sheet open={open} onOpenChange={setOpen}>
+      <SheetTrigger asChild>
+        <Button variant="outline" size="icon" className="shrink-0 md:hidden">
+          <Menu className="h-5 w-5" />
+          <span className="sr-only">Открыть меню</span>
+        </Button>
+      </SheetTrigger>
+      <SheetContent side="left" className="flex flex-col">
+        <Sidebar />
+      </SheetContent>
+    </Sheet>
+  )
+}
