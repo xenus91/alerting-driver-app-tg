@@ -20,6 +20,7 @@ import {
   Zap,
   Bell,
   BellOff,
+  Send,
 } from "lucide-react"
 import { QuickTripForm } from "@/components/quick-trip-form"
 import { TripSubscriptionModal } from "@/components/trip-subscription-modal"
@@ -59,6 +60,7 @@ export default function TripsPage() {
   const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
   const [showQuickTripForm, setShowQuickTripForm] = useState(false)
+  const [sendingNotifications, setSendingNotifications] = useState<number | null>(null)
 
   // Состояния для диалога ошибок
   const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
@@ -448,6 +450,27 @@ export default function TripsPage() {
     }
   }
 
+  const handleSendNotifications = async (tripId: number) => {
+    setSendingNotifications(tripId)
+    try {
+      const response = await fetch(`/api/trips/${tripId}/send-notifications`, {
+        method: "POST",
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        alert(`Уведомления отправлены: ${data.sent} из ${data.total}`)
+      } else {
+        alert("Ошибка при отправке уведомлений: " + data.error)
+      }
+    } catch (error) {
+      console.error("Error sending notifications:", error)
+      alert("Ошибка при отправке уведомлений")
+    } finally {
+      setSendingNotifications(null)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -566,6 +589,16 @@ export default function TripsPage() {
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end">
+                          {subscription && (
+                            <DropdownMenuItem
+                              onClick={() => handleSendNotifications(trip.id)}
+                              disabled={sendingNotifications === trip.id}
+                              className="text-blue-600 focus:text-blue-600"
+                            >
+                              <Send className="h-4 w-4 mr-2" />
+                              {sendingNotifications === trip.id ? "Отправляем..." : "Отправить уведомления"}
+                            </DropdownMenuItem>
+                          )}
                           {canDeleteTrip(trip) && (
                             <DropdownMenuItem
                               onClick={() => setShowDeleteConfirm(trip.id)}

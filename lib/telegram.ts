@@ -584,9 +584,6 @@ export async function editMessageReplyMarkup(chatId: number, messageId: number, 
 }
 
 export async function sendTelegramMessage(chatId: number, text: string, messageId?: number) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
-
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
@@ -674,5 +671,27 @@ export async function deleteMessage(chatId: number, messageId: number) {
   } catch (error) {
     console.error("Error deleting Telegram message:", error)
     return false
+  }
+}
+
+// Экспорт класса Telegram для совместимости
+export class Telegram {
+  static async sendMessage(chatId: number, text: string) {
+    return sendMessage(chatId, text)
+  }
+
+  static async sendMessageWithButtons(chatId: number, text: string, messageId: number) {
+    return sendMessageWithButtons(chatId, text, messageId)
+  }
+
+  static async sendTripMessage(
+    chatId: number,
+    tripData: any,
+    loadingPoints: any[],
+    unloadingPoints: any[],
+    firstName: string,
+    messageId: number,
+  ) {
+    return sendTripMessageWithButtons(chatId, tripData, loadingPoints, unloadingPoints, firstName, messageId)
   }
 }
