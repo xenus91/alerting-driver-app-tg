@@ -254,6 +254,31 @@ export default function TripsPage() {
     }
   }
 
+  const getCardBackgroundColor = (trip: TripData) => {
+    const confirmedNum = Number(trip.confirmed_responses)
+    const rejectedNum = Number(trip.rejected_responses)
+    const pendingNum = Number(trip.pending_responses)
+    const sentNum = Number(trip.sent_messages)
+
+    // Если есть отклонения - бледно красный
+    if (rejectedNum > 0) {
+      return "bg-red-50 border-red-100"
+    }
+
+    // Если все ответы получены и все положительные - бледно зеленый
+    if (sentNum > 0 && pendingNum === 0 && confirmedNum === sentNum) {
+      return "bg-green-50 border-green-100"
+    }
+
+    // Если есть ожидающие ответы - бледно желтый
+    if (pendingNum > 0) {
+      return "bg-yellow-50 border-yellow-100"
+    }
+
+    // По умолчанию - обычный фон
+    return "bg-white border-gray-200"
+  }
+
   const getTimeSinceSent = (sentAt?: string) => {
     if (!sentAt) return "Не отправлено"
 
@@ -352,7 +377,7 @@ export default function TripsPage() {
             )
 
             return (
-              <Card key={trip.id} className="w-full">
+              <Card key={trip.id} className={`w-full ${getCardBackgroundColor(trip)}`}>
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3">
