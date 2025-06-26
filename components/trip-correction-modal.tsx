@@ -47,7 +47,7 @@ const PointSelector = memo(
     onSearchStateChange,
   }: {
     value: string
-    onChange: (value: string) => void
+    onChange: (point: { point_id: string; point_name: string }) => void
     pointKey: string
     availablePoints: Array<{ point_id: string; point_name: string }>
     searchState: { open: boolean; search: string }
@@ -100,9 +100,9 @@ const PointSelector = memo(
     )
 
     const handlePointSelect = useCallback(
-      (pointId: string) => {
-        console.log(`${pointKey} - handlePointSelect:`, pointId)
-        onChange(pointId)
+      (point: { point_id: string; point_name: string }) => {
+        console.log(`${pointKey} - handlePointSelect:`, point)
+        onChange(point)
         onSearchStateChange(pointKey, { open: false, search: "" })
       },
       [pointKey, onChange, onSearchStateChange],
@@ -147,7 +147,7 @@ const PointSelector = memo(
                     "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
                     value === point.point_id && "bg-accent text-accent-foreground",
                   )}
-                  onClick={() => handlePointSelect(point.point_id)}
+                  onClick={() => handlePointSelect(point)}
                 >
                   <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
                   <div className="flex flex-col">
@@ -630,7 +630,10 @@ export function TripCorrectionModal({
                           <TableCell>
                             <PointSelector
                               value={correction.point_id}
-                              onChange={(value) => updateCorrection(globalIndex, "point_id", value)}
+                              onChange={(point) => {
+                                updateCorrection(globalIndex, "point_id", point.point_id)
+                                updateCorrection(globalIndex, "point_name", point.point_name)
+                              }}
                               pointKey={pointKey}
                               availablePoints={availablePoints}
                               searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
