@@ -169,23 +169,15 @@ export async function sendMultipleTripMessageWithButtons(
 
     // Добавляем заголовок корректировки если нужно
     if (isCorrection) {
-      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>
-
-`
+      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`
     }
 
-    message += `🌅 <b>Доброго времени суток!</b>
-
-`
-    message += `👤 Уважаемый, <b>${firstName}</b>
-
-`
+    message += `🌅 <b>Доброго времени суток!</b>\n\n`
+    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
 
     // Определяем множественное или единственное число
     const isMultiple = trips.length > 1
-    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>
-
-`
+    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
 
     // Сортируем рейсы по времени погрузки
     const sortedTrips = [...trips].sort((a, b) => {
@@ -198,12 +190,9 @@ export async function sendMultipleTripMessageWithButtons(
     sortedTrips.forEach((trip, tripIndex) => {
       console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
 
-      message += `<b>Рейс ${tripIndex + 1}:</b>
-`
-      message += `Транспортировка: <b>${trip.trip_identifier}</b>
-`
-      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>
-`
+      message += `<b>Рейс ${tripIndex + 1}:</b>\n`
+      message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
+      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
 
       // Форматируем дату и время БЕЗ смещения часового пояса
       const formatDateTime = (dateTimeString: string): string => {
@@ -242,47 +231,35 @@ export async function sendMultipleTripMessageWithButtons(
         }
       }
 
-      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>
-
-`
+      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
 
       // Пункты погрузки
       if (trip.loading_points.length > 0) {
-        message += `📦 <b>Погрузка:</b>
-`
+        message += `📦 <b>Погрузка:</b>\n`
         trip.loading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>
-`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
         })
-        message += `
-`
+        message += `\n`
       }
 
       // Пункты разгрузки
       if (trip.unloading_points.length > 0) {
-        message += `📤 <b>Разгрузка:</b>
-`
+        message += `📤 <b>Разгрузка:</b>\n`
         trip.unloading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>
-`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
 
           // Окна приемки для пункта разгрузки
           const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
           if (windows.length > 0) {
-            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>
-`
+            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
           }
         })
-        message += `
-`
+        message += `\n`
       }
 
       // Комментарий
       if (trip.driver_comment && trip.driver_comment.trim()) {
-        message += `💬 <b>Комментарий по рейсу:</b>
-<i>${trip.driver_comment}</i>
-
-`
+        message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
       }
 
       // Строим маршрут для этого рейса: сначала все точки погрузки, потом все точки разгрузки
@@ -295,9 +272,7 @@ export async function sendMultipleTripMessageWithButtons(
       const routeUrl = buildRouteUrl(routePoints)
 
       if (routeUrl) {
-        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>
-
-`
+        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
         console.log(`Added route URL for trip ${trip.trip_identifier}`)
       } else {
         console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
@@ -305,8 +280,7 @@ export async function sendMultipleTripMessageWithButtons(
 
       // Добавляем разделитель между рейсами (кроме последнего)
       if (tripIndex < sortedTrips.length - 1) {
-        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`
+        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
       }
     })
 
@@ -384,57 +358,39 @@ export async function sendTripMessageWithButtons(
 ) {
   try {
     // Генерируем красивое сообщение
-    let message = `🌅 <b>Доброго времени суток!</b>
-
-`
-    message += `👤 Уважаемый, <b>${firstName}</b>
-
-`
-    message += `🚛 На Вас запланирован рейс <b>${tripData.trip_identifier}</b>
-`
-    message += `🚗 Транспорт: <b>${tripData.vehicle_number}</b>
-`
-    message += `⏰ Плановое время погрузки: <b>${tripData.planned_loading_time}</b>
-
-`
+    let message = `🌅 <b>Доброго времени суток!</b>\n\n`
+    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
+    message += `🚛 На Вас запланирован рейс <b>${tripData.trip_identifier}</b>\n`
+    message += `🚗 Транспорт: <b>${tripData.vehicle_number}</b>\n`
+    message += `⏰ Плановое время погрузки: <b>${tripData.planned_loading_time}</b>\n\n`
 
     // Пункты погрузки
     if (loadingPoints.length > 0) {
-      message += `📦 <b>Погрузка:</b>
-`
+      message += `📦 <b>Погрузка:</b>\n`
       loadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_name}</b>
-`
+        message += `${index + 1}) <b>${point.point_name}</b>\n`
       })
-      message += `
-`
+      message += `\n`
     }
 
     // Пункты разгрузки
     if (unloadingPoints.length > 0) {
-      message += `📤 <b>Разгрузка:</b>
-`
+      message += `📤 <b>Разгрузка:</b>\n`
       unloadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_name}</b>
-`
+        message += `${index + 1}) <b>${point.point_name}</b>\n`
 
         // Окна приемки для пункта разгрузки
         const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
         if (windows.length > 0) {
-          message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>
-`
+          message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
         }
-        message += `
-`
+        message += `\n`
       })
     }
 
     // Комментарий
     if (tripData.driver_comment && tripData.driver_comment.trim()) {
-      message += `💬 <b>Комментарий по рейсу:</b>
-<i>${tripData.driver_comment}</i>
-
-`
+      message += `💬 <b>Комментарий по рейсу:</b>\n<i>${tripData.driver_comment}</i>\n\n`
     }
 
     // Строим маршрут: сначала все точки погрузки, потом все точки разгрузки
@@ -442,9 +398,7 @@ export async function sendTripMessageWithButtons(
     const routeUrl = buildRouteUrl(routePoints)
 
     if (routeUrl) {
-      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>
-
-`
+      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
     }
 
     message += `🙏 <b>Просьба подтвердить рейс</b>`
