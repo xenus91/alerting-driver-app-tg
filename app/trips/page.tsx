@@ -18,7 +18,6 @@ import {
   Trash2,
   AlertTriangle,
   Zap,
-  Bell,
 } from "lucide-react"
 import { QuickTripForm } from "@/components/quick-trip-form"
 import { TripSubscriptionButton } from "@/components/trip-subscription-button"
@@ -55,7 +54,6 @@ export default function TripsPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
   const [showQuickTripForm, setShowQuickTripForm] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ telegram_id?: number } | null>(null)
-  const [checkingSubscriptions, setCheckingSubscriptions] = useState(false)
 
   // Состояния для диалога ошибок
   const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
@@ -370,37 +368,6 @@ export default function TripsPage() {
     }
   }
 
-  const handleCheckSubscriptions = async () => {
-    setCheckingSubscriptions(true)
-    try {
-      const response = await fetch("/api/cron/check-subscriptions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.NEXT_PUBLIC_CRON_SECRET_KEY || "test-secret"}`,
-          "Content-Type": "application/json",
-        },
-      })
-      const data = await response.json()
-      if (data.success) {
-        toast({
-          title: "Проверка подписок",
-          description: `Проверено: ${data.checked}, отправлено: ${data.sent} уведомлений`,
-        })
-      } else {
-        throw new Error(data.error)
-      }
-    } catch (error) {
-      console.error("Error checking subscriptions:", error)
-      toast({
-        title: "Ошибка",
-        description: "Не удалось проверить подписки",
-        variant: "destructive",
-      })
-    } finally {
-      setCheckingSubscriptions(false)
-    }
-  }
-
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -416,10 +383,6 @@ export default function TripsPage() {
           <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Обновить
-          </Button>
-          <Button onClick={handleCheckSubscriptions} disabled={checkingSubscriptions} variant="outline">
-            <Bell className={`h-4 w-4 mr-2 ${checkingSubscriptions ? "animate-pulse" : ""}`} />
-            {checkingSubscriptions ? "Проверка..." : "Проверить подписки"}
           </Button>
         </div>
       </div>
