@@ -87,10 +87,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "Cannot subscribe to completed trip" }, { status: 400 })
     }
 
-    // Создаем новую подписку
+    // Создаем новую подписку с установкой last_notification_at = текущее время
     const result = await sql`
-      INSERT INTO trip_subscriptions (trip_id, user_telegram_id, interval_minutes, is_active)
-      VALUES (${trip_id}, ${user_telegram_id}, ${interval_minutes}, true)
+      INSERT INTO trip_subscriptions (trip_id, user_telegram_id, interval_minutes, is_active, last_notification_at)
+      VALUES (${trip_id}, ${user_telegram_id}, ${interval_minutes}, true, CURRENT_TIMESTAMP)
       RETURNING *
     `
 

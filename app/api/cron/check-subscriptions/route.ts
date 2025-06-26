@@ -1,8 +1,42 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendMessage } from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
+
+// Функция отправки сообщения в Telegram
+async function sendTelegramMessage(chatId: string, message: string) {
+  try {
+    const botToken = process.env.TELEGRAM_BOT_TOKEN
+    if (!botToken) {
+      throw new Error("TELEGRAM_BOT_TOKEN not configured")
+    }
+
+    const response = await fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: message,
+        parse_mode: "HTML",
+        disable_web_page_preview: true,
+      }),
+    })
+
+    const result = await response.json()
+
+    if (!response.ok) {
+      console.error("Telegram API error:", result)
+      return { success: false, error: result.description || "Failed to send message" }
+    }
+
+    return { success: true, data: result }
+  } catch (error) {
+    console.error("Error sending Telegram message:", error)
+    return { success: false, error: error instanceof Error ? error.message : "Unknown error" }
+  }
+}
 
 export async function POST(request: NextRequest) {
   try {
@@ -23,6 +57,7 @@ export async function POST(request: NextRequest) {
     console.log("=== CRON: CHECKING SUBSCRIPTIONS ===")
 
     // Получаем все активные подписки, которые нужно проверить
+    // Проверяем только те, где прошло достаточно времени с последнего уведомления
     const subscriptions = await sql`
       SELECT 
         ts.*,
@@ -41,7 +76,7 @@ export async function POST(request: NextRequest) {
         AND t.status != 'completed'
         AND (
           ts.last_notification_at IS NULL 
-          OR ts.last_notification_at < NOW() - INTERVAL '1 minute' * ts.interval_minutes
+          OR ts.last_notification_at <= NOW() - INTERVAL '1 minute' * ts.interval_minutes
         )
       GROUP BY ts.id, t.id, t.status, t.created_at
     `
@@ -50,6 +85,7 @@ export async function POST(request: NextRequest) {
 
     let notificationsSent = 0
     let subscriptionsCompleted = 0
+    let errors = 0
 
     for (const subscription of subscriptions) {
       try {
@@ -95,8 +131,11 @@ export async function POST(request: NextRequest) {
           message += `📋 Статус рассылки обновлен`
         }
 
+        // Добавляем ссылку на просмотр рассылки
+        message += `\n\n🔗 <a href="https://v0-tg-bot-allerting.vercel.app/trips/${subscription.trip_id}">Посмотреть детали рассылки</a>`
+
         // Отправляем уведомление
-        const telegramResult = await sendMessage(subscription.user_telegram_id, message)
+        const telegramResult = await sendTelegramMessage(subscription.user_telegram_id, message)
 
         if (telegramResult.success) {
           // Обновляем время последнего уведомления
@@ -129,15 +168,17 @@ export async function POST(request: NextRequest) {
             console.log(`CRON: Completed and removed subscription ${subscription.id}`)
           }
         } else {
+          errors++
           console.error(`CRON: Failed to send notification for subscription ${subscription.id}:`, telegramResult.error)
         }
       } catch (error) {
+        errors++
         console.error(`CRON: Error processing subscription ${subscription.id}:`, error)
       }
     }
 
     console.log(
-      `=== CRON: COMPLETED - ${notificationsSent} notifications sent, ${subscriptionsCompleted} subscriptions completed ===`,
+      `=== CRON: COMPLETED - ${notificationsSent} notifications sent, ${subscriptionsCompleted} subscriptions completed, ${errors} errors ===`,
     )
 
     return NextResponse.json({
@@ -145,6 +186,7 @@ export async function POST(request: NextRequest) {
       checked: subscriptions.length,
       sent: notificationsSent,
       completed: subscriptionsCompleted,
+      errors: errors,
       timestamp: new Date().toISOString(),
     })
   } catch (error) {
