@@ -10,6 +10,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   try {
     console.log(`Saving corrections for trip ${tripId}, phone ${phone}`)
     console.log("Corrections data:", corrections)
+    console.log("Deleted trips:", deletedTrips)
 
     // Начинаем транзакцию
     await sql`BEGIN`
@@ -68,38 +69,51 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       // Обрабатываем каждый рейс
       for (const [originalTripIdentifier, tripData] of originalTripGroups) {
         if (tripData.is_new_trip) {
-          // Создаем новое сообщение для нового рейса
+          console.log(`Creating new trip message for trip: ${tripData.new_trip_identifier}`)
+
+          // Создаем новое сообщение для нового рейса со статусом 'sent'
+          // чтобы оно было включено в отправку корректировки
           await sql`
             INSERT INTO trip_messages (
-              trip_id, phone, message, telegram_id, response_status,
-              trip_identifier, vehicle_number, planned_loading_time, driver_comment
+              trip_id, phone, message, telegram_id, status, response_status,
+              trip_identifier, vehicle_number, planned_loading_time, driver_comment,
+              sent_at
             )
             SELECT 
               ${tripId}, 
               ${phone}, 
-              'Новый рейс', 
+              'Новый рейс (добавлен при корректировке)', 
               telegram_id, 
+              'sent',
               'pending',
               ${tripData.new_trip_identifier},
               ${tripData.vehicle_number},
               ${tripData.planned_loading_time},
-              ${tripData.driver_comment || null}
+              ${tripData.driver_comment || null},
+              CURRENT_TIMESTAMP
             FROM users 
             WHERE phone = ${phone}
             LIMIT 1
           `
+
+          console.log(`Created new trip message for ${tripData.new_trip_identifier}`)
         } else {
-          // Обновляем существующее сообщение
+          // Обновляем существующее сообщение и сбрасываем статус подтверждения
           await sql`
             UPDATE trip_messages 
             SET trip_identifier = ${tripData.new_trip_identifier},
                 vehicle_number = ${tripData.vehicle_number},
                 planned_loading_time = ${tripData.planned_loading_time},
-                driver_comment = ${tripData.driver_comment || null}
+                driver_comment = ${tripData.driver_comment || null},
+                response_status = 'pending',
+                response_comment = NULL,
+                response_at = NULL
             WHERE trip_id = ${tripId} 
               AND phone = ${phone} 
               AND trip_identifier = ${originalTripIdentifier}
           `
+
+          console.log(`Updated existing trip message for ${originalTripIdentifier} -> ${tripData.new_trip_identifier}`)
         }
 
         // Удаляем старые точки для этого рейса (используем original_trip_identifier)
@@ -121,6 +135,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
               INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
               VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier})
             `
+
+            console.log(`Added point ${point.point_id} to trip ${tripData.new_trip_identifier}`)
           }
         }
       }
