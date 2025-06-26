@@ -4,6 +4,7 @@ import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Bell, BellOff } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { SubscriptionIntervalModal } from "./subscription-interval-modal"
 
 interface TripSubscriptionButtonProps {
   tripId: number
@@ -15,6 +16,7 @@ export function TripSubscriptionButton({ tripId, userTelegramId, className }: Tr
   const [isSubscribed, setIsSubscribed] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const { toast } = useToast()
+  const [showIntervalModal, setShowIntervalModal] = useState(false)
 
   // Проверяем подписку при загрузке
   useEffect(() => {
@@ -46,11 +48,10 @@ export function TripSubscriptionButton({ tripId, userTelegramId, className }: Tr
       return
     }
 
-    setIsLoading(true)
-
-    try {
-      if (isSubscribed) {
-        // Отписываемся
+    if (isSubscribed) {
+      // Отписываемся
+      setIsLoading(true)
+      try {
         const response = await fetch(`/api/trip-subscriptions?trip_id=${tripId}&user_telegram_id=${userTelegramId}`, {
           method: "DELETE",
         })
@@ -65,36 +66,53 @@ export function TripSubscriptionButton({ tripId, userTelegramId, className }: Tr
         } else {
           throw new Error(data.error)
         }
-      } else {
-        // Подписываемся
-        const response = await fetch("/api/trip-subscriptions", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            trip_id: tripId,
-            user_telegram_id: userTelegramId,
-            interval_minutes: 30, // По умолчанию каждые 30 минут
-          }),
+      } catch (error) {
+        console.error("Error unsubscribing:", error)
+        toast({
+          title: "Ошибка",
+          description: error instanceof Error ? error.message : "Не удалось отписаться",
+          variant: "destructive",
         })
+      } finally {
+        setIsLoading(false)
+      }
+    } else {
+      // Показываем модальное окно для выбора интервала
+      setShowIntervalModal(true)
+    }
+  }
 
-        const data = await response.json()
-        if (data.success) {
-          setIsSubscribed(true)
-          toast({
-            title: "Подписка активна",
-            description: "Вы будете получать уведомления о прогрессе рассылки каждые 30 минут",
-          })
-        } else {
-          throw new Error(data.error)
-        }
+  const handleConfirmSubscription = async (intervalMinutes: number) => {
+    setIsLoading(true)
+    try {
+      const response = await fetch("/api/trip-subscriptions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          trip_id: tripId,
+          user_telegram_id: userTelegramId,
+          interval_minutes: intervalMinutes,
+        }),
+      })
+
+      const data = await response.json()
+      if (data.success) {
+        setIsSubscribed(true)
+        setShowIntervalModal(false)
+        toast({
+          title: "Подписка активна",
+          description: `Вы будете получать уведомления о прогрессе рассылки каждые ${intervalMinutes} минут`,
+        })
+      } else {
+        throw new Error(data.error)
       }
     } catch (error) {
-      console.error("Error toggling subscription:", error)
+      console.error("Error subscribing:", error)
       toast({
         title: "Ошибка",
-        description: error instanceof Error ? error.message : "Не удалось изменить подписку",
+        description: error instanceof Error ? error.message : "Не удалось создать подписку",
         variant: "destructive",
       })
     } finally {
@@ -107,24 +125,32 @@ export function TripSubscriptionButton({ tripId, userTelegramId, className }: Tr
   }
 
   return (
-    <Button
-      variant={isSubscribed ? "default" : "outline"}
-      size="sm"
-      onClick={handleSubscriptionToggle}
-      disabled={isLoading}
-      className={className}
-    >
-      {isSubscribed ? (
-        <>
-          <Bell className="h-4 w-4 mr-2" />
-          {isLoading ? "Отписка..." : "Подписан"}
-        </>
-      ) : (
-        <>
-          <BellOff className="h-4 w-4 mr-2" />
-          {isLoading ? "Подписка..." : "Подписаться"}
-        </>
-      )}
-    </Button>
+    <>
+      <Button
+        variant={isSubscribed ? "default" : "outline"}
+        size="sm"
+        onClick={handleSubscriptionToggle}
+        disabled={isLoading}
+        className={className}
+      >
+        {isSubscribed ? (
+          <>
+            <Bell className="h-4 w-4 mr-2" />
+            {isLoading ? "Отписка..." : "Подписан"}
+          </>
+        ) : (
+          <>
+            <BellOff className="h-4 w-4 mr-2" />
+            {isLoading ? "Подписка..." : "Подписаться"}
+          </>
+        )}
+      </Button>
+      <SubscriptionIntervalModal
+        isOpen={showIntervalModal}
+        onClose={() => setShowIntervalModal(false)}
+        onConfirm={handleConfirmSubscription}
+        isLoading={isLoading}
+      />
+    </>
   )
 }

@@ -18,9 +18,11 @@ import {
   Trash2,
   AlertTriangle,
   Zap,
+  Bell,
 } from "lucide-react"
 import { QuickTripForm } from "@/components/quick-trip-form"
 import { TripSubscriptionButton } from "@/components/trip-subscription-button"
+import { useToast } from "@/hooks/use-toast"
 
 interface TripData {
   id: number
@@ -46,12 +48,14 @@ interface TripError {
 }
 
 export default function TripsPage() {
+  const { toast } = useToast()
   const [trips, setTrips] = useState<TripData[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
   const [showQuickTripForm, setShowQuickTripForm] = useState(false)
   const [currentUser, setCurrentUser] = useState<{ telegram_id?: number } | null>(null)
+  const [checkingSubscriptions, setCheckingSubscriptions] = useState(false)
 
   // Состояния для диалога ошибок
   const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
@@ -175,6 +179,24 @@ export default function TripsPage() {
     }
 
     getCurrentUser()
+  }, [])
+
+  useEffect(() => {
+    // Автоматическая проверка подписок при загрузке страницы
+    const autoCheckSubscriptions = async () => {
+      try {
+        await fetch("/api/auto-check-subscriptions")
+      } catch (error) {
+        console.error("Error in auto check subscriptions:", error)
+      }
+    }
+
+    autoCheckSubscriptions()
+
+    // Повторяем проверку каждые 3 минуты
+    const interval = setInterval(autoCheckSubscriptions, 3 * 60 * 1000)
+
+    return () => clearInterval(interval)
   }, [])
 
   const formatDate = (dateString: string) => {
@@ -366,6 +388,24 @@ export default function TripsPage() {
     }
   }
 
+  const handleCheckSubscriptions = async () => {
+    setCheckingSubscriptions(true)
+    try {
+      const response = await fetch("/api/auto-check-subscriptions")
+      const data = await response.json()
+      if (data.success) {
+        toast({
+          title: "Проверка подписок",
+          description: `Проверено: ${data.checked}, отправлено: ${data.sent} уведомлений`,
+        })
+      }
+    } catch (error) {
+      console.error("Error checking subscriptions:", error)
+    } finally {
+      setCheckingSubscriptions(false)
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -381,6 +421,10 @@ export default function TripsPage() {
           <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
             Обновить
+          </Button>
+          <Button onClick={handleCheckSubscriptions} disabled={checkingSubscriptions} variant="outline">
+            <Bell className={`h-4 w-4 mr-2 ${checkingSubscriptions ? "animate-pulse" : ""}`} />
+            {checkingSubscriptions ? "Проверка..." : "Проверить подписки"}
           </Button>
         </div>
       </div>
