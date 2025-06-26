@@ -112,7 +112,7 @@ export default function TripDetailPage() {
   const [filteredDrivers, setFilteredDrivers] = useState<GroupedDriver[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [resendingPhone, setResendingPhone] = useState<string | null>(null)
-  const [isDeleting, setIsDeleting] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(isDeleting)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [correctionModal, setCorrectionModal] = useState<{
     isOpen: boolean
@@ -750,6 +750,24 @@ export default function TripDetailPage() {
     }
   }
 
+  // Функция для расчета времени ответа
+  const getResponseTime = (sentAt?: string, responseAt?: string) => {
+    if (!sentAt) return null
+
+    const sent = new Date(sentAt)
+    const response = responseAt ? new Date(responseAt) : new Date()
+    const diffMs = response.getTime() - sent.getTime()
+
+    const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+    const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
+
+    if (diffHours > 0) {
+      return `${diffHours}ч ${diffMinutes}м`
+    } else {
+      return `${diffMinutes}м`
+    }
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -1035,14 +1053,28 @@ export default function TripDetailPage() {
                       <div className="flex flex-col gap-1">
                         {getStatusBadge(driver.overall_status, driver.overall_response_status)}
                         {driver.sent_at && (
-                          <span
-                            className={`text-xs ${
-                              driver.overall_response_status === "confirmed" ? "text-gray-400" : "text-muted-foreground"
-                            }`}
-                          >
-                            <Clock className="h-3 w-3 inline mr-1" />
-                            {getTimeSinceSent(driver.sent_at)} назад
-                          </span>
+                          <div className="text-xs space-y-1">
+                            <div
+                              className={
+                                driver.overall_response_status === "confirmed"
+                                  ? "text-gray-400"
+                                  : "text-muted-foreground"
+                              }
+                            >
+                              <Clock className="h-3 w-3 inline mr-1" />
+                              {formatDate(driver.sent_at)}
+                            </div>
+                            <div
+                              className={
+                                driver.overall_response_status === "confirmed"
+                                  ? "text-gray-400"
+                                  : "text-muted-foreground"
+                              }
+                            >
+                              ⏱️ {getResponseTime(driver.sent_at, driver.response_at)}
+                              {driver.response_at ? " до ответа" : " ожидания"}
+                            </div>
+                          </div>
                         )}
                       </div>
                     </TableCell>

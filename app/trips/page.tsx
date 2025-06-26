@@ -279,19 +279,38 @@ export default function TripsPage() {
     return "bg-white border-gray-200"
   }
 
-  const getTimeSinceSent = (sentAt?: string) => {
+  const getTimeSinceSent = (trip: TripData, sentAt?: string) => {
     if (!sentAt) return "Не отправлено"
 
-    const now = new Date()
+    const confirmedNum = Number(trip.confirmed_responses)
+    const rejectedNum = Number(trip.rejected_responses)
+    const sentNum = Number(trip.sent_messages)
+    const totalResponses = confirmedNum + rejectedNum
+
     const sent = new Date(sentAt)
-    const diffMs = now.getTime() - sent.getTime()
+    let endTime: Date
+
+    // Если получены все ответы, используем время последнего ответа
+    if (totalResponses === sentNum && sentNum > 0) {
+      // Используем last_sent_at как приблизительное время завершения
+      // В реальности нужно было бы хранить время последнего ответа
+      endTime = trip.last_sent_at ? new Date(trip.last_sent_at) : new Date()
+    } else {
+      // Иначе считаем до текущего времени
+      endTime = new Date()
+    }
+
+    const diffMs = endTime.getTime() - sent.getTime()
     const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
     const diffMinutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60))
 
-    if (diffHours > 0) {
-      return `${diffHours}ч ${diffMinutes}м назад`
+    const timeText = diffHours > 0 ? `${diffHours}ч ${diffMinutes}м` : `${diffMinutes}м`
+
+    // Добавляем индикатор завершения
+    if (totalResponses === sentNum && sentNum > 0) {
+      return `${timeText} (завершено)`
     } else {
-      return `${diffMinutes}м назад`
+      return `${timeText} назад`
     }
   }
 
@@ -394,7 +413,7 @@ export default function TripsPage() {
                           {trip.first_sent_at && (
                             <span className="flex items-center gap-1">
                               <Clock className="h-3 w-3" />
-                              {getTimeSinceSent(trip.first_sent_at)}
+                              {getTimeSinceSent(trip, trip.first_sent_at)}
                             </span>
                           )}
                           {trip.carpark && (
