@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback, memo, useMemo } from "react"
+import { useState, useEffect, useCallback, memo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -429,30 +429,18 @@ export function TripCorrectionModal({
     })
   }, [])
 
-
-
-  // Стабилизируем groupedCorrections
-const groupedCorrections = useMemo(() => {
-  // Превращаем в массив, чтобы сохранить порядок
-  return Object.entries(
-    corrections.reduce((groups, c) => {
-      const key = c.trip_identifier || c.original_trip_identifier || "__new__";
-      if (!groups[key]) groups[key] = [];
-      groups[key].push(c);
-      return groups;
-    }, {} as Record<string, CorrectionData[]>)
-  );
-}, [corrections]);
-
-const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue: string) => {
-  setCorrections(prev => 
-    prev.map(c => 
-      c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-        ? { ...c, trip_identifier: newValue }
-        : c
-    )
+  // Группируем корректировки по trip_identifier
+  const groupedCorrections = corrections.reduce(
+    (groups, correction) => {
+      const key = correction.trip_identifier
+      if (!groups[key]) {
+        groups[key] = []
+      }
+      groups[key].push(correction)
+      return groups
+    },
+    {} as Record<string, CorrectionData[]>,
   )
-}, [])
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -495,8 +483,8 @@ const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue
               </Button>
             </div>
 
-            {Object.entries(groupedCorrections).map(([tripIdentifier, tripCorrections], groupIndex) => (
-              <div key={groupIndex} className="border rounded-lg p-4">
+            {Object.entries(groupedCorrections).map(([tripIdentifier, tripCorrections]) => (
+              <div key={tripIdentifier} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold">Рейс {tripIdentifier}</h3>
                  <div className="flex gap-2">
@@ -520,7 +508,15 @@ const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue
                     <label className="text-sm font-medium">Номер рейса</label>
                     <Input
                       value={tripCorrections[0]?.trip_identifier || ""}
-                      onChange={(e) => handleTripIdentifierChange(tripIdentifier, e.target.value)}
+                      onChange={(e) => {
+                        // Обновляем для всех точек этого рейса
+                        const updatedCorrections = corrections.map((c) =>
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, trip_identifier: e.target.value }
+                            : c,
+                        )
+                        setCorrections(updatedCorrections)
+                      }}
                     />
                   </div>
                   <div>
