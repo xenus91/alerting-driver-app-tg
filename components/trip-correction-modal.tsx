@@ -429,18 +429,28 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  // Группируем корректировки по trip_identifier
-  const groupedCorrections = corrections.reduce(
-    (groups, correction) => {
-      const key = correction.trip_identifier
+  // Оптимизированный обработчик изменения номера рейса
+  const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue: string) => {
+    setCorrections(prev => 
+      prev.map(c => 
+        c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+          ? { ...c, trip_identifier: newValue }
+          : c
+      )
+    );
+  }, []);
+
+  // Стабилизируем groupedCorrections
+  const groupedCorrections = useMemo(() => {
+    return corrections.reduce((groups, correction) => {
+      const key = correction.trip_identifier;
       if (!groups[key]) {
-        groups[key] = []
+        groups[key] = [];
       }
-      groups[key].push(correction)
-      return groups
-    },
-    {} as Record<string, CorrectionData[]>,
-  )
+      groups[key].push(correction);
+      return groups;
+    }, {} as Record<string, CorrectionData[]>);
+  }, [corrections]);
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -508,15 +518,7 @@ export function TripCorrectionModal({
                     <label className="text-sm font-medium">Номер рейса</label>
                     <Input
                       value={tripCorrections[0]?.trip_identifier || ""}
-                      onChange={(e) => {
-                        // Обновляем для всех точек этого рейса
-                        const updatedCorrections = corrections.map((c) =>
-                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                            ? { ...c, trip_identifier: e.target.value }
-                            : c,
-                        )
-                        setCorrections(updatedCorrections)
-                      }}
+                      onChange={(e) => handleTripIdentifierChange(tripIdentifier, e.target.value)}
                     />
                   </div>
                   <div>
