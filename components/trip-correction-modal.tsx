@@ -330,8 +330,7 @@ export function TripCorrectionModal({
     await saveCorrections()
 
     // Затем отправляем корректировку водителю
-    // ИСПРАВЛЕННЫЙ ВЫЗОВ: используем tripId вместо messageIds[0]
-    const response = await fetch(`/api/trips/${tripId}/resend-combined`, { // <-- ИЗМЕНЕНО ЗДЕСЬ
+    const response = await fetch(`/api/trips/${tripId}/resend-combined`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -343,19 +342,21 @@ export function TripCorrectionModal({
       }),
     })
 
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
     const data = await response.json()
 
     if (data.success) {
-      setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
+      setSuccess("Корректировка отправлена водителю!")
       onCorrectionSent()
-      setTimeout(() => {
-        onClose()
-      }, 3000)
+      setTimeout(() => onClose(), 3000)
     } else {
       setError(data.error || "Failed to send correction")
     }
   } catch (error) {
-    setError("Error sending correction")
+    setError(error instanceof Error ? error.message : "Error sending correction")
     console.error("Error sending correction:", error)
   } finally {
     setIsSending(false)

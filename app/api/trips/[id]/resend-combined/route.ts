@@ -5,12 +5,13 @@ import { sendMultipleTripMessageWithButtons, deleteMessage } from "@/lib/telegra
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const messageId = Number.parseInt(params.id)
-  const { phone, isCorrection = false } = await request.json()
+  const tripId = Number.parseInt(params.id)
+  const { phone, isCorrection = false, deletedTrips = [] } = await request.json()
 
   try {
-    console.log(`Resending combined message for messageId: ${messageId}, phone: ${phone}`)
+    console.log(`Resending combined message for tripId: ${tripId}, phone: ${phone}`)
     console.log(`Is correction: ${isCorrection}`)
+    console.log(`Deleted trips:`, deletedTrips)
 
     // Получаем информацию о пользователе
     const userResult = await sql`
@@ -27,17 +28,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const user = userResult[0]
     const driverName = user.full_name || user.first_name || user.name || "Неизвестный водитель"
 
-    // Получаем trip_id из сообщения
-    const tripResult = await sql`
-      SELECT trip_id FROM trip_messages WHERE id = ${messageId}
-    `
-
-    if (tripResult.length === 0) {
-      return NextResponse.json({ success: false, error: "Trip message not found" }, { status: 404 })
-    }
-
-    const tripId = tripResult[0].trip_id
-
     // Получаем ВСЕ активные сообщения для этого пользователя и рейса
     const messagesResult = await sql`
       SELECT DISTINCT
@@ -52,6 +42,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         AND tm.phone = ${phone}
         AND tm.status = 'sent'
         AND tm.trip_identifier IS NOT NULL
+        ${deletedTrips.length > 0 ? sql`AND tm.trip_identifier != ALL(${deletedTrips})` : sql``}
       ORDER BY tm.trip_identifier
     `
 
@@ -123,13 +114,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
     }
 
+    // Используем первый messageId для кнопок
+    const firstMessageId = messagesResult[0]?.id || 0
+
     // Отправляем объединенное сообщение
     const telegramResult = await sendMultipleTripMessageWithButtons(
       user.telegram_id,
       trips,
       driverName,
-      messageId, // Используем исходный messageId для кнопок
-      true // isCorrection
+      firstMessageId,
+      isCorrection
     )
 
     // Обновляем статусы всех сообщений
