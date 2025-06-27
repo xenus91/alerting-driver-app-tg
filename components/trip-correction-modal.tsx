@@ -429,28 +429,32 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  // Оптимизированный обработчик изменения номера рейса
-  const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue: string) => {
-    setCorrections(prev => 
-      prev.map(c => 
-        c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-          ? { ...c, trip_identifier: newValue }
-          : c
-      )
-    );
-  }, []);
+
 
   // Стабилизируем groupedCorrections
-  const groupedCorrections = useMemo(() => {
-    return corrections.reduce((groups, correction) => {
-      const key = correction.trip_identifier;
+const groupedCorrections = useMemo(() => {
+  return corrections.reduce(
+    (groups, correction) => {
+      const key = correction.trip_identifier
       if (!groups[key]) {
-        groups[key] = [];
+        groups[key] = []
       }
-      groups[key].push(correction);
-      return groups;
-    }, {} as Record<string, CorrectionData[]>);
-  }, [corrections]);
+      groups[key].push(correction)
+      return groups
+    },
+    {} as Record<string, CorrectionData[]>
+  )
+}, [corrections])
+
+const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue: string) => {
+  setCorrections(prev => 
+    prev.map(c => 
+      c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+        ? { ...c, trip_identifier: newValue }
+        : c
+    )
+  )
+}, [])
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
