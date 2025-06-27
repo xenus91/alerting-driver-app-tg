@@ -217,28 +217,29 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  const addNewPoint = useCallback((tripIdentifier: string) => {
-    const tripCorrections = corrections.filter(
-      (c) =>
-        c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-    )
+const addNewPoint = (tripIdentifier: string) => {
+  const tripCorrections = corrections.filter(
+    (c) =>
+      c.original_trip_identifier === tripIdentifier ||
+      c.trip_identifier === tripIdentifier
+  )
 
-    const maxPointNum = Math.max(...tripCorrections.map((c) => c.point_num || 0), 0)
+  const maxPointNum = Math.max(...tripCorrections.map((c) => c.point_num || 0), 0)
 
-    const newPoint: CorrectionData = {
-      phone,
-      trip_identifier: tripIdentifier,
-      vehicle_number: tripCorrections[0]?.vehicle_number || "",
-      planned_loading_time: tripCorrections[0]?.planned_loading_time || "",
-      point_type: "P",
-      point_num: maxPointNum + 1,
-      point_id: "",
-      driver_comment: tripCorrections[0]?.driver_comment || "",
-      message_id: tripCorrections[0]?.message_id || 0,
-    }
+  const newPoint: CorrectionData = {
+    phone,
+    trip_identifier: tripCorrections[0]?.trip_identifier || "",
+    vehicle_number: tripCorrections[0]?.vehicle_number || "",
+    planned_loading_time: tripCorrections[0]?.planned_loading_time || "",
+    point_type: "P",
+    point_num: maxPointNum + 1,
+    point_id: "",
+    driver_comment: tripCorrections[0]?.driver_comment || "",
+    message_id: tripCorrections[0]?.message_id || 0,
+  }
 
-    setCorrections((prev) => [...prev, newPoint])
-  }, [corrections, phone])
+  setCorrections([...corrections, newPoint])
+}
 
   const addNewTrip = () => {
     const now = new Date()
@@ -355,14 +356,16 @@ export function TripCorrectionModal({
     }))
   }, [])
 
-  const groupedCorrections = useMemo(() => {
-    return corrections.reduce((groups, correction) => {
-      const key = correction.original_trip_identifier || correction.trip_identifier
-      if (!groups[key]) groups[key] = []
-      groups[key].push(correction)
-      return groups
-    }, {} as Record<string, CorrectionData[]>)
-  }, [corrections])
+const groupedCorrections = useMemo(() => {
+  return corrections.reduce((groups, correction) => {
+    const key = correction.original_trip_identifier || correction.trip_identifier
+    if (!groups[key]) {
+      groups[key] = []
+    }
+    groups[key].push(correction)
+    return groups
+  }, {} as Record<string, CorrectionData[]>)
+}, [corrections])
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -401,18 +404,17 @@ export function TripCorrectionModal({
             </div>
 
             {Object.entries(groupedCorrections).map(([groupKey, tripCorrections]) => {
-              const stableKey = tripCorrections[0].original_trip_identifier || groupKey
+              const stableKey = tripCorrections[0].original_trip_identifier || tripCorrections[0].trip_identifier
 
               return (
                 <div key={stableKey} className="border rounded-lg p-4">
                   <div className="flex items-center justify-between mb-4">
                     <h3 className="text-lg font-semibold">Рейс {tripCorrections[0].trip_identifier || "Новый рейс"}</h3>
                     <div className="flex gap-2">
-                      <Button
-                        onClick={() => addNewPoint(stableKey)}
-                        variant="outline"
+                      <Button 
+                        onClick={() => addNewPoint(stableKey)} 
+                        variant="outline" 
                         size="sm"
-                        className="text-blue-600"
                       >
                         <Plus className="h-4 w-4 mr-2" />
                         Добавить точку
@@ -435,22 +437,22 @@ export function TripCorrectionModal({
                     <div>
                       <label className="text-sm font-medium">Номер рейса</label>
                       <Input
-                        value={tripCorrections[0]?.trip_identifier || ""}
-                        onChange={(e) => {
-                          const newValue = e.target.value
-                          const currentVal = tripCorrections[0]?.trip_identifier
-                          if (newValue === currentVal) return
+                            value={tripCorrections[0]?.trip_identifier || ""}
+                            onChange={(e) => {
+                              const newValue = e.target.value
+                              const currentVal = tripCorrections[0]?.trip_identifier
+                              
+                              if (newValue === currentVal) return
 
-                          setCorrections((prev) =>
-                            prev.map((c) =>
-                              c.original_trip_identifier === stableKey ||
-                              c.trip_identifier === stableKey
-                                ? { ...c, trip_identifier: newValue }
-                                : c
-                            )
-                          )
-                        }}
-                      />
+                              setCorrections((prev) =>
+                                prev.map((c) =>
+                                  c.original_trip_identifier === stableKey || c.trip_identifier === stableKey
+                                    ? { ...c, trip_identifier: newValue }
+                                    : c
+                                )
+                              )
+                            }}
+                          />
                     </div>
                     <div>
                       <label className="text-sm font-medium">Транспорт</label>
