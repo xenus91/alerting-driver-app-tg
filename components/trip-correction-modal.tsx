@@ -322,47 +322,46 @@ export function TripCorrectionModal({
   }
 
   const sendCorrection = async () => {
-    setIsSending(true)
-    setError(null)
+  setIsSending(true)
+  setError(null)
 
-    try {
-      // Сначала сохраняем корректировки
-      await saveCorrections()
+  try {
+    // Сначала сохраняем корректировки
+    await saveCorrections()
 
-      // Затем отправляем корректировку водителю
-      const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+    // Затем отправляем корректировку водителю
+    const response = await fetch(`/api/trips/${tripId}/resend-combined`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        phone,
+        isCorrection: true,
+        deletedTrips,
+      }),
+    })
 
-      const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone,
-          messageIds,
-          isCorrection: true,
-          deletedTrips, // Добавляем информацию об удаленных рейсах
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
-        onCorrectionSent()
-        setTimeout(() => {
-          onClose()
-        }, 3000)
-      } else {
-        setError(data.error || "Failed to send correction")
-      }
-    } catch (error) {
-      setError("Error sending correction")
-      console.error("Error sending correction:", error)
-    } finally {
-      setIsSending(false)
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
+
+    const data = await response.json()
+
+    if (data.success) {
+      setSuccess("Корректировка отправлена водителю!")
+      onCorrectionSent()
+      setTimeout(() => onClose(), 3000)
+    } else {
+      setError(data.error || "Failed to send correction")
+    }
+  } catch (error) {
+    setError(error instanceof Error ? error.message : "Error sending correction")
+    console.error("Error sending correction:", error)
+  } finally {
+    setIsSending(false)
   }
+}
 
   // Исправленная функция форматирования времени БЕЗ преобразования часовых поясов
   const formatDateTime = (dateString: string) => {
