@@ -258,22 +258,26 @@ export function TripCorrectionModal({
     setCorrections([...corrections, newPoint])
   }
 
-  const addNewTrip = () => {
-    // Генерируем новый номер рейса
-    const newTrip: CorrectionData = {
-      phone,
-      trip_identifier: "", // Пустое поле вместо автогенерации
-      vehicle_number: "",
-      planned_loading_time: new Date().toISOString(),
-      point_type: "P",
-      point_num: 1,
-      point_id: "",
-      driver_comment: "",
-      message_id: corrections[0]?.message_id || 0,
-    }
+const addNewTrip = () => {
+  const now = new Date()
+  now.setMinutes(0, 0, 0) // Устанавливаем время на :00.000
 
-    setCorrections([...corrections, newTrip])
+  const tempId = `new-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
+  const newTrip: CorrectionData = {
+    phone,
+    trip_identifier: "",
+    original_trip_identifier: tempId,
+    vehicle_number: "",
+    planned_loading_time: now.toISOString(), // Текущее время с нулевыми минутами
+    point_type: "P",
+    point_num: 1,
+    point_id: "",
+    driver_comment: "",
+    message_id: corrections[0]?.message_id || 0,
   }
+  setCorrections([...corrections, newTrip])
+}
+
 
   const removePoint = (index: number) => {
     const updated = corrections.filter((_, i) => i !== index)
