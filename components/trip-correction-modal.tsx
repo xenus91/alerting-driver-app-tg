@@ -433,18 +433,16 @@ export function TripCorrectionModal({
 
   // Стабилизируем groupedCorrections
 const groupedCorrections = useMemo(() => {
-  return corrections.reduce(
-    (groups, correction) => {
-      const key = correction.trip_identifier
-      if (!groups[key]) {
-        groups[key] = []
-      }
-      groups[key].push(correction)
-      return groups
-    },
-    {} as Record<string, CorrectionData[]>
-  )
-}, [corrections])
+  // Превращаем в массив, чтобы сохранить порядок
+  return Object.entries(
+    corrections.reduce((groups, c) => {
+      const key = c.trip_identifier || c.original_trip_identifier || "__new__";
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(c);
+      return groups;
+    }, {} as Record<string, CorrectionData[]>)
+  );
+}, [corrections]);
 
 const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue: string) => {
   setCorrections(prev => 
@@ -497,8 +495,8 @@ const handleTripIdentifierChange = useCallback((tripIdentifier: string, newValue
               </Button>
             </div>
 
-            {Object.entries(groupedCorrections).map(([tripIdentifier, tripCorrections]) => (
-              <div key={tripIdentifier} className="border rounded-lg p-4">
+            {Object.entries(groupedCorrections).map(([tripIdentifier, tripCorrections], groupIndex) => (
+              <div key={groupIndex} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold">Рейс {tripIdentifier}</h3>
                  <div className="flex gap-2">
