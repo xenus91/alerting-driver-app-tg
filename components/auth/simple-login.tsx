@@ -73,6 +73,7 @@ export default function SimpleLogin({ onSuccess }: SimpleLoginProps) {
         </CardHeader>
         <CardContent className="space-y-6">
 
+
           {error && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
