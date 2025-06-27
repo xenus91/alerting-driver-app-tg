@@ -322,47 +322,45 @@ export function TripCorrectionModal({
   }
 
   const sendCorrection = async () => {
-    setIsSending(true)
-    setError(null)
+  setIsSending(true)
+  setError(null)
 
-    try {
-      // Сначала сохраняем корректировки
-      await saveCorrections()
+  try {
+    // Сначала сохраняем корректировки
+    await saveCorrections()
 
-      // Затем отправляем корректировку водителю
-      const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+    // Затем отправляем корректировку водителю
+    // ИСПРАВЛЕННЫЙ ВЫЗОВ: используем tripId вместо messageIds[0]
+    const response = await fetch(`/api/trips/${tripId}/resend-combined`, { // <-- ИЗМЕНЕНО ЗДЕСЬ
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        phone,
+        isCorrection: true,
+        deletedTrips,
+      }),
+    })
 
-      const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone,
-          messageIds,
-          isCorrection: true,
-          deletedTrips, // Добавляем информацию об удаленных рейсах
-        }),
-      })
+    const data = await response.json()
 
-      const data = await response.json()
-
-      if (data.success) {
-        setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
-        onCorrectionSent()
-        setTimeout(() => {
-          onClose()
-        }, 3000)
-      } else {
-        setError(data.error || "Failed to send correction")
-      }
-    } catch (error) {
-      setError("Error sending correction")
-      console.error("Error sending correction:", error)
-    } finally {
-      setIsSending(false)
+    if (data.success) {
+      setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
+      onCorrectionSent()
+      setTimeout(() => {
+        onClose()
+      }, 3000)
+    } else {
+      setError(data.error || "Failed to send correction")
     }
+  } catch (error) {
+    setError("Error sending correction")
+    console.error("Error sending correction:", error)
+  } finally {
+    setIsSending(false)
   }
+}
 
   // Исправленная функция форматирования времени БЕЗ преобразования часовых поясов
   const formatDateTime = (dateString: string) => {
@@ -488,28 +486,20 @@ export function TripCorrectionModal({
               <div key={tripIdentifier} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-lg font-semibold">Рейс {tripIdentifier}</h3>
-                  <div className="flex gap-2">
-                    <Button
-                      onClick={() => addNewPoint(tripIdentifier)}
-                      variant="outline"
-                      size="sm"
-                      className="text-blue-600"
-                    >
-                      <Plus className="h-4 w-4 mr-2" />
-                      Добавить точку
-                    </Button>
-                    {Object.keys(groupedCorrections).length > 1 && (
-                      <Button
-                        onClick={() => removeTrip(tripIdentifier)}
-                        variant="outline"
-                        size="sm"
-                        className="text-red-600"
-                      >
-                        <X className="h-4 w-4 mr-2" />
-                        Удалить рейс
-                      </Button>
-                    )}
-                  </div>
+                 <div className="flex gap-2">
+                      {/* Удалена кнопка "Добавить точку" */}
+                      {Object.keys(groupedCorrections).length > 1 && (
+                        <Button
+                          onClick={() => removeTrip(tripIdentifier)}
+                          variant="outline"
+                          size="sm"
+                          className="text-red-600"
+                        >
+                          <X className="h-4 w-4 mr-2" />
+                          Удалить рейс
+                        </Button>
+                      )}
+                    </div>
                 </div>
 
                 <div className="grid grid-cols-4 gap-4 mb-4">
@@ -662,6 +652,18 @@ export function TripCorrectionModal({
                     })}
                   </TableBody>
                 </Table>
+                                {/* ПЕРЕМЕЩЕННАЯ КНОПКА: теперь под таблицей справа */}
+                <div className="flex justify-end mt-2">
+                  <Button 
+                    onClick={() => addNewPoint(tripIdentifier)} 
+                    variant="outline" 
+                    size="sm"
+                    className="text-blue-600"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Добавить точку
+                  </Button>
+                </div>
               </div>
             ))}
 
