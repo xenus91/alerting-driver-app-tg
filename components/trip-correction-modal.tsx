@@ -1,6 +1,7 @@
 "use client"
+
 import type React from "react"
-import { useState, useEffect, useCallback, memo, useMemo } from "react"
+import { useState, useEffect, useCallback, memo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -15,7 +16,7 @@ import { cn } from "@/lib/utils"
 interface CorrectionData {
   phone: string
   trip_identifier: string
-  original_trip_identifier?: string
+  original_trip_identifier?: string // Добавляем для отслеживания изменений
   vehicle_number: string
   planned_loading_time: string
   point_type: "P" | "D"
@@ -36,107 +37,132 @@ interface TripCorrectionModalProps {
 }
 
 // Мемоизированный компонент для выбора точки с поиском
-const PointSelector = memo(({
-  value,
-  onChange,
-  pointKey,
-  availablePoints,
-  searchState,
-  onSearchStateChange,
-}: {
-  value: string
-  onChange: (point: { point_id: string; point_name: string }) => void
-  pointKey: string
-  availablePoints: Array<{ point_id: string; point_name: string }>
-  searchState: { open: boolean; search: string }
-  onSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
-}) => {
-  // Функция фильтрации точек
-  const filterPoints = useCallback((searchTerm: string) => {
-    if (!searchTerm) return availablePoints
-    const lowerSearch = searchTerm.toLowerCase()
-    return availablePoints.filter(
-      (point) =>
-        point.point_id.toLowerCase().includes(lowerSearch) || 
-        point.point_name.toLowerCase().includes(lowerSearch)
+const PointSelector = memo(
+  ({
+    value,
+    onChange,
+    pointKey,
+    availablePoints,
+    searchState,
+    onSearchStateChange,
+  }: {
+    value: string
+    onChange: (point: { point_id: string; point_name: string }) => void
+    pointKey: string
+    availablePoints: Array<{ point_id: string; point_name: string }>
+    searchState: { open: boolean; search: string }
+    onSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
+  }) => {
+    // Функция фильтрации точек
+    const filterPoints = useCallback(
+      (searchTerm: string) => {
+        if (!searchTerm) return availablePoints
+
+        const lowerSearch = searchTerm.toLowerCase()
+        return availablePoints.filter(
+          (point) =>
+            point.point_id.toLowerCase().includes(lowerSearch) || point.point_name.toLowerCase().includes(lowerSearch),
+        )
+      },
+      [availablePoints],
     )
-  }, [availablePoints])
 
-  const filteredPoints = filterPoints(searchState.search)
-  const selectedPoint = availablePoints.find((p) => p.point_id === value)
+    const filteredPoints = filterPoints(searchState.search)
+    const selectedPoint = availablePoints.find((p) => p.point_id === value)
 
-  const handleOpenChange = useCallback((open: boolean) => {
-    if (open) {
-      onSearchStateChange(pointKey, { open: true, search: "" })
-    } else {
-      onSearchStateChange(pointKey, { open: false, search: "" })
-    }
-  }, [pointKey, onSearchStateChange])
+    console.log(`PointSelector ${pointKey}:`, {
+      searchState,
+      selectedPoint,
+      filteredPointsCount: filteredPoints.length,
+    })
 
-  const handleSearchChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const newSearch = e.target.value
-    onSearchStateChange(pointKey, { search: newSearch })
-  }, [pointKey, onSearchStateChange])
+    const handleOpenChange = useCallback(
+      (open: boolean) => {
+        console.log(`${pointKey} - handleOpenChange:`, open)
+        if (open) {
+          // При открытии сбрасываем поиск
+          onSearchStateChange(pointKey, { open: true, search: "" })
+        } else {
+          // При закрытии также сбрасываем поиск
+          onSearchStateChange(pointKey, { open: false, search: "" })
+        }
+      },
+      [pointKey, onSearchStateChange],
+    )
 
-  const handlePointSelect = useCallback((point: { point_id: string; point_name: string }) => {
-    onChange(point)
-    onSearchStateChange(pointKey, { open: false, search: "" })
-  }, [pointKey, onChange, onSearchStateChange])
+    const handleSearchChange = useCallback(
+      (e: React.ChangeEvent<HTMLInputElement>) => {
+        const newSearch = e.target.value
+        console.log(`${pointKey} - handleSearchChange:`, newSearch)
+        onSearchStateChange(pointKey, { search: newSearch })
+      },
+      [pointKey, onSearchStateChange],
+    )
 
-  return (
-    <Popover open={searchState.open} onOpenChange={handleOpenChange}>
-      <PopoverTrigger asChild>
-        <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
-          {selectedPoint ? (
-            <div className="flex flex-col items-start">
-              <span className="font-medium">{selectedPoint.point_id}</span>
-              <span className="text-xs text-muted-foreground">{selectedPoint.point_name}</span>
-            </div>
-          ) : (
-            "Выберите точку..."
-          )}
-          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-        </Button>
-      </PopoverTrigger>
-      <PopoverContent className="w-[300px] p-0">
-        <div className="flex items-center border-b px-3">
-          <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-          <input
-            className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-            placeholder="Поиск по коду или названию..."
-            value={searchState.search}
-            onChange={handleSearchChange}
-            autoFocus
-          />
-        </div>
-        <div className="max-h-[200px] overflow-auto">
-          {filteredPoints.length === 0 ? (
-            <div className="py-6 text-center text-sm">
-              {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
-            </div>
-          ) : (
-            filteredPoints.map((point) => (
-              <div
-                key={point.point_id}
-                className={cn(
-                  "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                  value === point.point_id && "bg-accent text-accent-foreground"
-                )}
-                onClick={() => handlePointSelect(point)}
-              >
-                <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
-                <div className="flex flex-col">
-                  <span className="font-medium">{point.point_id}</span>
-                  <span className="text-sm text-muted-foreground">{point.point_name}</span>
-                </div>
+    const handlePointSelect = useCallback(
+      (point: { point_id: string; point_name: string }) => {
+        console.log(`${pointKey} - handlePointSelect:`, point)
+        onChange(point)
+        onSearchStateChange(pointKey, { open: false, search: "" })
+      },
+      [pointKey, onChange, onSearchStateChange],
+    )
+
+    return (
+      <Popover open={searchState.open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
+            {selectedPoint ? (
+              <div className="flex flex-col items-start">
+                <span className="font-medium">{selectedPoint.point_id}</span>
+                <span className="text-xs text-muted-foreground">{selectedPoint.point_name}</span>
               </div>
-            ))
-          )}
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
-})
+            ) : (
+              "Выберите точку..."
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Поиск по коду или названию..."
+              value={searchState.search}
+              onChange={handleSearchChange}
+              autoFocus
+            />
+          </div>
+          <div className="max-h-[200px] overflow-auto">
+            {filteredPoints.length === 0 ? (
+              <div className="py-6 text-center text-sm">
+                {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
+              </div>
+            ) : (
+              filteredPoints.map((point) => (
+                <div
+                  key={point.point_id}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    value === point.point_id && "bg-accent text-accent-foreground",
+                  )}
+                  onClick={() => handlePointSelect(point)}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
+                  <div className="flex flex-col">
+                    <span className="font-medium">{point.point_id}</span>
+                    <span className="text-sm text-muted-foreground">{point.point_name}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    )
+  },
+)
 
 PointSelector.displayName = "PointSelector"
 
@@ -172,6 +198,7 @@ export function TripCorrectionModal({
     try {
       const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`)
       const data = await response.json()
+
       if (data.success) {
         // Добавляем original_trip_identifier для отслеживания изменений
         const correctionsWithOriginal = data.data.map((item: CorrectionData) => ({
@@ -195,6 +222,7 @@ export function TripCorrectionModal({
     try {
       const response = await fetch("/api/points")
       const data = await response.json()
+
       if (data.success) {
         setAvailablePoints(data.points.map((p: any) => ({ point_id: p.point_id, point_name: p.point_name })))
       }
@@ -212,14 +240,9 @@ export function TripCorrectionModal({
   }, [])
 
   const addNewPoint = (tripIdentifier: string) => {
-    const tripCorrections = corrections.filter(
-      (c) => 
-        c.original_trip_identifier === tripIdentifier || 
-        c.trip_identifier === tripIdentifier
-    )
-    
+    const tripCorrections = corrections.filter((c) => c.trip_identifier === tripIdentifier)
     const maxPointNum = Math.max(...tripCorrections.map((c) => c.point_num || 0), 0)
-    
+
     const newPoint: CorrectionData = {
       phone,
       trip_identifier: tripIdentifier,
@@ -231,29 +254,24 @@ export function TripCorrectionModal({
       driver_comment: tripCorrections[0]?.driver_comment || "",
       message_id: tripCorrections[0]?.message_id || 0,
     }
-    
+
     setCorrections([...corrections, newPoint])
   }
 
   const addNewTrip = () => {
-    const now = new Date()
-    now.setMinutes(0, 0, 0)
-    
-    const tempId = `new-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`
-    
+    // Генерируем новый номер рейса
     const newTrip: CorrectionData = {
       phone,
-      trip_identifier: "",
-      original_trip_identifier: tempId,
+      trip_identifier: "", // Пустое поле вместо автогенерации
       vehicle_number: "",
-      planned_loading_time: now.toISOString(),
+      planned_loading_time: new Date().toISOString(),
       point_type: "P",
       point_num: 1,
       point_id: "",
       driver_comment: "",
       message_id: corrections[0]?.message_id || 0,
     }
-    
+
     setCorrections([...corrections, newTrip])
   }
 
@@ -263,13 +281,10 @@ export function TripCorrectionModal({
   }
 
   const removeTrip = (tripIdentifier: string) => {
-    const updated = corrections.filter(
-      (c) => 
-        c.original_trip_identifier !== tripIdentifier && 
-        c.trip_identifier !== tripIdentifier
-    )
-    
+    const updated = corrections.filter((c) => c.trip_identifier !== tripIdentifier)
     setCorrections(updated)
+
+    // Добавляем в список удаленных рейсов
     setDeletedTrips((prev) => [...prev, tripIdentifier])
   }
 
@@ -277,6 +292,7 @@ export function TripCorrectionModal({
     setIsSaving(true)
     setError(null)
     setSuccess(null)
+
     try {
       const response = await fetch(`/api/trips/${tripId}/save-corrections`, {
         method: "POST",
@@ -286,10 +302,12 @@ export function TripCorrectionModal({
         body: JSON.stringify({
           phone,
           corrections,
-          deletedTrips
+          deletedTrips, // Добавляем информацию об удаленных рейсах
         }),
       })
+
       const data = await response.json()
+
       if (data.success) {
         setSuccess("Корректировки сохранены успешно!")
       } else {
@@ -306,58 +324,75 @@ export function TripCorrectionModal({
   const sendCorrection = async () => {
     setIsSending(true)
     setError(null)
+
     try {
+      // Сначала сохраняем корректировки
       await saveCorrections()
-      
-      const response = await fetch(`/api/trips/${tripId}/resend-combined`, {
+
+      // Затем отправляем корректировку водителю
+      const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+
+      const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
           phone,
+          messageIds,
           isCorrection: true,
-          deletedTrips,
+          deletedTrips, // Добавляем информацию об удаленных рейсах
         }),
       })
-      
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-      
+
       const data = await response.json()
+
       if (data.success) {
-        setSuccess("Корректировка отправлена водителю!")
+        setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
         onCorrectionSent()
-        setTimeout(() => onClose(), 3000)
+        setTimeout(() => {
+          onClose()
+        }, 3000)
       } else {
         setError(data.error || "Failed to send correction")
       }
     } catch (error) {
-      setError(error instanceof Error ? error.message : "Error sending correction")
+      setError("Error sending correction")
       console.error("Error sending correction:", error)
     } finally {
       setIsSending(false)
     }
   }
 
+  // Исправленная функция форматирования времени БЕЗ преобразования часовых поясов
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
+
     try {
+      // Если это ISO строка, парсим её вручную без создания Date объекта
       if (dateString.includes("T")) {
+        // Извлекаем дату и время из ISO строки вручную
         const [datePart, timePart] = dateString.split("T")
         const timeWithoutSeconds = timePart.split(":").slice(0, 2).join(":")
+
         return `${datePart}T${timeWithoutSeconds}`
       }
+
+      // Если это строка в другом формате, пробуем распарсить
       if (dateString.includes("/") || dateString.includes("-")) {
+        // Пытаемся найти паттерн даты и времени
         const dateMatch = dateString.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
         const timeMatch = dateString.match(/(\d{1,2}):(\d{2})/)
+
         if (dateMatch && timeMatch) {
           const [, day, month, year] = dateMatch
           const [, hours, minutes] = timeMatch
+
           return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hours.padStart(2, "0")}:${minutes}`
         }
       }
+
+      // Если ничего не подошло, возвращаем пустую строку
       return ""
     } catch (error) {
       console.error("Error formatting date:", error, "Input:", dateString)
@@ -365,36 +400,48 @@ export function TripCorrectionModal({
     }
   }
 
+  // Исправленная функция сохранения времени БЕЗ преобразования часовых поясов
   const formatDateTimeForSave = (dateString: string) => {
     if (!dateString) return ""
     try {
+      // Добавляем секунды и миллисекунды, но НЕ добавляем Z (UTC)
+      // Это сохранит время как локальное
       return dateString + ":00.000"
     } catch {
       return dateString
     }
   }
 
+  // Функция для получения уникального ключа для каждой точки
   const getPointKey = (tripIdentifier: string, pointType: string, pointNum: number) => {
     return `${tripIdentifier}-${pointType}-${pointNum}`
   }
 
+  // Мемоизированная функция для управления состоянием поиска точек
   const handleSearchStateChange = useCallback((key: string, state: { open?: boolean; search?: string }) => {
-    setPointSearchStates((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], ...state }
-    }))
+    console.log(`setPointSearchState ${key}:`, state)
+    setPointSearchStates((prev) => {
+      const newState = {
+        ...prev,
+        [key]: { ...prev[key], ...state },
+      }
+      console.log(`New pointSearchStates:`, newState)
+      return newState
+    })
   }, [])
 
-  const groupedCorrections = useMemo(() => {
-    return corrections.reduce((groups, correction) => {
-      const key = correction.original_trip_identifier || correction.trip_identifier
+  // Группируем корректировки по trip_identifier
+  const groupedCorrections = corrections.reduce(
+    (groups, correction) => {
+      const key = correction.trip_identifier
       if (!groups[key]) {
         groups[key] = []
       }
       groups[key].push(correction)
       return groups
-    }, {} as Record<string, CorrectionData[]>)
-  }, [corrections])
+    },
+    {} as Record<string, CorrectionData[]>,
+  )
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -402,6 +449,7 @@ export function TripCorrectionModal({
         <DialogHeader>
           <DialogTitle>Корректировка рейсов для {driverName}</DialogTitle>
         </DialogHeader>
+
         <Alert className="border-orange-200 bg-orange-50">
           <AlertTriangle className="h-4 w-4 text-orange-600" />
           <AlertDescription className="text-orange-800">
@@ -409,16 +457,19 @@ export function TripCorrectionModal({
             потребуется заново подтвердить скорректированные рейсы.
           </AlertDescription>
         </Alert>
+
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
+
         {success && (
           <Alert>
             <AlertDescription className="text-green-600">{success}</AlertDescription>
           </Alert>
         )}
+
         {isLoading ? (
           <div className="flex items-center justify-center p-8">
             <RefreshCw className="h-6 w-6 animate-spin mr-2" />
@@ -432,200 +483,188 @@ export function TripCorrectionModal({
                 Добавить новый рейс
               </Button>
             </div>
-            {Object.entries(groupedCorrections).map(([groupKey, tripCorrections]) => {
-              const stableKey = tripCorrections[0].original_trip_identifier || groupKey
-              
-              return (
-                <div key={stableKey} className="border rounded-lg p-4">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-lg font-semibold">Рейс {tripCorrections[0].trip_identifier || 'Новый рейс'}</h3>
-                    <div className="flex gap-2">
-                      <Button 
-                        onClick={() => addNewPoint(stableKey)}
-                        variant="outline" 
+
+            {Object.entries(groupedCorrections).map(([tripIdentifier, tripCorrections]) => (
+              <div key={tripIdentifier} className="border rounded-lg p-4">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold">Рейс {tripIdentifier}</h3>
+                  <div className="flex gap-2">
+                    <Button
+                      onClick={() => addNewPoint(tripIdentifier)}
+                      variant="outline"
+                      size="sm"
+                      className="text-blue-600"
+                    >
+                      <Plus className="h-4 w-4 mr-2" />
+                      Добавить точку
+                    </Button>
+                    {Object.keys(groupedCorrections).length > 1 && (
+                      <Button
+                        onClick={() => removeTrip(tripIdentifier)}
+                        variant="outline"
                         size="sm"
-                        className="text-blue-600"
+                        className="text-red-600"
                       >
-                        <Plus className="h-4 w-4 mr-2" />
-                        Добавить точку
+                        <X className="h-4 w-4 mr-2" />
+                        Удалить рейс
                       </Button>
-                      
-                      {Object.keys(groupedCorrections).length > 1 && (
-                        <Button
-                          onClick={() => removeTrip(stableKey)}
-                          variant="outline"
-                          size="sm"
-                          className="text-red-600"
-                        >
-                          <X className="h-4 w-4 mr-2" />
-                          Удалить рейс
-                        </Button>
-                      )}
-                    </div>
+                    )}
                   </div>
-                  
-                  <div className="grid grid-cols-4 gap-4 mb-4">
-                    <div>
-                      <label className="text-sm font-medium">Номер рейса</label>
-                      <Input
-                        value={tripCorrections[0]?.trip_identifier || ""}
-                        onChange={(e) => {
-                          const newValue = e.target.value
-                          const currentTripId = tripCorrections[0].trip_identifier
-                          
-                          if (newValue === currentTripId) return
-                          
-                          setCorrections((prev) =>
-                            prev.map((c) =>
-                              c.original_trip_identifier === stableKey || c.trip_identifier === stableKey
-                                ? { ...c, trip_identifier: newValue }
-                                : c
-                            )
-                          )
-                        }}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium">Транспорт</label>
-                      <Input
-                        value={tripCorrections[0]?.vehicle_number || ""}
-                        onChange={(e) => {
-                          const updatedCorrections = corrections.map((c) =>
-                            c.original_trip_identifier === stableKey || c.trip_identifier === stableKey
-                              ? { ...c, vehicle_number: e.target.value }
-                              : c
-                          )
-                          setCorrections(updatedCorrections)
-                        }}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium">Время погрузки</label>
-                      <Input
-                        type="datetime-local"
-                        value={formatDateTime(tripCorrections[0]?.planned_loading_time || "")}
-                        onChange={(e) => {
-                          const formattedDate = formatDateTimeForSave(e.target.value)
-                          const updatedCorrections = corrections.map((c) =>
-                            c.original_trip_identifier === stableKey || c.trip_identifier === stableKey
-                              ? { ...c, planned_loading_time: formattedDate }
-                              : c
-                          )
-                          setCorrections(updatedCorrections)
-                        }}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="text-sm font-medium">Комментарий</label>
-                      <Input
-                        value={tripCorrections[0]?.driver_comment || ""}
-                        onChange={(e) => {
-                          const updatedCorrections = corrections.map((c) =>
-                            c.original_trip_identifier === stableKey || c.trip_identifier === stableKey
-                              ? { ...c, driver_comment: e.target.value }
-                              : c
-                          )
-                          setCorrections(updatedCorrections)
-                        }}
-                      />
-                    </div>
-                  </div>
-                  
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Тип</TableHead>
-                        <TableHead>№</TableHead>
-                        <TableHead>Точка</TableHead>
-                        <TableHead>Действия</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {tripCorrections.map((correction, index) => {
-                        const globalIndex = corrections.findIndex(
-                          (c) =>
-                            c.trip_identifier === correction.trip_identifier &&
-                            c.point_num === correction.point_num &&
-                            c.point_type === correction.point_type
-                        )
-                        
-                        const pointKey = getPointKey(
-                          correction.trip_identifier,
-                          correction.point_type,
-                          correction.point_num
-                        )
-                        
-                        return (
-                          <TableRow
-                            key={`${correction.original_trip_identifier || correction.trip_identifier}-${correction.point_type}-${correction.point_num}`}
-                          >
-                            <TableCell>
-                              <Select
-                                value={correction.point_type}
-                                onValueChange={(value: "P" | "D") => updateCorrection(globalIndex, "point_type", value)}
-                              >
-                                <SelectTrigger className="w-20">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="P">
-                                    <Badge variant="outline" className="bg-blue-100 text-blue-600">
-                                      P
-                                    </Badge>
-                                  </SelectItem>
-                                  <SelectItem value="D">
-                                    <Badge variant="outline" className="bg-green-100 text-green-600">
-                                      D
-                                    </Badge>
-                                  </SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </TableCell>
-                            <TableCell>
-                              <Input
-                                type="number"
-                                value={correction.point_num}
-                                onChange={(e) =>
-                                  updateCorrection(globalIndex, "point_num", Number.parseInt(e.target.value))
-                                }
-                                className="w-16"
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <PointSelector
-                                value={correction.point_id}
-                                onChange={(point) => {
-                                  updateCorrection(globalIndex, "point_id", point.point_id)
-                                  updateCorrection(globalIndex, "point_name", point.point_name)
-                                }}
-                                pointKey={pointKey}
-                                availablePoints={availablePoints}
-                                searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
-                                onSearchStateChange={handleSearchStateChange}
-                              />
-                            </TableCell>
-                            <TableCell>
-                              <Button
-                                onClick={() => removePoint(globalIndex)}
-                                variant="outline"
-                                size="sm"
-                                className="text-red-600"
-                              >
-                                <Trash2 className="h-4 w-4" />
-                              </Button>
-                            </TableCell>
-                          </TableRow>
-                        )
-                      })}
-                    </TableBody>
-                  </Table>
                 </div>
-              )
-            })}
-            
+
+                <div className="grid grid-cols-4 gap-4 mb-4">
+                  <div>
+                    <label className="text-sm font-medium">Номер рейса</label>
+                    <Input
+                      value={tripCorrections[0]?.trip_identifier || ""}
+                      onChange={(e) => {
+                        // Обновляем для всех точек этого рейса
+                        const updatedCorrections = corrections.map((c) =>
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, trip_identifier: e.target.value }
+                            : c,
+                        )
+                        setCorrections(updatedCorrections)
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Транспорт</label>
+                    <Input
+                      value={tripCorrections[0]?.vehicle_number || ""}
+                      onChange={(e) => {
+                        // Обновляем для всех точек этого рейса
+                        const updatedCorrections = corrections.map((c) =>
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, vehicle_number: e.target.value }
+                            : c,
+                        )
+                        setCorrections(updatedCorrections)
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Время погрузки</label>
+                    <Input
+                      type="datetime-local"
+                      value={formatDateTime(tripCorrections[0]?.planned_loading_time || "")}
+                      onChange={(e) => {
+                        const formattedDate = formatDateTimeForSave(e.target.value)
+                        const updatedCorrections = corrections.map((c) =>
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, planned_loading_time: formattedDate }
+                            : c,
+                        )
+                        setCorrections(updatedCorrections)
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <label className="text-sm font-medium">Комментарий</label>
+                    <Input
+                      value={tripCorrections[0]?.driver_comment || ""}
+                      onChange={(e) => {
+                        const updatedCorrections = corrections.map((c) =>
+                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                            ? { ...c, driver_comment: e.target.value }
+                            : c,
+                        )
+                        setCorrections(updatedCorrections)
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Тип</TableHead>
+                      <TableHead>№</TableHead>
+                      <TableHead>Точка</TableHead>
+                      <TableHead>Действия</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {tripCorrections.map((correction, index) => {
+                      const globalIndex = corrections.findIndex(
+                        (c) =>
+                          c.trip_identifier === correction.trip_identifier &&
+                          c.point_num === correction.point_num &&
+                          c.point_type === correction.point_type,
+                      )
+                      const pointKey = getPointKey(
+                        correction.trip_identifier,
+                        correction.point_type,
+                        correction.point_num,
+                      )
+
+                      return (
+                        <TableRow
+                          key={`${correction.trip_identifier}-${correction.point_type}-${correction.point_num}`}
+                        >
+                          <TableCell>
+                            <Select
+                              value={correction.point_type}
+                              onValueChange={(value: "P" | "D") => updateCorrection(globalIndex, "point_type", value)}
+                            >
+                              <SelectTrigger className="w-20">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="P">
+                                  <Badge variant="outline" className="bg-blue-100 text-blue-600">
+                                    P
+                                  </Badge>
+                                </SelectItem>
+                                <SelectItem value="D">
+                                  <Badge variant="outline" className="bg-green-100 text-green-600">
+                                    D
+                                  </Badge>
+                                </SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              value={correction.point_num}
+                              onChange={(e) =>
+                                updateCorrection(globalIndex, "point_num", Number.parseInt(e.target.value))
+                              }
+                              className="w-16"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <PointSelector
+                              value={correction.point_id}
+                              onChange={(point) => {
+                                updateCorrection(globalIndex, "point_id", point.point_id)
+                                updateCorrection(globalIndex, "point_name", point.point_name)
+                              }}
+                              pointKey={pointKey}
+                              availablePoints={availablePoints}
+                              searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
+                              onSearchStateChange={handleSearchStateChange}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Button
+                              onClick={() => removePoint(globalIndex)}
+                              variant="outline"
+                              size="sm"
+                              className="text-red-600"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              </div>
+            ))}
+
             <div className="flex gap-4 justify-end">
               <Button onClick={onClose} variant="outline">
                 Отмена
