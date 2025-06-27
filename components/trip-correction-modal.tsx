@@ -1,7 +1,7 @@
 "use client"
 
 import type React from "react"
-import { useState, useEffect, useCallback, memo } from "react"
+import { useState, useEffect, useCallback, memo, useMemo } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -429,18 +429,16 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  // Группируем корректировки по trip_identifier
-  const groupedCorrections = corrections.reduce(
-    (groups, correction) => {
-      const key = correction.trip_identifier
-      if (!groups[key]) {
-        groups[key] = []
-      }
-      groups[key].push(correction)
-      return groups
-    },
-    {} as Record<string, CorrectionData[]>,
-  )
+ const groupedCorrections = useMemo(() => {
+  return corrections.reduce((groups, correction) => {
+    const key = correction.original_trip_identifier || correction.trip_identifier
+    if (!groups[key]) {
+      groups[key] = []
+    }
+    groups[key].push(correction)
+    return groups
+  }, {} as Record<string, CorrectionData[]>)
+}, [corrections])
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -506,18 +504,22 @@ export function TripCorrectionModal({
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div>
                     <label className="text-sm font-medium">Номер рейса</label>
-                    <Input
-                      value={tripCorrections[0]?.trip_identifier || ""}
-                      onChange={(e) => {
-                        // Обновляем для всех точек этого рейса
-                        const updatedCorrections = corrections.map((c) =>
-                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                            ? { ...c, trip_identifier: e.target.value }
-                            : c,
-                        )
-                        setCorrections(updatedCorrections)
-                      }}
-                    />
+                       <Input
+                        value={tripCorrections[0]?.trip_identifier || ""}
+                        onChange={(e) => {
+                          const newValue = e.target.value;
+                          // Проверяем, нужно ли вообще обновлять
+                          if (tripCorrections[0].trip_identifier === newValue) return;
+
+                          setCorrections((prev) =>
+                            prev.map((c) =>
+                              c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                                ? { ...c, trip_identifier: newValue }
+                                : c
+                            )
+                          );
+                        }}
+                      />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Транспорт</label>
