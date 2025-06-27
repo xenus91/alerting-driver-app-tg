@@ -508,22 +508,24 @@ const addNewTrip = () => {
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div>
                     <label className="text-sm font-medium">Номер рейса</label>
-                       <Input
-                        value={tripCorrections[0]?.trip_identifier || ""}
-                        onChange={(e) => {
-                          const newValue = e.target.value;
-                          // Проверяем, нужно ли вообще обновлять
-                          if (tripCorrections[0].trip_identifier === newValue) return;
+                    <Input
+                      value={tripCorrections[0]?.trip_identifier || ""}
+                      onChange={(e) => {
+                        const newValue = e.target.value
+                        const currentTripId = tripCorrections[0].trip_identifier
 
-                          setCorrections((prev) =>
-                            prev.map((c) =>
-                              c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                                ? { ...c, trip_identifier: newValue }
-                                : c
-                            )
-                          );
-                        }}
-                      />
+                        // Не обновляем, если значение не изменилось
+                        if (newValue === currentTripId) return
+
+                        setCorrections((prev) =>
+                          prev.map((c) =>
+                            c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
+                              ? { ...c, trip_identifier: newValue }
+                              : c
+                          )
+                        )
+                      }}
+                    />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Транспорт</label>
@@ -662,7 +664,7 @@ const addNewTrip = () => {
                                 {/* ПЕРЕМЕЩЕННАЯ КНОПКА: теперь под таблицей справа */}
                 <div className="flex justify-end mt-2">
                   <Button 
-                    onClick={() => addNewPoint(tripIdentifier)} 
+                    onClick={() => addNewPoint(tripCorrections[0].trip_identifier)}
                     variant="outline" 
                     size="sm"
                     className="text-blue-600"
