@@ -284,7 +284,7 @@ const addNewPoint = (tripIdentifier: string) => {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           phone,
-          corrections,
+          corrections: corrections.map(({ original_trip_identifier, ...rest }) => rest),
           deletedTrips,
         }),
       })
