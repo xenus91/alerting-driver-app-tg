@@ -114,11 +114,12 @@ export default function TripDetailPage() {
   const [resendingPhone, setResendingPhone] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-  const [correctionModal, setCorrectionModal] = useState<{
-    isOpen: boolean
-    phone: string
-    driverName: string
-  } | null>(null)
+const [correctionModal, setCorrectionModal] = useState<{
+  isOpen: boolean
+  phone: string
+  driverName: string
+  initialCorrections: TripCorrection[] // Добавлено
+} | null>(null)
 
   // Проверяем можно ли удалить рассылку (все подтверждены или завершены)
   const canDeleteTrip = () => {
