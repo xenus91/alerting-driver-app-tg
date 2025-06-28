@@ -65,13 +65,14 @@ export function TripCorrectionModal({
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
 
-  useEffect(() => {
-    if (isOpen) {
-      setCorrections([...initialCorrections])
-      setDeletedTrips([])
-      fetchAvailablePoints()
-    }
-  }, [isOpen, initialCorrections])
+useEffect(() => {
+  if (isOpen) {
+    // Защита от undefined/empty
+    setCorrections(initialCorrections?.length ? [...initialCorrections] : [])
+    setDeletedTrips([])
+    fetchAvailablePoints()
+  }
+}, [isOpen, initialCorrections])
 
   const fetchAvailablePoints = async () => {
     try {
