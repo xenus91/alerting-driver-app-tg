@@ -47,7 +47,7 @@ interface TripCorrectionModalProps {
   onClose: () => void
   tripId: number
   phone: string
-  initialCorrections: TripCorrection[]
+  initialCorrections?: TripCorrection[] // Сделайте опциональным
   onSave: () => void
 }
 
