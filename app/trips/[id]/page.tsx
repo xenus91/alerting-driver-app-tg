@@ -1199,7 +1199,7 @@ const [correctionModal, setCorrectionModal] = useState<{
           </div>
         </div>
       )}
-      {correctionModal && (
+     {correctionModal && (
   <TripCorrectionModal
     isOpen={correctionModal.isOpen}
     onClose={() => setCorrectionModal(null)}
@@ -1213,6 +1213,3 @@ const [correctionModal, setCorrectionModal] = useState<{
     }}
   />
 )}
-    </div>
-  )
-}
