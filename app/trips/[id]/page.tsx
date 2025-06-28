@@ -1105,8 +1105,8 @@ const [correctionModal, setCorrectionModal] = useState<{
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Button
-                          onClick={() =>
-                         // ФИКС: Правильный синтаксис стрелочной функции в JSX
+                          onClick={() => {
+                    // ФИКС: Правильный синтаксис стрелочной функции в JSX
                     setCorrectionModal({
                       isOpen: true,
                       phone: driver.phone,
