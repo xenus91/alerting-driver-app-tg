@@ -118,7 +118,9 @@ useEffect(() => {
 
   const addPoint = (tripIdentifier: string, pointType: "P" | "D") => {
     const existingPoints = corrections.filter((c) => c.trip_identifier === tripIdentifier && c.point_type === pointType)
-    const nextPointNum = Math.max(0, ...existingPoints.map((p) => p.point_num)) + 1
+    const nextPointNum = existingPoints.length > 0 
+    ? Math.max(...existingPoints.map(p => p.point_num)) + 1 
+    : 1
     const firstCorrection = corrections.find((c) => c.trip_identifier === tripIdentifier)
 
     if (firstCorrection) {
