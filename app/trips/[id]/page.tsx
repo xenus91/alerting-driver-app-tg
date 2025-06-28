@@ -1106,10 +1106,31 @@ export default function TripDetailPage() {
                         <Button
                           onClick={() =>
                             setCorrectionModal({
-                              isOpen: true,
-                              phone: driver.phone,
-                              driverName: driver.full_name || driver.first_name || "Неизвестный",
-                            })
+  isOpen: true,
+  phone: driver.phone,
+  driverName: driver.full_name || driver.first_name || "Неизвестный",
+  // Добавляем формирование initialCorrections
+  initialCorrections: driver.trips.flatMap(trip => {
+    const pointsForTrip = tripPoints.filter(p => p.trip_identifier === trip.trip_identifier);
+    return pointsForTrip.map(point => ({
+      phone: driver.phone,
+      trip_identifier: trip.trip_identifier,
+      vehicle_number: trip.vehicle_number,
+      planned_loading_time: trip.planned_loading_time,
+      driver_comment: trip.driver_comment || "",
+      message_id: trip.messageId,
+      point_type: point.point_type,
+      point_num: point.point_num,
+      point_id: point.point_id,
+      point_name: "", // Заполнится позже из availablePoints
+      door_open_1: point.door_open_1,
+      door_open_2: point.door_open_2,
+      door_open_3: point.door_open_3,
+      latitude: "",
+      longitude: "",
+    }));
+  })
+});
                           }
                           variant="outline"
                           size="sm"
