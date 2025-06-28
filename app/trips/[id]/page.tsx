@@ -1200,18 +1200,19 @@ const [correctionModal, setCorrectionModal] = useState<{
         </div>
       )}
       {correctionModal && (
-        <TripCorrectionModal
-          isOpen={correctionModal.isOpen}
-          onClose={() => setCorrectionModal(null)}
-          tripId={tripId}
-          phone={correctionModal.phone}
-          driverName={correctionModal.driverName}
-          onCorrectionSent={() => {
-            fetchMessages()
-            setCorrectionModal(null)
-          }}
-        />
-      )}
+  <TripCorrectionModal
+    isOpen={correctionModal.isOpen}
+    onClose={() => setCorrectionModal(null)}
+    tripId={tripId}
+    phone={correctionModal.phone}
+    initialCorrections={correctionModal.initialCorrections} // Добавлено
+    driverName={correctionModal.driverName}
+    onSave={() => {
+      fetchMessages()
+      setCorrectionModal(null)
+    }}
+  />
+)}
     </div>
   )
 }
