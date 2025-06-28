@@ -75,16 +75,24 @@ useEffect(() => {
 }, [isOpen, initialCorrections])
 
   const fetchAvailablePoints = async () => {
-    try {
-      const response = await fetch("/api/points")
-      if (response.ok) {
-        const data = await response.json()
-        setAvailablePoints(data.points || [])
-      }
-    } catch (error) {
-      console.error("Error fetching points:", error)
+  setIsLoading(true)
+  try {
+    const response = await fetch("/api/points")
+    if (response.ok) {
+      const data = await response.json()
+      setAvailablePoints(data.points || [])
+    } else {
+      toast.error("Ошибка загрузки точек")
+      setAvailablePoints([])
     }
+  } catch (error) {
+    console.error("Error fetching points:", error)
+    toast.error("Ошибка сети")
+    setAvailablePoints([])
+  } finally {
+    setIsLoading(false)
   }
+}
 
   // Группируем корректировки по trip_identifier (БЕЗ сортировки)
   const tripGroups = corrections.reduce((acc: Record<string, TripCorrection[]>, correction) => {
