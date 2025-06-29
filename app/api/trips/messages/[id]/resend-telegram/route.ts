@@ -43,10 +43,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Удаляем предыдущее сообщение если оно есть
-    if (message.telegram_message_id) {
+   /* if (message.telegram_message_id) {
       console.log(`Deleting previous message ${message.telegram_message_id} for chat ${message.telegram_id}`)
       await deleteMessage(message.telegram_id, message.telegram_message_id)
-    }
+    }*/
 
     // Получаем точки для рейса с координатами
     const pointsResult = await sql`

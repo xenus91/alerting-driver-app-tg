@@ -223,11 +223,6 @@ export default function UsersPage() {
           return (
             <div>
               <div className="font-medium">{user.full_name || user.name || "Неизвестный"}</div>
-              {user.first_name && user.last_name && (
-                <div className="text-xs text-muted-foreground">
-                  {user.first_name} {user.last_name}
-                </div>
-              )}
             </div>
           )
         },
