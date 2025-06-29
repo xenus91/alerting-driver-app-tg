@@ -203,6 +203,13 @@ export default function TripDetailPage() {
     return route
   }
 
+  const fetchInitialCorrections = async (phone: string): Promise<TripCorrection[]> => {
+  const response = await fetch(`/api/trips/${tripId}/corrections?phone=${phone}`)
+  if (!response.ok) throw new Error("Failed to load corrections")
+  const data = await response.json()
+  return data.corrections || []
+}
+
   // Группировка сообщений по водителям
   const groupMessagesByDriver = (messages: TripMessage[]): GroupedDriver[] => {
     const driverMap = new Map<string, GroupedDriver>()
