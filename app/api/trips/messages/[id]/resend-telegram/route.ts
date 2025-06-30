@@ -1,19 +1,26 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendTripMessageWithButtons, deleteMessage } from "@/lib/telegram"
+import { sendMultipleTripMessageWithButtons, deleteMessage } from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const messageId = Number.parseInt(params.id)
+  const { isCorrection = false } = await request.json()
 
   try {
-    console.log(`=== RESENDING SINGLE MESSAGE ===`)
-    console.log(`Message ID: ${messageId}`)
+    console.log(`=== RESENDING TELEGRAM MESSAGE ===`)
+    console.log(`Message ID: ${messageId}, Is correction: ${isCorrection}`)
 
-    // Получаем информацию о сообщении
+    // Получаем информацию о сообщении и пользователе
     const messageResult = await sql`
-      SELECT tm.*, u.telegram_id, u.first_name, u.full_name, tm.telegram_message_id
+      SELECT 
+        tm.*, 
+        u.telegram_id, 
+        u.first_name, 
+        u.full_name, 
+        u.name,
+        tm.telegram_message_id
       FROM trip_messages tm
       JOIN users u ON tm.phone = u.phone
       WHERE tm.id = ${messageId}
@@ -22,11 +29,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     if (messageResult.length === 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "Message not found",
-        },
-        { status: 404 },
+        { success: false, error: "Message not found" },
+        { status: 404 }
       )
     }
 
@@ -34,21 +38,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     if (!message.telegram_id) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "User telegram_id not found",
-        },
-        { status: 400 },
+        { success: false, error: "User telegram_id not found" },
+        { status: 400 }
       )
     }
 
-    // Удаляем предыдущее сообщение если оно есть
-   /* if (message.telegram_message_id) {
-      console.log(`Deleting previous message ${message.telegram_message_id} for chat ${message.telegram_id}`)
-      await deleteMessage(message.telegram_id, message.telegram_message_id)
-    }*/
+    const driverName = message.full_name || message.first_name || message.name || "Водитель"
 
-    // Получаем точки для рейса с координатами
+    // Получаем точки для рейса
     const pointsResult = await sql`
       SELECT 
         tp.*, 
@@ -61,20 +58,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         p.longitude
       FROM trip_points tp
       JOIN points p ON tp.point_id = p.id
-      WHERE tp.trip_id = ${message.trip_id} AND tp.trip_identifier = ${message.trip_identifier}
+      WHERE tp.trip_id = ${message.trip_id} 
+        AND (tp.trip_identifier = ${message.trip_identifier} OR tp.trip_identifier IS NULL)
       ORDER BY tp.point_type DESC, tp.point_num
     `
 
-    console.log(
-      `Points for trip ${message.trip_identifier}:`,
-      pointsResult.map((p) => ({
-        id: p.point_short_id,
-        name: p.point_name,
-        lat: p.latitude,
-        lng: p.longitude,
-        type: p.point_type,
-      })),
-    )
+    console.log(`Found ${pointsResult.length} points for trip ${message.trip_identifier}`)
 
     const loading_points = []
     const unloading_points = []
@@ -97,37 +86,46 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
     }
 
-    const tripData = {
+    // Формируем данные для отправки
+    const trips = [{
       trip_identifier: message.trip_identifier,
       vehicle_number: message.vehicle_number,
       planned_loading_time: message.planned_loading_time,
       driver_comment: message.driver_comment,
-    }
-
-    console.log(`Prepared trip data for resending:`, tripData)
-
-    // Отправляем сообщение в Telegram
-    const telegramResult = await sendTripMessageWithButtons(
-      message.telegram_id,
-      tripData,
       loading_points,
       unloading_points,
-      message.first_name || "Водитель",
+    }]
+
+    /*// Удаляем предыдущее сообщение если оно есть
+    if (message.telegram_message_id) {
+      console.log(`Deleting previous message ${message.telegram_message_id}`)
+      await deleteMessage(message.telegram_id, message.telegram_message_id)
+    }
+*/
+    // Отправляем сообщение (используем multiple для единого формата)
+    const telegramResult = await sendMultipleTripMessageWithButtons(
+      message.telegram_id,
+      trips,
+      driverName,
       messageId,
+      isCorrection
     )
 
     // Обновляем статус сообщения
-    const updateResult = await sql`
+    await sql`
       UPDATE trip_messages 
-      SET status = 'sent', 
-          sent_at = ${new Date().toISOString()},
-          error_message = NULL,
-          telegram_message_id = ${telegramResult.message_id}
+      SET 
+        status = 'sent',
+        sent_at = ${new Date().toISOString()},
+        error_message = NULL,
+        telegram_message_id = ${telegramResult.message_id},
+        response_status = 'pending',
+        response_comment = NULL,
+        response_at = NULL
       WHERE id = ${messageId}
-      RETURNING *
     `
 
-    console.log(`Updated message status to sent`)
+    console.log(`Message ${messageId} resent successfully`)
 
     return NextResponse.json({
       success: true,
@@ -135,6 +133,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       messageId: messageId,
       telegramMessageId: telegramResult.message_id,
     })
+
   } catch (error) {
     console.error("Error resending message:", error)
 
@@ -142,8 +141,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     try {
       await sql`
         UPDATE trip_messages 
-        SET status = 'error', 
-            error_message = ${error instanceof Error ? error.message : "Unknown error"}
+        SET 
+          status = 'error',
+          error_message = ${error instanceof Error ? error.message : "Unknown error"}
         WHERE id = ${messageId}
       `
     } catch (updateError) {
@@ -156,7 +156,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         error: "Failed to resend message",
         details: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 },
+      { status: 500 }
     )
   }
 }
