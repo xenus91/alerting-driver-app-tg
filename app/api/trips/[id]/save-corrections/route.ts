@@ -15,36 +15,29 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     // Начинаем транзакцию
     await sql`BEGIN`
 
-    // Сначала удаляем рейсы, которые были помечены для удаления
+    // 1. Помечаем удаленные рейсы вместо физического удаления
     if (deletedTrips.length > 0) {
-      console.log(`Deleting trips: ${deletedTrips.join(", ")} for phone ${phone}`)
-
-      for (const tripIdentifier of deletedTrips) {
-        // Удаляем из trip_messages
-        await sql`
-          DELETE FROM trip_messages 
-          WHERE trip_id = ${tripId} 
-            AND phone = ${phone} 
-            AND trip_identifier = ${tripIdentifier}
-        `
-
-        // Удаляем из trip_points
-        await sql`
-          DELETE FROM trip_points 
-          WHERE trip_id = ${tripId} 
-            AND trip_identifier = ${tripIdentifier}
-        `
-
-        console.log(`Deleted trip ${tripIdentifier} for phone ${phone}`)
-      }
+      console.log(`Marking trips as deleted: ${deletedTrips.join(", ")}`)
+      
+      // Обновляем статус в trip_messages
+      await sql`
+        UPDATE trip_messages 
+        SET status = 'deleted'
+        WHERE trip_id = ${tripId} 
+          AND phone = ${phone} 
+          AND trip_identifier = ANY(${deletedTrips})
+      `
+      
+      console.log(`Marked ${deletedTrips.length} trips as deleted in trip_messages`)
     }
 
     try {
-      // Группируем корректировки по original_trip_identifier для обновления
+      // 2. Группируем корректировки по original_trip_identifier
       const originalTripGroups = new Map()
 
       for (const correction of corrections) {
         const originalKey = correction.original_trip_identifier || correction.trip_identifier
+        
         if (!originalTripGroups.has(originalKey)) {
           originalTripGroups.set(originalKey, {
             original_trip_identifier: originalKey,
@@ -53,7 +46,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             planned_loading_time: correction.planned_loading_time,
             driver_comment: correction.driver_comment,
             points: [],
-            is_new_trip: !correction.original_trip_identifier, // Новый рейс если нет original
+            is_new_trip: !correction.original_trip_identifier,
+            is_restored: correction.is_restored || false // Флаг восстановления
           })
         }
 
@@ -66,13 +60,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
       }
 
-      // Обрабатываем каждый рейс
+      // 3. Обрабатываем каждый рейс
       for (const [originalTripIdentifier, tripData] of originalTripGroups) {
         if (tripData.is_new_trip) {
-          console.log(`Creating new trip message for trip: ${tripData.new_trip_identifier}`)
-
-          // Создаем новое сообщение для нового рейса со статусом 'sent'
-          // чтобы оно было включено в отправку корректировки
+          // Создаем новый рейс
+          console.log(`Creating new trip: ${tripData.new_trip_identifier}`)
+          
           await sql`
             INSERT INTO trip_messages (
               trip_id, phone, message, telegram_id, status, response_status,
@@ -95,35 +88,50 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             WHERE phone = ${phone}
             LIMIT 1
           `
-
-          console.log(`Created new trip message for ${tripData.new_trip_identifier}`)
         } else {
-          // Обновляем существующее сообщение и сбрасываем статус подтверждения
-          await sql`
-            UPDATE trip_messages 
-            SET trip_identifier = ${tripData.new_trip_identifier},
-                vehicle_number = ${tripData.vehicle_number},
-                planned_loading_time = ${tripData.planned_loading_time},
-                driver_comment = ${tripData.driver_comment || null},
-                response_status = 'pending',
-                response_comment = NULL,
-                response_at = NULL
-            WHERE trip_id = ${tripId} 
-              AND phone = ${phone} 
-              AND trip_identifier = ${originalTripIdentifier}
-          `
-
-          console.log(`Updated existing trip message for ${originalTripIdentifier} -> ${tripData.new_trip_identifier}`)
+          // Обработка существующего рейса
+          if (tripData.is_restored) {
+            // Восстановление удаленного рейса
+            console.log(`Restoring trip: ${originalTripIdentifier}`)
+            
+            await sql`
+              UPDATE trip_messages 
+              SET status = 'sent',
+                  response_status = 'pending',
+                  response_comment = NULL,
+                  response_at = NULL,
+                  trip_identifier = ${tripData.new_trip_identifier},
+                  vehicle_number = ${tripData.vehicle_number},
+                  planned_loading_time = ${tripData.planned_loading_time},
+                  driver_comment = ${tripData.driver_comment || null}
+              WHERE trip_id = ${tripId} 
+                AND phone = ${phone} 
+                AND trip_identifier = ${originalTripIdentifier}
+                AND status = 'deleted'
+            `
+          } else {
+            // Обновление активного рейса
+            console.log(`Updating trip: ${originalTripIdentifier} -> ${tripData.new_trip_identifier}`)
+            
+            await sql`
+              UPDATE trip_messages 
+              SET trip_identifier = ${tripData.new_trip_identifier},
+                  vehicle_number = ${tripData.vehicle_number},
+                  planned_loading_time = ${tripData.planned_loading_time},
+                  driver_comment = ${tripData.driver_comment || null},
+                  response_status = 'pending',
+                  response_comment = NULL,
+                  response_at = NULL
+              WHERE trip_id = ${tripId} 
+                AND phone = ${phone} 
+                AND trip_identifier = ${originalTripIdentifier}
+                AND status = 'sent'
+            `
+          }
         }
 
-        // Удаляем старые точки для этого рейса (используем original_trip_identifier)
-        await sql`
-          DELETE FROM trip_points 
-          WHERE trip_id = ${tripId} 
-            AND trip_identifier = ${originalTripIdentifier}
-        `
-
-        // Добавляем новые точки с новым trip_identifier
+        // 4. Добавляем новые точки для рейса
+        // Важно: старые точки не удаляем, оставляем в БД как исторические данные
         for (const point of tripData.points) {
           // Получаем ID точки из таблицы points
           const pointResult = await sql`
@@ -132,11 +140,23 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
           if (pointResult.length > 0) {
             await sql`
-              INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
-              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier})
+              INSERT INTO trip_points (
+                trip_id, 
+                point_id, 
+                point_type, 
+                point_num, 
+                trip_identifier
+              )
+              VALUES (
+                ${tripId}, 
+                ${pointResult[0].id}, 
+                ${point.point_type}, 
+                ${point.point_num}, 
+                ${tripData.new_trip_identifier}
+              )
+              ON CONFLICT (trip_id, point_id, trip_identifier, point_type, point_num) 
+              DO NOTHING
             `
-
-            console.log(`Added point ${point.point_id} to trip ${tripData.new_trip_identifier}`)
           }
         }
       }
@@ -144,7 +164,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       await sql`COMMIT`
 
       console.log(
-        `Corrections saved successfully for ${originalTripGroups.size} trips, deleted ${deletedTrips.length} trips`,
+        `Corrections saved successfully. Updated: ${originalTripGroups.size} trips, Deleted: ${deletedTrips.length} trips`
       )
 
       return NextResponse.json({
@@ -155,6 +175,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       })
     } catch (error) {
       await sql`ROLLBACK`
+      console.error("Error during transaction:", error)
       throw error
     }
   } catch (error) {

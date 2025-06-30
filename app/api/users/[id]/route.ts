@@ -58,7 +58,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         SET name = ${name},
             first_name = ${first_name},
             last_name = ${last_name},
-            full_name = ${first_name && last_name ? `${first_name} ${last_name}` : name},
+            full_name = ${last_name && first_name   ? `${last_name} ${first_name}` : name},
             carpark = ${carpark},
             role = ${role},
             verified = ${verified}
@@ -72,7 +72,7 @@ export async function PUT(request: NextRequest, { params }: { params: { id: stri
         SET name = ${name},
             first_name = ${first_name},
             last_name = ${last_name},
-            full_name = ${first_name && last_name ? `${first_name} ${last_name}` : name},
+            full_name = ${last_name && first_name   ? `${last_name} ${first_name}` : name},
             carpark = ${carpark},
             role = ${role}
         WHERE id = ${userId}
