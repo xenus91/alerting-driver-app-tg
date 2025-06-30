@@ -16,7 +16,7 @@ import { cn } from "@/lib/utils"
 interface CorrectionData {
   phone: string
   trip_identifier: string
-  original_trip_identifier?: string // Добавляем для отслеживания изменений
+  original_trip_identifier?: string
   vehicle_number: string
   planned_loading_time: string
   point_type: "P" | "D"
@@ -25,6 +25,8 @@ interface CorrectionData {
   point_name?: string
   driver_comment?: string
   message_id: number
+  latitude?: string // ДОБАВЛЕНО: координаты
+  longitude?: string // ДОБАВЛЕНО: координаты
 }
 
 interface TripCorrectionModalProps {
@@ -47,9 +49,9 @@ const PointSelector = memo(
     onSearchStateChange,
   }: {
     value: string
-    onChange: (point: { point_id: string; point_name: string }) => void
+    onChange: (point: { point_id: string; point_name: string; latitude?: string; longitude?: string }) => void // ИЗМЕНЕНО: добавлены координаты
     pointKey: string
-    availablePoints: Array<{ point_id: string; point_name: string }>
+    availablePoints: Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }> // ИЗМЕНЕНО: добавлены координаты
     searchState: { open: boolean; search: string }
     onSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
   }) => {
@@ -70,20 +72,11 @@ const PointSelector = memo(
     const filteredPoints = filterPoints(searchState.search)
     const selectedPoint = availablePoints.find((p) => p.point_id === value)
 
-    console.log(`PointSelector ${pointKey}:`, {
-      searchState,
-      selectedPoint,
-      filteredPointsCount: filteredPoints.length,
-    })
-
     const handleOpenChange = useCallback(
       (open: boolean) => {
-        console.log(`${pointKey} - handleOpenChange:`, open)
         if (open) {
-          // При открытии сбрасываем поиск
           onSearchStateChange(pointKey, { open: true, search: "" })
         } else {
-          // При закрытии также сбрасываем поиск
           onSearchStateChange(pointKey, { open: false, search: "" })
         }
       },
@@ -93,15 +86,13 @@ const PointSelector = memo(
     const handleSearchChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
         const newSearch = e.target.value
-        console.log(`${pointKey} - handleSearchChange:`, newSearch)
         onSearchStateChange(pointKey, { search: newSearch })
       },
       [pointKey, onSearchStateChange],
     )
 
     const handlePointSelect = useCallback(
-      (point: { point_id: string; point_name: string }) => {
-        console.log(`${pointKey} - handlePointSelect:`, point)
+      (point: { point_id: string; point_name: string; latitude?: string; longitude?: string }) => {
         onChange(point)
         onSearchStateChange(pointKey, { open: false, search: "" })
       },
@@ -176,7 +167,7 @@ export function TripCorrectionModal({
 }: TripCorrectionModalProps) {
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
-  const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string }>>([])
+  const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>>([]) // ИЗМЕНЕНО: добавлены координаты
   const [pointSearchStates, setPointSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
@@ -184,7 +175,6 @@ export function TripCorrectionModal({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
-  // Загружаем данные при открытии модального окна
   useEffect(() => {
     if (isOpen) {
       loadDriverDetails()
@@ -200,7 +190,6 @@ export function TripCorrectionModal({
       const data = await response.json()
 
       if (data.success) {
-        // Добавляем original_trip_identifier для отслеживания изменений
         const correctionsWithOriginal = data.data.map((item: CorrectionData) => ({
           ...item,
           original_trip_identifier: item.trip_identifier,
@@ -218,13 +207,19 @@ export function TripCorrectionModal({
     }
   }
 
+  // ИЗМЕНЕНО: добавлены координаты
   const loadAvailablePoints = async () => {
     try {
       const response = await fetch("/api/points")
       const data = await response.json()
 
       if (data.success) {
-        setAvailablePoints(data.points.map((p: any) => ({ point_id: p.point_id, point_name: p.point_name })))
+        setAvailablePoints(data.points.map((p: any) => ({ 
+          point_id: p.point_id, 
+          point_name: p.point_name,
+          latitude: p.latitude,
+          longitude: p.longitude
+        })))
       }
     } catch (error) {
       console.error("Error loading points:", error)
@@ -239,10 +234,13 @@ export function TripCorrectionModal({
     })
   }, [])
 
+  // ИЗМЕНЕНО: добавлены координаты
   const addNewPoint = (tripIdentifier: string) => {
     const tripCorrections = corrections.filter((c) => c.trip_identifier === tripIdentifier)
     const maxPointNum = Math.max(...tripCorrections.map((c) => c.point_num || 0), 0)
 
+    const defaultPoint = availablePoints[0] || {}
+    
     const newPoint: CorrectionData = {
       phone,
       trip_identifier: tripIdentifier,
@@ -250,26 +248,34 @@ export function TripCorrectionModal({
       planned_loading_time: tripCorrections[0]?.planned_loading_time || "",
       point_type: "P",
       point_num: maxPointNum + 1,
-      point_id: "",
+      point_id: defaultPoint.point_id || "",
+      point_name: defaultPoint.point_name || "",
       driver_comment: tripCorrections[0]?.driver_comment || "",
       message_id: tripCorrections[0]?.message_id || 0,
+      latitude: defaultPoint.latitude, // ДОБАВЛЕНО
+      longitude: defaultPoint.longitude // ДОБАВЛЕНО
     }
 
     setCorrections([...corrections, newPoint])
   }
 
+  // ИЗМЕНЕНО: добавлены координаты
   const addNewTrip = () => {
-    // Генерируем новый номер рейса
+    const defaultPoint = availablePoints[0] || {}
+    
     const newTrip: CorrectionData = {
       phone,
-      trip_identifier: "", // Пустое поле вместо автогенерации
+      trip_identifier: "",
       vehicle_number: "",
       planned_loading_time: new Date().toISOString(),
       point_type: "P",
       point_num: 1,
-      point_id: "",
+      point_id: defaultPoint.point_id || "",
+      point_name: defaultPoint.point_name || "",
       driver_comment: "",
       message_id: corrections[0]?.message_id || 0,
+      latitude: defaultPoint.latitude, // ДОБАВЛЕНО
+      longitude: defaultPoint.longitude // ДОБАВЛЕНО
     }
 
     setCorrections([...corrections, newTrip])
@@ -283,8 +289,6 @@ export function TripCorrectionModal({
   const removeTrip = (tripIdentifier: string) => {
     const updated = corrections.filter((c) => c.trip_identifier !== tripIdentifier)
     setCorrections(updated)
-
-    // Добавляем в список удаленных рейсов
     setDeletedTrips((prev) => [...prev, tripIdentifier])
   }
 
@@ -302,7 +306,7 @@ export function TripCorrectionModal({
         body: JSON.stringify({
           phone,
           corrections,
-          deletedTrips, // Добавляем информацию об удаленных рейсах
+          deletedTrips,
         }),
       })
 
@@ -326,10 +330,7 @@ export function TripCorrectionModal({
     setError(null)
 
     try {
-      // Сначала сохраняем корректировки
       await saveCorrections()
-
-      // Затем отправляем корректировку водителю
       const messageIds = [...new Set(corrections.map((c) => c.message_id))]
 
       const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
@@ -341,7 +342,7 @@ export function TripCorrectionModal({
           phone,
           messageIds,
           isCorrection: true,
-          deletedTrips, // Добавляем информацию об удаленных рейсах
+          deletedTrips,
         }),
       })
 
@@ -364,23 +365,17 @@ export function TripCorrectionModal({
     }
   }
 
-  // Исправленная функция форматирования времени БЕЗ преобразования часовых поясов
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
 
     try {
-      // Если это ISO строка, парсим её вручную без создания Date объекта
       if (dateString.includes("T")) {
-        // Извлекаем дату и время из ISO строки вручную
         const [datePart, timePart] = dateString.split("T")
         const timeWithoutSeconds = timePart.split(":").slice(0, 2).join(":")
-
         return `${datePart}T${timeWithoutSeconds}`
       }
 
-      // Если это строка в другом формате, пробуем распарсить
       if (dateString.includes("/") || dateString.includes("-")) {
-        // Пытаемся найти паттерн даты и времени
         const dateMatch = dateString.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
         const timeMatch = dateString.match(/(\d{1,2}):(\d{2})/)
 
@@ -392,7 +387,6 @@ export function TripCorrectionModal({
         }
       }
 
-      // Если ничего не подошло, возвращаем пустую строку
       return ""
     } catch (error) {
       console.error("Error formatting date:", error, "Input:", dateString)
@@ -400,37 +394,29 @@ export function TripCorrectionModal({
     }
   }
 
-  // Исправленная функция сохранения времени БЕЗ преобразования часовых поясов
   const formatDateTimeForSave = (dateString: string) => {
     if (!dateString) return ""
     try {
-      // Добавляем секунды и миллисекунды, но НЕ добавляем Z (UTC)
-      // Это сохранит время как локальное
       return dateString + ":00.000"
     } catch {
       return dateString
     }
   }
 
-  // Функция для получения уникального ключа для каждой точки
   const getPointKey = (tripIdentifier: string, pointType: string, pointNum: number) => {
     return `${tripIdentifier}-${pointType}-${pointNum}`
   }
 
-  // Мемоизированная функция для управления состоянием поиска точек
   const handleSearchStateChange = useCallback((key: string, state: { open?: boolean; search?: string }) => {
-    console.log(`setPointSearchState ${key}:`, state)
     setPointSearchStates((prev) => {
       const newState = {
         ...prev,
         [key]: { ...prev[key], ...state },
       }
-      console.log(`New pointSearchStates:`, newState)
       return newState
     })
   }, [])
 
-  // Группируем корректировки по trip_identifier
   const groupedCorrections = corrections.reduce(
     (groups, correction) => {
       const key = correction.trip_identifier
@@ -518,7 +504,6 @@ export function TripCorrectionModal({
                     <Input
                       value={tripCorrections[0]?.trip_identifier || ""}
                       onChange={(e) => {
-                        // Обновляем для всех точек этого рейса
                         const updatedCorrections = corrections.map((c) =>
                           c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
                             ? { ...c, trip_identifier: e.target.value }
@@ -533,7 +518,6 @@ export function TripCorrectionModal({
                     <Input
                       value={tripCorrections[0]?.vehicle_number || ""}
                       onChange={(e) => {
-                        // Обновляем для всех точек этого рейса
                         const updatedCorrections = corrections.map((c) =>
                           c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
                             ? { ...c, vehicle_number: e.target.value }
@@ -638,8 +622,11 @@ export function TripCorrectionModal({
                             <PointSelector
                               value={correction.point_id}
                               onChange={(point) => {
+                                // ИЗМЕНЕНО: обновление координат
                                 updateCorrection(globalIndex, "point_id", point.point_id)
                                 updateCorrection(globalIndex, "point_name", point.point_name)
+                                updateCorrection(globalIndex, "latitude", point.latitude)
+                                updateCorrection(globalIndex, "longitude", point.longitude)
                               }}
                               pointKey={pointKey}
                               availablePoints={availablePoints}
