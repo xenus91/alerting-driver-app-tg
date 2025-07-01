@@ -183,11 +183,12 @@ export default function TripsPage() {
     return new Date(dateString).toLocaleString("ru-RU")
   }
 
-  const calculateSentPercentage = (sent: string | number, total: string | number) => {
-    const sentNum = Number(sent)
-    const totalNum = Number(total)
-    return totalNum > 0 ? Math.round((sentNum / totalNum) * 100) : 0
-  }
+const calculateSentPercentage = (sent: number | string, total: number | string) => {
+  const sentNum = Number(sent)
+  const totalNum = Number(total)
+  if (totalNum === 0) return 0
+  return Math.round((sentNum / totalNum) * 100)
+}
 
   const calculateResponsePercentage = (
     confirmed: string | number,
@@ -477,81 +478,70 @@ export default function TripsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{trip.total_messages}</div>
-                      <div className="text-sm text-muted-foreground">Всего</div>
-                    </div>
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{trip.sent_messages}</div>
-                      <div className="text-sm text-muted-foreground">Отправлено</div>
-                    </div>
-                    {/* Подтверждено - кликабельное */}
-                    <div className="text-center">
-                      {Number(trip.confirmed_responses) > 0 ? (
-                        <Link
-                          href={`/trips/${trip.id}?filter=confirmed`}
-                          className="block hover:opacity-80 transition-opacity"
-                        >
-                          <div className="text-2xl font-bold text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors">
-                            {trip.confirmed_responses}
-                          </div>
-                          <div className="text-sm text-muted-foreground hover:text-emerald-600 transition-colors">
-                            Подтверждено
-                          </div>
-                        </Link>
-                      ) : (
-                        <>
-                          <div className="text-2xl font-bold text-emerald-600">{trip.confirmed_responses}</div>
-                          <div className="text-sm text-muted-foreground">Подтверждено</div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Отклонено - кликабельное */}
-                    <div className="text-center">
-                      {Number(trip.rejected_responses) > 0 ? (
-                        <Link
-                          href={`/trips/${trip.id}?filter=rejected`}
-                          className="block hover:opacity-80 transition-opacity"
-                        >
-                          <div className="text-2xl font-bold text-red-600 cursor-pointer hover:text-red-700 transition-colors">
-                            {trip.rejected_responses}
-                          </div>
-                          <div className="text-sm text-muted-foreground hover:text-red-600 transition-colors">
-                            Отклонено
-                          </div>
-                        </Link>
-                      ) : (
-                        <>
-                          <div className="text-2xl font-bold text-red-600">{trip.rejected_responses}</div>
-                          <div className="text-sm text-muted-foreground">Отклонено</div>
-                        </>
-                      )}
-                    </div>
-
-                    {/* Ожидают - кликабельное */}
-                    <div className="text-center">
-                      {Number(trip.pending_responses) > 0 ? (
-                        <Link
-                          href={`/trips/${trip.id}?filter=pending`}
-                          className="block hover:opacity-80 transition-opacity"
-                        >
-                          <div className="text-2xl font-bold text-orange-600 cursor-pointer hover:text-orange-700 transition-colors">
-                            {trip.pending_responses}
-                          </div>
-                          <div className="text-sm text-muted-foreground hover:text-orange-600 transition-colors">
-                            Ожидают
-                          </div>
-                        </Link>
-                      ) : (
-                        <>
-                          <div className="text-2xl font-bold text-orange-600">{trip.pending_responses}</div>
-                          <div className="text-sm text-muted-foreground">Ожидают</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
+                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+  <div className="text-center">
+    <div className="text-2xl font-bold text-blue-600">{trip.total_messages}</div>
+    <div className="text-sm text-muted-foreground">Всего сообщений</div>
+  </div>
+  <div className="text-center">
+    <div className="text-2xl font-bold text-green-600">{trip.sent_messages}</div>
+    <div className="text-sm text-muted-foreground">Пользователей</div> <!-- Изменено -->
+  </div>
+  {/* Подтверждено */}
+  <div className="text-center">
+    {Number(trip.confirmed_responses) > 0 ? (
+      <Link href={`/trips/${trip.id}?filter=confirmed`} className="block hover:opacity-80 transition-opacity">
+        <div className="text-2xl font-bold text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors">
+          {trip.confirmed_responses}
+        </div>
+        <div className="text-sm text-muted-foreground hover:text-emerald-600 transition-colors">
+          Подтверждено
+        </div>
+      </Link>
+    ) : (
+      <>
+        <div className="text-2xl font-bold text-emerald-600">{trip.confirmed_responses}</div>
+        <div className="text-sm text-muted-foreground">Подтверждено</div>
+      </>
+    )}
+  </div>
+  {/* Отклонено */}
+  <div className="text-center">
+    {Number(trip.rejected_responses) > 0 ? (
+      <Link href={`/trips/${trip.id}?filter=rejected`} className="block hover:opacity-80 transition-opacity">
+        <div className="text-2xl font-bold text-red-600 cursor-pointer hover:text-red-700 transition-colors">
+          {trip.rejected_responses}
+        </div>
+        <div className="text-sm text-muted-foreground hover:text-red-600 transition-colors">
+          Отклонено
+        </div>
+      </Link>
+    ) : (
+      <>
+        <div className="text-2xl font-bold text-red-600">{trip.rejected_responses}</div>
+        <div className="text-sm text-muted-foreground">Отклонено</div>
+      </>
+    )}
+  </div>
+  {/* Ожидают */}
+  <div className="text-center">
+    {Number(trip.pending_responses) > 0 ? (
+      <Link href={`/trips/${trip.id}?filter=pending`} className="block hover:opacity-80 transition-opacity">
+        <div className="text-2xl font-bold text-orange-600 cursor-pointer hover:text-orange-700 transition-colors">
+          {trip.pending_responses}
+        </div>
+        <div className="text-sm text-muted-foreground hover:text-orange-600 transition-colors">
+          Ожидают
+        </div>
+      </Link>
+    ) : (
+      <>
+        <div className="text-2xl font-bold text-orange-600">{trip.pending_responses}</div>
+        <div className="text-sm text-muted-foreground">Ожидают</div>
+      </>
+    )}
+  </div>
+</div>
 
                   <div className="space-y-4">
                     <div>
