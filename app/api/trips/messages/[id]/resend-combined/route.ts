@@ -1,12 +1,12 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendMultipleTripMessageWithButtons, editMessageReplyMarkup } from "@/lib/telegram"
+import { sendMultipleTripMessageWithButtons } from "@/lib/telegram" // Импорт новой функции
 
 const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const messageId = Number.parseInt(params.id)
-  const { phone, isCorrection = false, deletedTrips = [] } = await request.json()
+  const { phone, messageIds, isCorrection = false, deletedTrips = [] } = await request.json()
 
   try {
     console.log(`Resending combined message for messageId: ${messageId}, phone: ${phone}`)
@@ -27,7 +27,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     const user = userResult[0]
     const driverName = user.full_name || user.first_name || user.name || "Неизвестный водитель"
 
-    // Получаем trip_id из сообщения
+    // Получаем trip_id из первого сообщения
     const tripResult = await sql`
       SELECT trip_id FROM trip_messages WHERE id = ${messageId}
     `
@@ -38,31 +38,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const tripId = tripResult[0].trip_id
 
-    // Удаляем кнопки у предыдущих сообщений этого рейса
-    const previousMessages = await sql`
-      SELECT DISTINCT telegram_message_id
-      FROM trip_messages
-      WHERE trip_id = ${tripId}
-        AND phone = ${phone}
-        AND telegram_message_id IS NOT NULL
-        AND id != ${messageId}
-    `
-
-    for (const msg of previousMessages) {
-      try {
-        await editMessageReplyMarkup(
-          user.telegram_id,
-          msg.telegram_message_id,
-          { inline_keyboard: [] }
-        )
-        console.log(`Removed buttons from previous message ${msg.telegram_message_id}`)
-      } catch (error) {
-        console.error(`Error removing buttons from message ${msg.telegram_message_id}:`, error)
-      }
-    }
-
-    // Получаем активные сообщения
-    let messagesQuery = sql`
+    // Получаем ВСЕ активные сообщения для этого пользователя и рейса
+    const messagesResult = await sql`
       SELECT DISTINCT
         tm.id,
         tm.trip_identifier,
@@ -74,24 +51,25 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         AND tm.phone = ${phone}
         AND tm.status = 'sent'
         AND tm.trip_identifier IS NOT NULL
+      ORDER BY tm.trip_identifier
     `
 
-    if (deletedTrips.length > 0) {
-      // Для массива используем sql.join
-      messagesQuery = sql`${messagesQuery} AND tm.trip_identifier NOT IN (${sql.join(deletedTrips, sql`, `)})`
-    }
-
-    messagesQuery = sql`${messagesQuery} ORDER BY tm.trip_identifier`
-
-    const messagesResult = await messagesQuery
+    console.log(
+      `Found ${messagesResult.length} messages to resend:`,
+      messagesResult.map((m) => m.trip_identifier),
+    )
 
     if (messagesResult.length === 0) {
       return NextResponse.json({ success: false, error: "No messages found to resend" }, { status: 404 })
     }
 
-    // Собираем данные о рейсах
+    // Собираем данные о рейсах для новой функции
     const trips = []
+
     for (const message of messagesResult) {
+      console.log(`Processing trip: ${message.trip_identifier}`)
+
+      // Получаем точки для каждого рейса
       const pointsResult = await sql`
         SELECT DISTINCT
           tp.point_type,
@@ -108,6 +86,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${message.trip_identifier}
         ORDER BY tp.point_type DESC, tp.point_num
       `
+
+      console.log(`Found ${pointsResult.length} points for trip ${message.trip_identifier}`)
 
       const loading_points = []
       const unloading_points = []
@@ -140,7 +120,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       })
     }
 
-    // Отправляем сообщение
+    console.log(`Prepared ${trips.length} trips for sending`)
+
+    // Отправляем сообщение через новую функцию
     const telegramResult = await sendMultipleTripMessageWithButtons(
       user.telegram_id,
       trips,
@@ -149,9 +131,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       isCorrection
     )
 
-    // Обновляем статусы сообщений
-    const messageIdsToUpdate = messagesResult.map(m => m.id)
-    if (messageIdsToUpdate.length > 0) {
+    // Обновляем статусы всех сообщений
+    const messageIdsToUpdate = messagesResult.map((m) => m.id)
+
+    for (const msgId of messageIdsToUpdate) {
       await sql`
         UPDATE trip_messages 
         SET telegram_message_id = ${telegramResult.message_id},
@@ -159,9 +142,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             response_comment = NULL,
             response_at = NULL,
             sent_at = CURRENT_TIMESTAMP
-        WHERE id IN (${sql.join(messageIdsToUpdate, sql`, `)})
+        WHERE id = ${msgId}
       `
     }
+
+    console.log(`Successfully sent correction to ${user.telegram_id}, updated ${messageIdsToUpdate.length} messages`)
 
     return NextResponse.json({
       success: true,
@@ -174,13 +159,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   } catch (error) {
     console.error("Error resending combined message:", error)
     
+    // Обновляем статус сообщений при ошибке
     try {
-      await sql`
-        UPDATE trip_messages 
-        SET status = 'error', 
-            error_message = ${error instanceof Error ? error.message : "Unknown error"}
-        WHERE id = ${messageId}
-      `
+      for (const msgId of messageIds) {
+        await sql`
+          UPDATE trip_messages 
+          SET status = 'error', 
+              error_message = ${error instanceof Error ? error.message : "Unknown error"}
+          WHERE id = ${msgId}
+        `
+      }
     } catch (updateError) {
       console.error("Error updating message status:", updateError)
     }
