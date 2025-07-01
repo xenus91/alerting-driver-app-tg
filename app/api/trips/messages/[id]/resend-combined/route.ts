@@ -61,8 +61,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
     }
 
-    // Получаем активные сообщения для этого пользователя и рейса
-    const messagesResult = await sql`
+    // Формируем условие для исключения удаленных рейсов
+    let messagesQuery = sql`
       SELECT DISTINCT
         tm.id,
         tm.trip_identifier,
@@ -74,9 +74,16 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         AND tm.phone = ${phone}
         AND tm.status = 'sent'
         AND tm.trip_identifier IS NOT NULL
-        ${deletedTrips?.length > 0 ? sql`AND tm.trip_identifier NOT IN ${sql(deletedTrips)}` : sql``}
-      ORDER BY tm.trip_identifier
     `
+
+    if (deletedTrips.length > 0) {
+      messagesQuery = sql`${messagesQuery} AND tm.trip_identifier NOT IN (${sql(deletedTrips)})`
+    }
+
+    messagesQuery = sql`${messagesQuery} ORDER BY tm.trip_identifier`
+
+    // Получаем активные сообщения
+    const messagesResult = await messagesQuery
 
     if (messagesResult.length === 0) {
       return NextResponse.json({ success: false, error: "No messages found to resend" }, { status: 404 })
@@ -145,6 +152,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     )
 
     // Обновляем статусы сообщений
+    const messageIdsToUpdate = messagesResult.map(m => m.id)
     await sql`
       UPDATE trip_messages 
       SET telegram_message_id = ${telegramResult.message_id},
@@ -152,7 +160,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           response_comment = NULL,
           response_at = NULL,
           sent_at = CURRENT_TIMESTAMP
-      WHERE id IN ${sql(messagesResult.map(m => m.id))}
+      WHERE id IN (${sql(messageIdsToUpdate)})
     `
 
     return NextResponse.json({
@@ -160,6 +168,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       message: "Correction sent successfully",
       telegram_message_id: telegramResult.message_id,
       trips_count: trips.length,
+      updated_messages: messageIdsToUpdate.length,
     })
     
   } catch (error) {
