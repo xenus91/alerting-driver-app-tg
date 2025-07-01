@@ -61,7 +61,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }
     }
 
-    // Формируем условие для исключения удаленных рейсов
+    // Получаем активные сообщения
     let messagesQuery = sql`
       SELECT DISTINCT
         tm.id,
@@ -77,12 +77,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     `
 
     if (deletedTrips.length > 0) {
-      messagesQuery = sql`${messagesQuery} AND tm.trip_identifier NOT IN (${sql(deletedTrips)})`
+      // Для массива используем sql.join
+      messagesQuery = sql`${messagesQuery} AND tm.trip_identifier NOT IN (${sql.join(deletedTrips, sql`, `)})`
     }
 
     messagesQuery = sql`${messagesQuery} ORDER BY tm.trip_identifier`
 
-    // Получаем активные сообщения
     const messagesResult = await messagesQuery
 
     if (messagesResult.length === 0) {
@@ -90,7 +90,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Собираем данные о рейсах
-    const trips = await Promise.all(messagesResult.map(async (message) => {
+    const trips = []
+    for (const message of messagesResult) {
       const pointsResult = await sql`
         SELECT DISTINCT
           tp.point_type,
@@ -108,39 +109,36 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         ORDER BY tp.point_type DESC, tp.point_num
       `
 
-      const loading_points = pointsResult
-        .filter(p => p.point_type === "P")
-        .map(p => ({
-          point_id: p.point_id,
-          point_name: p.point_name,
-          door_open_1: p.door_open_1,
-          door_open_2: p.door_open_2,
-          door_open_3: p.door_open_3,
-          latitude: p.latitude,
-          longitude: p.longitude,
-        }))
+      const loading_points = []
+      const unloading_points = []
 
-      const unloading_points = pointsResult
-        .filter(p => p.point_type === "D")
-        .map(p => ({
-          point_id: p.point_id,
-          point_name: p.point_name,
-          door_open_1: p.door_open_1,
-          door_open_2: p.door_open_2,
-          door_open_3: p.door_open_3,
-          latitude: p.latitude,
-          longitude: p.longitude,
-        }))
+      for (const point of pointsResult) {
+        const pointInfo = {
+          point_id: point.point_id,
+          point_name: point.point_name,
+          door_open_1: point.door_open_1,
+          door_open_2: point.door_open_2,
+          door_open_3: point.door_open_3,
+          latitude: point.latitude,
+          longitude: point.longitude,
+        }
 
-      return {
+        if (point.point_type === "P") {
+          loading_points.push(pointInfo)
+        } else if (point.point_type === "D") {
+          unloading_points.push(pointInfo)
+        }
+      }
+
+      trips.push({
         trip_identifier: message.trip_identifier,
         vehicle_number: message.vehicle_number,
         planned_loading_time: message.planned_loading_time,
         driver_comment: message.driver_comment || "",
         loading_points,
         unloading_points,
-      }
-    }))
+      })
+    }
 
     // Отправляем сообщение
     const telegramResult = await sendMultipleTripMessageWithButtons(
@@ -153,15 +151,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     // Обновляем статусы сообщений
     const messageIdsToUpdate = messagesResult.map(m => m.id)
-    await sql`
-      UPDATE trip_messages 
-      SET telegram_message_id = ${telegramResult.message_id},
-          response_status = 'pending',
-          response_comment = NULL,
-          response_at = NULL,
-          sent_at = CURRENT_TIMESTAMP
-      WHERE id IN (${sql(messageIdsToUpdate)})
-    `
+    if (messageIdsToUpdate.length > 0) {
+      await sql`
+        UPDATE trip_messages 
+        SET telegram_message_id = ${telegramResult.message_id},
+            response_status = 'pending',
+            response_comment = NULL,
+            response_at = NULL,
+            sent_at = CURRENT_TIMESTAMP
+        WHERE id IN (${sql.join(messageIdsToUpdate, sql`, `)})
+      `
+    }
 
     return NextResponse.json({
       success: true,
