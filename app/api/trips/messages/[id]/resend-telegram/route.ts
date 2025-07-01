@@ -43,10 +43,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     // Удаляем кнопки предыдущего сообщения если оно есть
-      if (message.telegram_message_id) {
-      console.log(`Removing buttons from message ${message.telegram_message_id} for chat ${message.telegram_id}`);
-      await removeButtons(message.telegram_id, message.telegram_message_id);
-    }
+if (message.telegram_message_id) {
+  console.log(`Removing buttons from message ID: ${message.telegram_message_id}`);
+  const buttonsRemoved = await removeButtons(message.telegram_id, message.telegram_message_id);
+  if (!buttonsRemoved) {
+    console.warn('Failed to remove buttons from previous message');
+  }
+}
 
     // Получаем точки для рейса с координатами
     const pointsResult = await sql`
