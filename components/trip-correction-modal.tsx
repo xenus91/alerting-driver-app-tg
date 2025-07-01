@@ -239,7 +239,7 @@ export function TripCorrectionModal({
     const tripCorrections = corrections.filter((c) => c.trip_identifier === tripIdentifier)
     const maxPointNum = Math.max(...tripCorrections.map((c) => c.point_num || 0), 0)
 
-    const defaultPoint = availablePoints[0] || {}
+    //const defaultPoint = availablePoints[0] || {}
     
     const newPoint: CorrectionData = {
       phone,
@@ -248,12 +248,12 @@ export function TripCorrectionModal({
       planned_loading_time: tripCorrections[0]?.planned_loading_time || "",
       point_type: "P",
       point_num: maxPointNum + 1,
-      point_id: defaultPoint.point_id || "",
-      point_name: defaultPoint.point_name || "",
+      point_id: "",
+      point_name: "",
       driver_comment: tripCorrections[0]?.driver_comment || "",
       message_id: tripCorrections[0]?.message_id || 0,
-      latitude: defaultPoint.latitude, // ДОБАВЛЕНО
-      longitude: defaultPoint.longitude // ДОБАВЛЕНО
+      latitude: "", // ДОБАВЛЕНО
+      longitude: "" // ДОБАВЛЕНО
     }
 
     setCorrections([...corrections, newPoint])
@@ -261,7 +261,7 @@ export function TripCorrectionModal({
 
   // ИЗМЕНЕНО: добавлены координаты
   const addNewTrip = () => {
-    const defaultPoint = availablePoints[0] || {}
+    //const defaultPoint = availablePoints[0] || {}
     
     const newTrip: CorrectionData = {
       phone,
@@ -270,12 +270,12 @@ export function TripCorrectionModal({
       planned_loading_time: new Date().toISOString(),
       point_type: "P",
       point_num: 1,
-      point_id: defaultPoint.point_id || "",
-      point_name: defaultPoint.point_name || "",
+      point_id:  "",
+      point_name:  "",
       driver_comment: "",
       message_id: corrections[0]?.message_id || 0,
-      latitude: defaultPoint.latitude, // ДОБАВЛЕНО
-      longitude: defaultPoint.longitude // ДОБАВЛЕНО
+      latitude: "", // ДОБАВЛЕНО
+      longitude: "" // ДОБАВЛЕНО
     }
 
     setCorrections([...corrections, newTrip])
