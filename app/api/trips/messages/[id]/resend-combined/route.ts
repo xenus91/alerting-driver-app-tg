@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendMultipleTripMessageWithButtons } from "@/lib/telegram" // Импорт новой функции
+import { sendMultipleTripMessageWithButtons, removeButtons } from "@/lib/telegram" // Добавлен removeButtons
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -12,7 +12,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`Resending combined message for messageId: ${messageId}, phone: ${phone}`)
     console.log(`Is correction: ${isCorrection}, deleted trips:`, deletedTrips)
 
-    // Получаем информацию о пользователе
     const userResult = await sql`
       SELECT telegram_id, first_name, full_name, name
       FROM users 
@@ -25,9 +24,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const user = userResult[0]
+
     const driverName = user.full_name || user.first_name || user.name || "Неизвестный водитель"
 
-    // Получаем trip_id из первого сообщения
     const tripResult = await sql`
       SELECT trip_id FROM trip_messages WHERE id = ${messageId}
     `
@@ -38,10 +37,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     const tripId = tripResult[0].trip_id
 
-    // Получаем ВСЕ активные сообщения для этого пользователя и рейса
+    // Получаем все активные сообщения для пользователя и рейса
     const messagesResult = await sql`
       SELECT DISTINCT
         tm.id,
+        tm.telegram_message_id,
         tm.trip_identifier,
         tm.vehicle_number,
         tm.planned_loading_time,
@@ -54,22 +54,26 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       ORDER BY tm.trip_identifier
     `
 
-    console.log(
-      `Found ${messagesResult.length} messages to resend:`,
-      messagesResult.map((m) => m.trip_identifier),
-    )
-
     if (messagesResult.length === 0) {
       return NextResponse.json({ success: false, error: "No messages found to resend" }, { status: 404 })
     }
 
-    // Собираем данные о рейсах для новой функции
+    // Удаляем кнопки из всех предыдущих сообщений
+    for (const message of messagesResult) {
+       const telegramMessageId = Number(message.telegram_message_id)
+      if (message.telegram_message_id) {
+        console.log(`Removing buttons from message ID: ${message.telegram_message_id}`)
+        const buttonsRemoved = await removeButtons(user.telegram_id, telegramMessageId)
+        if (!buttonsRemoved) {
+          console.warn(`Failed to remove buttons from message ID: ${message.id}`)
+        }
+      }
+    }
+
+    // Далее формируем и отправляем объединённое сообщение
     const trips = []
 
     for (const message of messagesResult) {
-      console.log(`Processing trip: ${message.trip_identifier}`)
-
-      // Получаем точки для каждого рейса
       const pointsResult = await sql`
         SELECT DISTINCT
           tp.point_type,
@@ -86,8 +90,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${message.trip_identifier}
         ORDER BY tp.point_type DESC, tp.point_num
       `
-
-      console.log(`Found ${pointsResult.length} points for trip ${message.trip_identifier}`)
 
       const loading_points = []
       const unloading_points = []
@@ -122,7 +124,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log(`Prepared ${trips.length} trips for sending`)
 
-    // Отправляем сообщение через новую функцию
     const telegramResult = await sendMultipleTripMessageWithButtons(
       user.telegram_id,
       trips,
@@ -131,7 +132,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       isCorrection
     )
 
-    // Обновляем статусы всех сообщений
+    // Обновляем статусы и telegram_message_id у всех сообщений
     const messageIdsToUpdate = messagesResult.map((m) => m.id)
 
     for (const msgId of messageIdsToUpdate) {
@@ -155,10 +156,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       trips_count: trips.length,
       updated_messages: messageIdsToUpdate.length,
     })
-    
   } catch (error) {
     console.error("Error resending combined message:", error)
-    
     // Обновляем статус сообщений при ошибке
     try {
       for (const msgId of messageIds) {
@@ -172,7 +171,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     } catch (updateError) {
       console.error("Error updating message status:", updateError)
     }
-
     return NextResponse.json(
       {
         success: false,
