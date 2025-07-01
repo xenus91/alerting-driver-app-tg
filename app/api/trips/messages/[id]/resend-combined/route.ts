@@ -25,7 +25,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const user = userResult[0]
-    const driverName = user.full_name || user.first_name || user.name || "Неизвестный водитель"
+    const driverName = user.first_name || user.full_name  || user.name || "Неизвестный водитель"
 
     // Получаем trip_id из первого сообщения
     const tripResult = await sql`
