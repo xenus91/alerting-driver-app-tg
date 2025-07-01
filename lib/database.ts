@@ -591,7 +591,7 @@ export async function getTrips(carparkFilter?: string) {
           t.id,
           t.created_at,
           t.carpark,
-          COUNT(tm.id) AS total_messages,
+          COUNT(DISTINCT u.telegram_id) AS total_messages, -- Изменено: уникальные пользователи
           COUNT(DISTINCT CASE WHEN tm.status = 'sent' THEN u.telegram_id END) AS sent_messages,
           COUNT(DISTINCT CASE WHEN tm.status = 'error' THEN u.telegram_id END) AS error_messages,
           COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_responses,
@@ -612,7 +612,7 @@ export async function getTrips(carparkFilter?: string) {
           t.id,
           t.created_at,
           t.carpark,
-          COUNT(tm.id) AS total_messages,
+          COUNT(DISTINCT u.telegram_id) AS total_messages,
           COUNT(DISTINCT CASE WHEN tm.status = 'sent' THEN u.telegram_id END) AS sent_messages,
           COUNT(DISTINCT CASE WHEN tm.status = 'error' THEN u.telegram_id END) AS error_messages,
           COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_responses,
