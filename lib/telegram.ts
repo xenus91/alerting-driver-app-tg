@@ -159,33 +159,53 @@ export async function sendMultipleTripMessageWithButtons(
   firstName: string,
   messageId: number,
   isCorrection = false,
+  previousTelegramMessageId?: number // Новый параметр
 ) {
   try {
     console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`)
     console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}`)
+    console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || 'None'}`)
+
+    // Удаляем предыдущее сообщение, если есть previousTelegramMessageId
+    if (previousTelegramMessageId) {
+      try {
+        const deleteResponse = await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            message_id: previousTelegramMessageId,
+          }),
+        });
+
+        const deleteData = await deleteResponse.json();
+        if (!deleteData.ok) {
+          console.error(`Failed to delete previous message ${previousTelegramMessageId}:`, deleteData.description);
+        } else {
+          console.log(`Successfully deleted previous message ${previousTelegramMessageId}`);
+        }
+      } catch (error) {
+        console.error(`Error deleting previous message ${previousTelegramMessageId}:`, error);
+        // Продолжаем выполнение, даже если удаление не удалось
+      }
+    }
 
     // Генерируем красивое сообщение
     let message = ""
 
     // Добавляем заголовок корректировки если нужно
     if (isCorrection) {
-      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>
-
-`
+      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`
     }
 
-    message += `🌅 <b>Доброго времени суток!</b>
-
-`
-    message += `👤 Уважаемый, <b>${firstName}</b>
-
-`
+    message += `🌅 <b>Доброго времени суток!</b>\n\n`
+    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
 
     // Определяем множественное или единственное число
     const isMultiple = trips.length > 1
-    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>
-
-`
+    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
 
     // Сортируем рейсы по времени погрузки
     const sortedTrips = [...trips].sort((a, b) => {
@@ -198,12 +218,9 @@ export async function sendMultipleTripMessageWithButtons(
     sortedTrips.forEach((trip, tripIndex) => {
       console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
 
-      message += `<b>Рейс ${tripIndex + 1}:</b>
-`
-      message += `Транспортировка: <b>${trip.trip_identifier}</b>
-`
-      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>
-`
+      message += `<b>Рейс ${tripIndex + 1}:</b>\n`
+      message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
+      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
 
       // Форматируем дату и время БЕЗ смещения часового пояса
       const formatDateTime = (dateTimeString: string): string => {
@@ -230,7 +247,6 @@ export async function sendMultipleTripMessageWithButtons(
           ]
           const month = monthNames[date.getMonth()]
 
-          // Убираем timeZone: "Europe/Moscow" чтобы не было смещения
           const hours = date.getHours().toString().padStart(2, "0")
           const minutes = date.getMinutes().toString().padStart(2, "0")
           const time = `${hours}:${minutes}`
@@ -242,50 +258,38 @@ export async function sendMultipleTripMessageWithButtons(
         }
       }
 
-      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>
-
-`
+      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
 
       // Пункты погрузки
       if (trip.loading_points.length > 0) {
-        message += `📦 <b>Погрузка:</b>
-`
+        message += `📦 <b>Погрузка:</b>\n`
         trip.loading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>
-`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
         })
-        message += `
-`
+        message += `\n`
       }
 
       // Пункты разгрузки
       if (trip.unloading_points.length > 0) {
-        message += `📤 <b>Разгрузка:</b>
-`
+        message += `📤 <b>Разгрузка:</b>\n`
         trip.unloading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>
-`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
 
           // Окна приемки для пункта разгрузки
           const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
           if (windows.length > 0) {
-            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>
-`
+            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
           }
         })
-        message += `
-`
+        message += `\n`
       }
 
       // Комментарий
       if (trip.driver_comment && trip.driver_comment.trim()) {
-        message += `💬 <b>Комментарий по рейсу:</b>
-<i>${trip.driver_comment}</i>
-
-`
+        message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
       }
 
-      // Строим маршрут для этого рейса: сначала все точки погрузки, потом все точки разгрузки
+      // Строим маршрут для этого рейса
       const routePoints = [...trip.loading_points, ...trip.unloading_points]
       console.log(
         `Route points for trip ${trip.trip_identifier}:`,
@@ -295,9 +299,7 @@ export async function sendMultipleTripMessageWithButtons(
       const routeUrl = buildRouteUrl(routePoints)
 
       if (routeUrl) {
-        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>
-
-`
+        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
         console.log(`Added route URL for trip ${trip.trip_identifier}`)
       } else {
         console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
@@ -305,8 +307,7 @@ export async function sendMultipleTripMessageWithButtons(
 
       // Добавляем разделитель между рейсами (кроме последнего)
       if (tripIndex < sortedTrips.length - 1) {
-        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`
+        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
       }
     })
 
@@ -315,6 +316,7 @@ export async function sendMultipleTripMessageWithButtons(
     console.log(`Final message length: ${message.length}`)
     console.log(`Message preview: ${message.substring(0, 200)}...`)
 
+    // Отправляем новое сообщение
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
