@@ -587,43 +587,35 @@ export async function getTrips(carparkFilter?: string) {
 
     if (carparkFilter) {
       query = sql`
-        SELECT 
-          t.id,
-          t.created_at,
-          t.carpark,
-          COUNT(tm.id) AS total_messages, -- Всего сообщений
-          COUNT(DISTINCT CASE WHEN tm.status = 'sent' THEN u.telegram_id END) AS sent_messages, -- Уникальные пользователи
-          COUNT(DISTINCT CASE WHEN tm.status = 'error' THEN u.telegram_id END) AS error_messages, -- Пользователи с ошибками
-          COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_responses, -- Подтверждённые пользователи
-          COUNT(DISTINCT CASE WHEN tm.response_status = 'rejected' THEN u.telegram_id END) AS rejected_responses, -- Отклонённые пользователи
-          COUNT(DISTINCT CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN u.telegram_id END) AS pending_responses, -- Ожидающие ответа
-          MIN(tm.sent_at) AS first_sent_at,
-          MAX(tm.sent_at) AS last_sent_at
+        SELECT t.*, 
+               COUNT(tm.id) as total_messages,
+               COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
+               COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
+               COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
+               COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
+               COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
+               MIN(tm.sent_at) as first_sent_at,
+               MAX(tm.sent_at) as last_sent_at
         FROM trips t
         LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-        LEFT JOIN users u ON tm.phone = u.phone -- Привязка к пользователям
         WHERE t.carpark = ${carparkFilter}
-        GROUP BY t.id, t.created_at, t.carpark
+        GROUP BY t.id
         ORDER BY t.created_at DESC
       `
     } else {
       query = sql`
-        SELECT 
-          t.id,
-          t.created_at,
-          t.carpark,
-          COUNT(tm.id) AS total_messages,
-          COUNT(DISTINCT CASE WHEN tm.status = 'sent' THEN u.telegram_id END) AS sent_messages,
-          COUNT(DISTINCT CASE WHEN tm.status = 'error' THEN u.telegram_id END) AS error_messages,
-          COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_responses,
-          COUNT(DISTINCT CASE WHEN tm.response_status = 'rejected' THEN u.telegram_id END) AS rejected_responses,
-          COUNT(DISTINCT CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN u.telegram_id END) AS pending_responses,
-          MIN(tm.sent_at) AS first_sent_at,
-          MAX(tm.sent_at) AS last_sent_at
+        SELECT t.*, 
+               COUNT(tm.id) as total_messages,
+               COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
+               COUNT(CASE WHEN tm.status = 'error' THEN 1 END) as error_messages,
+               COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
+               COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
+               COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
+               MIN(tm.sent_at) as first_sent_at,
+               MAX(tm.sent_at) as last_sent_at
         FROM trips t
         LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-        LEFT JOIN users u ON tm.phone = u.phone
-        GROUP BY t.id, t.created_at, t.carpark
+        GROUP BY t.id
         ORDER BY t.created_at DESC
       `
     }
