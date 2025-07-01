@@ -104,8 +104,8 @@ export async function POST(request: NextRequest) {
     // Формируем сообщение с прогрессом
     let message = `📊 <b>Прогресс рассылки #${subscription.trip_id}</b>\n\n`
 
-    message += `👤 <b>Водители:</b> ${sentUsers}/${totalUsers} (${sentPercentage}%)\n`
-    message += `📥 <b>Ответы:</b> ${totalResponses}/${sentUsers} (${responsePercentage}%)\n\n`
+    message += `👤 <b>Водители, отправка:</b> ${sentUsers}/${totalUsers} (${sentPercentage}%)\n`
+    message += `📥 <b>Водители, ответы:</b> ${totalResponses}/${sentUsers} (${responsePercentage}%)\n\n`
 
     message += `✅ Подтверждено: ${confirmedUsers}\n`
     message += `❌ Отклонено: ${rejectedUsers}\n`
