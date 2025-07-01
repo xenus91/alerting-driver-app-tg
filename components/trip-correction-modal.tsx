@@ -27,7 +27,6 @@ interface CorrectionData {
   message_id: number
   latitude?: string // ДОБАВЛЕНО: координаты
   longitude?: string // ДОБАВЛЕНО: координаты
-  isNew?: boolean
 }
 
 interface TripCorrectionModalProps {
@@ -175,13 +174,9 @@ export function TripCorrectionModal({
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  // Добавляем состояние для ID основного сообщения
-  const [primaryMessageId, setPrimaryMessageId] = useState<number | null>(null)
 
   useEffect(() => {
     if (isOpen) {
-      setPrimaryMessageId(null)
-      setDeletedTrips([])
       loadDriverDetails()
       loadAvailablePoints()
     }
@@ -199,11 +194,6 @@ export function TripCorrectionModal({
           ...item,
           original_trip_identifier: item.trip_identifier,
         }))
-      // Сохраняем ID первого сообщения как основной
-        if (correctionsWithOriginal.length > 0) {
-          setPrimaryMessageId(correctionsWithOriginal[0].message_id)
-        }
-
         setCorrections(correctionsWithOriginal)
       } else {
         setError(data.error || "Failed to load driver details")
@@ -283,8 +273,7 @@ export function TripCorrectionModal({
       point_id: defaultPoint.point_id || "",
       point_name: defaultPoint.point_name || "",
       driver_comment: "",
-      message_id: 0, // Временное значение для новых рейсов
-      isNew: true, // Помечаем как новый рейс
+      message_id: corrections[0]?.message_id || 0,
       latitude: defaultPoint.latitude, // ДОБАВЛЕНО
       longitude: defaultPoint.longitude // ДОБАВЛЕНО
     }
@@ -298,14 +287,9 @@ export function TripCorrectionModal({
   }
 
   const removeTrip = (tripIdentifier: string) => {
-    const tripToDelete = corrections.find(c => c.trip_identifier === tripIdentifier)
-    
-    if (tripToDelete && !tripToDelete.isNew) {
-      setDeletedTrips((prev) => [...prev, tripIdentifier])
-    }
-    
     const updated = corrections.filter((c) => c.trip_identifier !== tripIdentifier)
     setCorrections(updated)
+    setDeletedTrips((prev) => [...prev, tripIdentifier])
   }
 
   const saveCorrections = async () => {
@@ -347,12 +331,9 @@ export function TripCorrectionModal({
 
     try {
       await saveCorrections()
-      // Используем основной ID сообщения, который не удаляется
-      if (!primaryMessageId) {
-        throw new Error("Primary message ID not available")
-      }
+      const messageIds = [...new Set(corrections.map((c) => c.message_id))]
 
-      const response = await fetch(`/api/trips/messages/${primaryMessageId}/resend-combined`, {
+      const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
