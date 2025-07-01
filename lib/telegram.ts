@@ -159,40 +159,14 @@ export async function sendMultipleTripMessageWithButtons(
   firstName: string,
   messageId: number,
   isCorrection = false,
-  previousTelegramMessageId?: number // Новый параметр
+  previousTelegramMessageId?: number // Параметр для старого message_id
 ) {
   try {
     console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`)
     console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}`)
     console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || 'None'}`)
 
-    // Удаляем предыдущее сообщение, если есть previousTelegramMessageId
-    if (previousTelegramMessageId) {
-      try {
-        const deleteResponse = await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            chat_id: chatId,
-            message_id: previousTelegramMessageId,
-          }),
-        });
-
-        const deleteData = await deleteResponse.json();
-        if (!deleteData.ok) {
-          console.error(`Failed to delete previous message ${previousTelegramMessageId}:`, deleteData.description);
-        } else {
-          console.log(`Successfully deleted previous message ${previousTelegramMessageId}`);
-        }
-      } catch (error) {
-        console.error(`Error deleting previous message ${previousTelegramMessageId}:`, error);
-        // Продолжаем выполнение, даже если удаление не удалось
-      }
-    }
-
-    // Генерируем красивое сообщение
+    // Генерируем красивое сообщение для нового сообщения
     let message = ""
 
     // Добавляем заголовок корректировки если нужно
@@ -315,6 +289,39 @@ export async function sendMultipleTripMessageWithButtons(
 
     console.log(`Final message length: ${message.length}`)
     console.log(`Message preview: ${message.substring(0, 200)}...`)
+
+    // Если есть previousTelegramMessageId, редактируем старое сообщение
+    if (previousTelegramMessageId) {
+      try {
+        // Получаем текст старого сообщения (можно использовать заглушку, так как мы зачеркиваем)
+        const strikethroughMessage = `<s>Устаревшее сообщение. Пожалуйста, используйте новое сообщение ниже.</s>`;
+
+        const editResponse = await fetch(`${TELEGRAM_API_URL}/editMessageText`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            message_id: previousTelegramMessageId,
+            text: strikethroughMessage,
+            parse_mode: "HTML",
+            reply_markup: {}, // Удаляем кнопки, передавая пустой reply_markup
+          }),
+        });
+
+        const editData = await editResponse.json();
+        if (!editData.ok) {
+          console.error(`Failed to edit message ${previousTelegramMessageId}:`, editData.description);
+          // Продолжаем выполнение, даже если редактирование не удалось
+        } else {
+          console.log(`Successfully edited message ${previousTelegramMessageId} to strikethrough and removed buttons`);
+        }
+      } catch (error) {
+        console.error(`Error editing message ${previousTelegramMessageId}:`, error);
+        // Продолжаем выполнение, даже если редактирование не удалось
+      }
+    }
 
     // Отправляем новое сообщение
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
