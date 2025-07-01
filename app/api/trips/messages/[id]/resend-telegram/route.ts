@@ -1,6 +1,6 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendTripMessageWithButtons, deleteMessage } from "@/lib/telegram"
+import { sendTripMessageWithButtons, removeButtons } from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -42,11 +42,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       )
     }
 
-    // Удаляем предыдущее сообщение если оно есть
-   /* if (message.telegram_message_id) {
-      console.log(`Deleting previous message ${message.telegram_message_id} for chat ${message.telegram_id}`)
-      await deleteMessage(message.telegram_id, message.telegram_message_id)
-    }*/
+    // Удаляем кнопки предыдущего сообщения если оно есть
+      if (message.telegram_message_id) {
+      console.log(`Removing buttons from message ${message.telegram_message_id} for chat ${message.telegram_id}`);
+      await removeButtons(message.telegram_id, message.telegram_message_id);
+    }
 
     // Получаем точки для рейса с координатами
     const pointsResult = await sql`
