@@ -230,7 +230,7 @@ async function sendExistingMessages(tripId: number, sql: any) {
   })
 }
 
-// Функция для отправки из загруженных данных (оригинальная логика)
+// Функция для отправки из загруженных данных (обновленная версия)
 async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any) {
   console.log(`Processing ${tripData.length} trips for sending`)
 
@@ -302,6 +302,180 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
 
       console.log(`Processing trips for user: ${user.first_name || user.name}`)
 
+      // Подготавливаем данные для отправки и создания сообщения
+      const tripsForSending = phoneTrips.map((tripDataItem) => {
+        const loadingPointsData = []
+        const unloadingPointsData = []
+
+        for (const loadingPoint of tripDataItem.loading_points || []) {
+          const point = pointsMap.get(loadingPoint.point_id)
+          if (point) {
+            loadingPointsData.push({
+              point_id: point.point_id,
+              point_name: point.point_name,
+              point_num: loadingPoint.point_num,
+              door_open_1: point.door_open_1,
+              door_open_2: point.door_open_2,
+              door_open_3: point.door_open_3,
+              latitude: point.latitude,
+              longitude: point.longitude,
+            })
+          }
+        }
+
+        for (const unloadingPoint of tripDataItem.unloading_points || []) {
+          const point = pointsMap.get(unloadingPoint.point_id)
+          if (point) {
+            unloadingPointsData.push({
+              point_id: point.point_id,
+              point_name: point.point_name,
+              point_num: unloadingPoint.point_num,
+              door_open_1: point.door_open_1,
+              door_open_2: point.door_open_2,
+              door_open_3: point.door_open_3,
+              latitude: point.latitude,
+              longitude: point.longitude,
+            })
+          }
+        }
+
+        return {
+          trip_identifier: tripDataItem.trip_identifier,
+          vehicle_number: tripDataItem.vehicle_number,
+          planned_loading_time: tripDataItem.planned_loading_time,
+          driver_comment: tripDataItem.driver_comment,
+          loading_points: loadingPointsData,
+          unloading_points: unloadingPointsData,
+        }
+      })
+
+      const firstName = user.first_name || user.full_name || "Водитель"
+
+      // Генерируем текст сообщения (аналогично sendMultipleTripMessageWithButtons)
+      let message = `🌅 <b>Доброго времени суток!</b>\n\n`
+      message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
+
+      const isMultiple = tripsForSending.length > 1
+      message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${tripsForSending.length} рейс${tripsForSending.length > 1 ? "а" : ""}:</b>\n\n`
+
+      const sortedTrips = [...tripsForSending].sort((a, b) => {
+        const timeA = new Date(a.planned_loading_time || "").getTime()
+        const timeB = new Date(b.planned_loading_time || "").getTime()
+        return timeA - timeB
+      })
+
+      sortedTrips.forEach((trip, tripIndex) => {
+        console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
+
+        message += `<b>Рейс ${tripIndex + 1}:</b>\n`
+        message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
+        message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
+
+        const formatDateTime = (dateTimeString: string): string => {
+          try {
+            if (!dateTimeString) return "Не указано"
+
+            const date = new Date(dateTimeString)
+            if (isNaN(date.getTime())) return dateTimeString
+
+            const day = date.getDate()
+            const monthNames = [
+              "января",
+              "февраля",
+              "марта",
+              "апреля",
+              "мая",
+              "июня",
+              "июля",
+              "августа",
+              "сентября",
+              "октября",
+              "ноября",
+              "декабря",
+            ]
+            const month = monthNames[date.getMonth()]
+
+            const hours = date.getHours().toString().padStart(2, "0")
+            const minutes = date.getMinutes().toString().padStart(2, "0")
+            const time = `${hours}:${minutes}`
+
+            return `${day} ${month} ${time}`
+          } catch (error) {
+            console.error("Error formatting date:", error)
+            return dateTimeString
+          }
+        }
+
+        message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
+
+        if (trip.loading_points.length > 0) {
+          message += `📦 <b>Погрузка:</b>\n`
+          trip.loading_points.forEach((point, index) => {
+            message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
+          })
+          message += `\n`
+        }
+
+        if (trip.unloading_points.length > 0) {
+          message += `📤 <b>Разгрузка:</b>\n`
+          trip.unloading_points.forEach((point, index) => {
+            message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
+
+            const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
+            if (windows.length > 0) {
+              message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
+            }
+          })
+          message += `\n`
+        }
+
+        if (trip.driver_comment && trip.driver_comment.trim()) {
+          message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
+        }
+
+        const routePoints = [...trip.loading_points, ...trip.unloading_points]
+        console.log(
+          `Route points for trip ${trip.trip_identifier}:`,
+          routePoints.map((p) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
+        )
+
+        const validPoints = routePoints.filter((p) => {
+          const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+          const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+          return lat && lng && !isNaN(lat) && !isNaN(lng)
+        })
+
+        let routeUrl = null
+        if (validPoints.length >= 2) {
+          const coordinates = validPoints
+            .map((p) => {
+              const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+              const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+              return `${lat},${lng}`
+            })
+            .join("~")
+
+          routeUrl = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
+          console.log(`Built route URL: ${routeUrl}`)
+        } else {
+          console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
+        }
+
+        if (routeUrl) {
+          message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
+          console.log(`Added route URL for trip ${trip.trip_identifier}`)
+        }
+
+        if (tripIndex < sortedTrips.length - 1) {
+          message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        }
+      })
+
+      message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`
+
+      console.log(`Final message length: ${message.length}`)
+      console.log(`Message preview: ${message.substring(0, 200)}...`)
+
       // Создаем записи в БД для всех рейсов этого пользователя
       for (const tripDataItem of phoneTrips) {
         // Создаем пункты для этого рейса
@@ -339,11 +513,11 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
           console.log(`Created unloading point: ${unloadingPoint.point_id}`)
         }
 
-        // Создаем сообщение для этого рейса
+        // Создаем сообщение для этого рейса с отформатированным текстом
         await createTripMessage(
           mainTrip.id,
           tripDataItem.phone,
-          "Автоматически сгенерированное сообщение о рейсе",
+          message, // Сохраняем отформатированное сообщение
           user.telegram_id,
           {
             trip_identifier: tripDataItem.trip_identifier,
@@ -354,63 +528,13 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
         )
       }
 
-      // Теперь отправляем ОДНО сообщение со всеми рейсами для этого пользователя
+      // Отправляем ОДНО сообщение со всеми рейсами
       try {
-        // Подготавливаем данные для отправки
-        const tripsForSending = phoneTrips.map((tripDataItem) => {
-          const loadingPointsData = []
-          const unloadingPointsData = []
-
-          for (const loadingPoint of tripDataItem.loading_points || []) {
-            const point = pointsMap.get(loadingPoint.point_id)
-            if (point) {
-              loadingPointsData.push({
-                point_id: point.point_id,
-                point_name: point.point_name,
-                point_num: loadingPoint.point_num,
-                door_open_1: point.door_open_1,
-                door_open_2: point.door_open_2,
-                door_open_3: point.door_open_3,
-                latitude: point.latitude,
-                longitude: point.longitude,
-              })
-            }
-          }
-
-          for (const unloadingPoint of tripDataItem.unloading_points || []) {
-            const point = pointsMap.get(unloadingPoint.point_id)
-            if (point) {
-              unloadingPointsData.push({
-                point_id: point.point_id,
-                point_name: point.point_name,
-                point_num: unloadingPoint.point_num,
-                door_open_1: point.door_open_1,
-                door_open_2: point.door_open_2,
-                door_open_3: point.door_open_3,
-                latitude: point.latitude,
-                longitude: point.longitude,
-              })
-            }
-          }
-
-          return {
-            trip_identifier: tripDataItem.trip_identifier,
-            vehicle_number: tripDataItem.vehicle_number,
-            planned_loading_time: tripDataItem.planned_loading_time,
-            driver_comment: tripDataItem.driver_comment,
-            loading_points: loadingPointsData,
-            unloading_points: unloadingPointsData,
-          }
-        })
-
-        const firstName = user.first_name || user.full_name || "Водитель"
-
-        // Отправляем ОДНО сообщение со всеми рейсами
         const telegramResult = await sendMultipleTripMessageWithButtons(
           user.telegram_id,
           tripsForSending,
           firstName,
-          mainTrip.id, // Используем ID основного trip как messageId
+          mainTrip.id,
         )
 
         console.log(`Telegram API result:`, telegramResult)
