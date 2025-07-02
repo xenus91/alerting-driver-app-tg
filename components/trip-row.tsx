@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Plus, Trash2, Check, ChevronsUpDown, X, Search } from "lucide-react"
+import { Plus, Trash2, Check, ChevronsUpDown, X , Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface PointData {
