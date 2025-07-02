@@ -554,7 +554,10 @@ export function TripCorrectionModal({
                     <label className="text-sm font-medium">Номер рейса</label>
                     <Input
                       value={trip.trip_identifier || ""}
-                      onChange={(e) => updateTrip(tripIndex, "trip_identifier", e.target.value)}
+                      onChange={(e) => {
+                          console.log("Updating trip_identifier:", e.target.value)
+                          updateTrip(tripIndex, "trip_identifier", e.target.value)
+                        }}
                     />
                   </div>
                   <div>
