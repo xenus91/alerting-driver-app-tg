@@ -66,6 +66,7 @@ export function TripCorrectionModal({
     setIsLoading(true)
     setError(null)
     try {
+      const缕
       const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`)
       const data = await response.json()
 
@@ -161,7 +162,7 @@ export function TripCorrectionModal({
   const addNewTrip = () => {
     const newTrip: CorrectionData = {
       phone,
-      trip_identifier: "",
+      trip_identifier: `NEW_${Date.now()}`,
       vehicle_number: "",
       planned_loading_time: new Date().toISOString(),
       driver_comment: "",
@@ -191,7 +192,7 @@ export function TripCorrectionModal({
   const removeTrip = (tripIndex: number) => {
     const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
     setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
-    if (tripIdentifier) {
+    if (tripIdentifier && !tripIdentifier.startsWith("NEW_")) {
       setDeletedTrips((prev) => [...prev, tripIdentifier])
     }
   }
@@ -202,6 +203,21 @@ export function TripCorrectionModal({
     setSuccess(null)
 
     try {
+      // Удаляем рейсы из deletedTrips
+      for (const tripIdentifier of deletedTrips) {
+        await fetch(`/api/trips/${tripId}/delete-trip`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            phone,
+            trip_identifier: tripIdentifier,
+          }),
+        })
+      }
+
+      // Сохраняем корректировки
       const flatCorrections = corrections.flatMap((trip) =>
         trip.points.map((point) => ({
           phone: trip.phone,
@@ -236,6 +252,7 @@ export function TripCorrectionModal({
 
       if (data.success) {
         setSuccess("Корректировки сохранены успешно!")
+        setDeletedTrips([]) // Очищаем deletedTrips после успешного сохранения
       } else {
         setError(data.error || "Failed to save corrections")
       }
@@ -252,7 +269,16 @@ export function TripCorrectionModal({
     setError(null)
 
     try {
+      // Сначала сохраняем изменения
       await saveCorrections()
+
+      // Проверяем, есть ли активные рейсы
+      if (corrections.length === 0) {
+        setError("Нет активных рейсов для отправки")
+        setIsSending(false)
+        return
+      }
+
       const messageIds = [...new Set(corrections.map((c) => c.message_id))]
 
       const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {

@@ -7,7 +7,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
   try {
     console.log(`Fetching points for trip ${tripId}`)
 
-    // Получаем точки маршрута для рейса
     const points = await getTripPoints(tripId)
 
     console.log(`Found ${points.length} points for trip ${tripId}:`, points)

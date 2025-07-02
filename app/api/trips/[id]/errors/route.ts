@@ -6,7 +6,6 @@ export const dynamic = "force-dynamic"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-// Функция для получения текущего пользователя
 async function getCurrentUser() {
   try {
     const cookieStore = cookies()
@@ -34,7 +33,6 @@ async function getCurrentUser() {
 
 export async function GET(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    // Проверяем авторизацию
     const currentUser = await getCurrentUser()
     if (!currentUser) {
       return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
@@ -45,15 +43,12 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: false, error: "Invalid trip ID" }, { status: 400 })
     }
 
-    // Проверяем существование trip и права доступа
     let tripQuery
     if (currentUser.role === "admin") {
-      // Администратор видит все trips
       tripQuery = await sql`
         SELECT id, carpark FROM trips WHERE id = ${tripId}
       `
     } else {
-      // Оператор видит только trips своего автопарка
       tripQuery = await sql`
         SELECT id, carpark FROM trips 
         WHERE id = ${tripId} AND carpark = ${currentUser.carpark}
@@ -64,7 +59,6 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
       return NextResponse.json({ success: false, error: "Trip not found" }, { status: 404 })
     }
 
-    // Получаем ошибки для данного trip с именами пользователей
     const errors = await sql`
       SELECT 
         tm.id,
