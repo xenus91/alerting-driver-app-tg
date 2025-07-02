@@ -13,20 +13,25 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { RefreshCw, Save, Send, Plus, Trash2, AlertTriangle, X, Check, ChevronsUpDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
 
+
+interface PointData {
+  point_type: "P" | "D"
+  point_num: number
+  point_id: string
+  point_name?: string
+  latitude?: string
+  longitude?: string
+}
+
 interface CorrectionData {
   phone: string
   trip_identifier: string
   original_trip_identifier?: string
   vehicle_number: string
   planned_loading_time: string
-  point_type: "P" | "D"
-  point_num: number
-  point_id: string
-  point_name?: string
   driver_comment?: string
   message_id: number
-  latitude?: string // ДОБАВЛЕНО: координаты
-  longitude?: string // ДОБАВЛЕНО: координаты
+  points: PointData[]
 }
 
 interface TripCorrectionModalProps {
@@ -190,11 +195,32 @@ export function TripCorrectionModal({
       const data = await response.json()
 
       if (data.success) {
-        const correctionsWithOriginal = data.data.map((item: CorrectionData) => ({
-          ...item,
-          original_trip_identifier: item.trip_identifier,
-        }))
-        setCorrections(correctionsWithOriginal)
+        // Группируем точки по trip_identifier
+        const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
+          const key = item.trip_identifier
+          if (!acc[key]) {
+            acc[key] = {
+              phone: item.phone,
+              trip_identifier: item.trip_identifier,
+              original_trip_identifier: item.trip_identifier,
+              vehicle_number: item.vehicle_number,
+              planned_loading_time: item.planned_loading_time,
+              driver_comment: item.driver_comment,
+              message_id: item.message_id,
+              points: [],
+            }
+          }
+          acc[key].points.push({
+            point_type: item.point_type,
+            point_num: item.point_num,
+            point_id: item.point_id,
+            point_name: item.point_name,
+            latitude: item.latitude,
+            longitude: item.longitude,
+          })
+          return acc
+        }, {})
+        setCorrections(Object.values(grouped))
       } else {
         setError(data.error || "Failed to load driver details")
       }
@@ -226,78 +252,103 @@ export function TripCorrectionModal({
     }
   }
 
-  const updateCorrection = useCallback((index: number, field: keyof CorrectionData, value: any) => {
+ const updateTrip = useCallback((tripIndex: number, field: keyof CorrectionData, value: any) => {
     setCorrections((prev) => {
       const updated = [...prev]
-      updated[index] = { ...updated[index], [field]: value }
+      updated[tripIndex] = { ...updated[tripIndex], [field]: value }
+      return updated
+    })
+  }, [])
+
+  const updatePoint = useCallback((tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
+    setCorrections((prev) => {
+      const updated = [...prev]
+      updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
       return updated
     })
   }, [])
 
   // ИЗМЕНЕНО: добавлены координаты
-  const addNewPoint = (tripIdentifier: string) => {
-    const tripCorrections = corrections.filter((c) => c.trip_identifier === tripIdentifier)
-    const maxPointNum = Math.max(...tripCorrections.map((c) => c.point_num || 0), 0)
-
-    //const defaultPoint = availablePoints[0] || {}
-    
-    const newPoint: CorrectionData = {
-      phone,
-      trip_identifier: tripIdentifier,
-      vehicle_number: tripCorrections[0]?.vehicle_number || "",
-      planned_loading_time: tripCorrections[0]?.planned_loading_time || "",
+ const addNewPoint = (tripIndex: number) => {
+    const maxPointNum = Math.max(...corrections[tripIndex].points.map((p) => p.point_num || 0), 0)
+    const newPoint: PointData = {
       point_type: "P",
       point_num: maxPointNum + 1,
       point_id: "",
       point_name: "",
-      driver_comment: tripCorrections[0]?.driver_comment || "",
-      message_id: tripCorrections[0]?.message_id || 0,
-      latitude: "", // ДОБАВЛЕНО
-      longitude: "" // ДОБАВЛЕНО
+      latitude: "",
+      longitude: "",
     }
-
-    setCorrections([...corrections, newPoint])
+    setCorrections((prev) => {
+      const updated = [...prev]
+      updated[tripIndex].points = [...updated[tripIndex].points, newPoint]
+      return updated
+    })
   }
 
   // ИЗМЕНЕНО: добавлены координаты
-  const addNewTrip = () => {
-    //const defaultPoint = availablePoints[0] || {}
-    
+ const addNewTrip = () => {
     const newTrip: CorrectionData = {
       phone,
       trip_identifier: "",
       vehicle_number: "",
       planned_loading_time: new Date().toISOString(),
-      point_type: "P",
-      point_num: 1,
-      point_id:  "",
-      point_name:  "",
       driver_comment: "",
       message_id: corrections[0]?.message_id || 0,
-      latitude: "", // ДОБАВЛЕНО
-      longitude: "" // ДОБАВЛЕНО
+      points: [
+        {
+          point_type: "P",
+          point_num: 1,
+          point_id: "",
+          point_name: "",
+          latitude: "",
+          longitude: "",
+        },
+      ],
     }
-
     setCorrections([...corrections, newTrip])
   }
 
-  const removePoint = (index: number) => {
-    const updated = corrections.filter((_, i) => i !== index)
-    setCorrections(updated)
+  const removePoint = (tripIndex: number, pointIndex: number) => {
+    setCorrections((prev) => {
+      const updated = [...prev]
+      updated[tripIndex].points = updated[tripIndex].points.filter((_, i) => i !== pointIndex)
+      return updated
+    })
   }
 
-  const removeTrip = (tripIdentifier: string) => {
-    const updated = corrections.filter((c) => c.trip_identifier !== tripIdentifier)
-    setCorrections(updated)
-    setDeletedTrips((prev) => [...prev, tripIdentifier])
+  const removeTrip = (tripIndex: number) => {
+    const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
+    setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
+    if (tripIdentifier) {
+      setDeletedTrips((prev) => [...prev, tripIdentifier])
+    }
   }
-
   const saveCorrections = async () => {
     setIsSaving(true)
     setError(null)
     setSuccess(null)
 
     try {
+      // Преобразуем corrections в формат, ожидаемый сервером
+      const flatCorrections = corrections.flatMap((trip) =>
+        trip.points.map((point) => ({
+          phone: trip.phone,
+          trip_identifier: trip.trip_identifier,
+          original_trip_identifier: trip.original_trip_identifier,
+          vehicle_number: trip.vehicle_number,
+          planned_loading_time: trip.planned_loading_time,
+          driver_comment: trip.driver_comment,
+          message_id: trip.message_id,
+          point_type: point.point_type,
+          point_num: point.point_num,
+          point_id: point.point_id,
+          point_name: point.point_name,
+          latitude: point.latitude,
+          longitude: point.longitude,
+        }))
+      )
+
       const response = await fetch(`/api/trips/${tripId}/save-corrections`, {
         method: "POST",
         headers: {
@@ -305,7 +356,7 @@ export function TripCorrectionModal({
         },
         body: JSON.stringify({
           phone,
-          corrections,
+          corrections: flatCorrections,
           deletedTrips,
         }),
       })
@@ -365,7 +416,7 @@ export function TripCorrectionModal({
     }
   }
 
-  const formatDateTime = (dateString: string) => {
+ const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
 
     try {
@@ -394,7 +445,7 @@ export function TripCorrectionModal({
     }
   }
 
-  const formatDateTimeForSave = (dateString: string) => {
+ const formatDateTimeForSave = (dateString: string) => {
     if (!dateString) return ""
     try {
       return dateString + ":00.000"
@@ -417,7 +468,7 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  const groupedCorrections = corrections.reduce(
+  /*const groupedCorrections = corrections.reduce(
     (groups, correction) => {
       const key = correction.trip_identifier
       if (!groups[key]) {
@@ -427,7 +478,7 @@ export function TripCorrectionModal({
       return groups
     },
     {} as Record<string, CorrectionData[]>,
-  )
+  )*/
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
@@ -470,13 +521,13 @@ export function TripCorrectionModal({
               </Button>
             </div>
 
-            {Object.entries(groupedCorrections).map(([tripIdentifier, tripCorrections]) => (
-              <div key={tripIdentifier} className="border rounded-lg p-4">
+            {corrections.map((trip, tripIndex) => (
+              <div key={trip.trip_identifier || tripIndex} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Рейс {tripIdentifier}</h3>
+                  <h3 className="text-lg font-semibold">Рейс {trip.trip_identifier || `Новый ${tripIndex + 1}`}</h3>
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => addNewPoint(tripIdentifier)}
+                      onClick={() => addNewPoint(tripIndex)}
                       variant="outline"
                       size="sm"
                       className="text-blue-600"
@@ -484,9 +535,9 @@ export function TripCorrectionModal({
                       <Plus className="h-4 w-4 mr-2" />
                       Добавить точку
                     </Button>
-                    {Object.keys(groupedCorrections).length > 1 && (
+                    {corrections.length > 1 && (
                       <Button
-                        onClick={() => removeTrip(tripIdentifier)}
+                        onClick={() => removeTrip(tripIndex)}
                         variant="outline"
                         size="sm"
                         className="text-red-600"
@@ -502,59 +553,32 @@ export function TripCorrectionModal({
                   <div>
                     <label className="text-sm font-medium">Номер рейса</label>
                     <Input
-                      value={tripCorrections[0]?.trip_identifier || ""}
-                      onChange={(e) => {
-                        const updatedCorrections = corrections.map((c) =>
-                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                            ? { ...c, trip_identifier: e.target.value }
-                            : c,
-                        )
-                        setCorrections(updatedCorrections)
-                      }}
+                      value={trip.trip_identifier || ""}
+                      onChange={(e) => updateTrip(tripIndex, "trip_identifier", e.target.value)}
                     />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Транспорт</label>
                     <Input
-                      value={tripCorrections[0]?.vehicle_number || ""}
-                      onChange={(e) => {
-                        const updatedCorrections = corrections.map((c) =>
-                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                            ? { ...c, vehicle_number: e.target.value }
-                            : c,
-                        )
-                        setCorrections(updatedCorrections)
-                      }}
+                      value={trip.vehicle_number || ""}
+                      onChange={(e) => updateTrip(tripIndex, "vehicle_number", e.target.value)}
                     />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Время погрузки</label>
                     <Input
                       type="datetime-local"
-                      value={formatDateTime(tripCorrections[0]?.planned_loading_time || "")}
-                      onChange={(e) => {
-                        const formattedDate = formatDateTimeForSave(e.target.value)
-                        const updatedCorrections = corrections.map((c) =>
-                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                            ? { ...c, planned_loading_time: formattedDate }
-                            : c,
-                        )
-                        setCorrections(updatedCorrections)
-                      }}
+                      value={formatDateTime(trip.planned_loading_time || "")}
+                      onChange={(e) =>
+                        updateTrip(tripIndex, "planned_loading_time", formatDateTimeForSave(e.target.value))
+                      }
                     />
                   </div>
                   <div>
                     <label className="text-sm font-medium">Комментарий</label>
                     <Input
-                      value={tripCorrections[0]?.driver_comment || ""}
-                      onChange={(e) => {
-                        const updatedCorrections = corrections.map((c) =>
-                          c.original_trip_identifier === tripIdentifier || c.trip_identifier === tripIdentifier
-                            ? { ...c, driver_comment: e.target.value }
-                            : c,
-                        )
-                        setCorrections(updatedCorrections)
-                      }}
+                      value={trip.driver_comment || ""}
+                      onChange={(e) => updateTrip(tripIndex, "driver_comment", e.target.value)}
                     />
                   </div>
                 </div>
@@ -569,27 +593,16 @@ export function TripCorrectionModal({
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {tripCorrections.map((correction, index) => {
-                      const globalIndex = corrections.findIndex(
-                        (c) =>
-                          c.trip_identifier === correction.trip_identifier &&
-                          c.point_num === correction.point_num &&
-                          c.point_type === correction.point_type,
-                      )
-                      const pointKey = getPointKey(
-                        correction.trip_identifier,
-                        correction.point_type,
-                        correction.point_num,
-                      )
-
+                    {trip.points.map((point, pointIndex) => {
+                      const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
                       return (
-                        <TableRow
-                          key={`${correction.trip_identifier}-${correction.point_type}-${correction.point_num}`}
-                        >
+                        <TableRow key={`${trip.trip_identifier}-${point.point_type}-${point.point_num}`}>
                           <TableCell>
                             <Select
-                              value={correction.point_type}
-                              onValueChange={(value: "P" | "D") => updateCorrection(globalIndex, "point_type", value)}
+                              value={point.point_type}
+                              onValueChange={(value: "P" | "D") =>
+                                updatePoint(tripIndex, pointIndex, "point_type", value)
+                              }
                             >
                               <SelectTrigger className="w-20">
                                 <SelectValue />
@@ -611,22 +624,21 @@ export function TripCorrectionModal({
                           <TableCell>
                             <Input
                               type="number"
-                              value={correction.point_num}
+                              value={point.point_num}
                               onChange={(e) =>
-                                updateCorrection(globalIndex, "point_num", Number.parseInt(e.target.value))
+                                updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))
                               }
                               className="w-16"
                             />
                           </TableCell>
                           <TableCell>
                             <PointSelector
-                              value={correction.point_id}
-                              onChange={(point) => {
-                                // ИЗМЕНЕНО: обновление координат
-                                updateCorrection(globalIndex, "point_id", point.point_id)
-                                updateCorrection(globalIndex, "point_name", point.point_name)
-                                updateCorrection(globalIndex, "latitude", point.latitude)
-                                updateCorrection(globalIndex, "longitude", point.longitude)
+                              value={point.point_id}
+                              onChange={(selectedPoint) => {
+                                updatePoint(tripIndex, pointIndex, "point_id", selectedPoint.point_id)
+                                updatePoint(tripIndex, pointIndex, "point_name", selectedPoint.point_name)
+                                updatePoint(tripIndex, pointIndex, "latitude", selectedPoint.latitude)
+                                updatePoint(tripIndex, pointIndex, "longitude", selectedPoint.longitude)
                               }}
                               pointKey={pointKey}
                               availablePoints={availablePoints}
@@ -636,7 +648,7 @@ export function TripCorrectionModal({
                           </TableCell>
                           <TableCell>
                             <Button
-                              onClick={() => removePoint(globalIndex)}
+                              onClick={() => removePoint(tripIndex, pointIndex)}
                               variant="outline"
                               size="sm"
                               className="text-red-600"
