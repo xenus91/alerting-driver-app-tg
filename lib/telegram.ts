@@ -159,12 +159,14 @@ export async function sendMultipleTripMessageWithButtons(
   firstName: string,
   messageId: number,
   isCorrection = false,
+  previousTelegramMessageId?: number // Параметр для старого message_id
 ) {
   try {
     console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`)
     console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}`)
+    console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || 'None'}`)
 
-    // Генерируем красивое сообщение
+    // Генерируем красивое сообщение для нового сообщения
     let message = ""
 
     // Добавляем заголовок корректировки если нужно
@@ -219,7 +221,6 @@ export async function sendMultipleTripMessageWithButtons(
           ]
           const month = monthNames[date.getMonth()]
 
-          // Убираем timeZone: "Europe/Moscow" чтобы не было смещения
           const hours = date.getHours().toString().padStart(2, "0")
           const minutes = date.getMinutes().toString().padStart(2, "0")
           const time = `${hours}:${minutes}`
@@ -262,7 +263,7 @@ export async function sendMultipleTripMessageWithButtons(
         message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
       }
 
-      // Строим маршрут для этого рейса: сначала все точки погрузки, потом все точки разгрузки
+      // Строим маршрут для этого рейса
       const routePoints = [...trip.loading_points, ...trip.unloading_points]
       console.log(
         `Route points for trip ${trip.trip_identifier}:`,
@@ -289,6 +290,40 @@ export async function sendMultipleTripMessageWithButtons(
     console.log(`Final message length: ${message.length}`)
     console.log(`Message preview: ${message.substring(0, 200)}...`)
 
+    // Если есть previousTelegramMessageId, редактируем старое сообщение
+    if (previousTelegramMessageId) {
+      try {
+        // Получаем текст старого сообщения (можно использовать заглушку, так как мы зачеркиваем)
+        const strikethroughMessage = `<s>Устаревшее сообщение. Пожалуйста, используйте новое сообщение ниже.</s>`;
+
+        const editResponse = await fetch(`${TELEGRAM_API_URL}/editMessageText`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            chat_id: chatId,
+            message_id: previousTelegramMessageId,
+            text: strikethroughMessage,
+            parse_mode: "HTML",
+            reply_markup: {}, // Удаляем кнопки, передавая пустой reply_markup
+          }),
+        });
+
+        const editData = await editResponse.json();
+        if (!editData.ok) {
+          console.error(`Failed to edit message ${previousTelegramMessageId}:`, editData.description);
+          // Продолжаем выполнение, даже если редактирование не удалось
+        } else {
+          console.log(`Successfully edited message ${previousTelegramMessageId} to strikethrough and removed buttons`);
+        }
+      } catch (error) {
+        console.error(`Error editing message ${previousTelegramMessageId}:`, error);
+        // Продолжаем выполнение, даже если редактирование не удалось
+      }
+    }
+
+    // Отправляем новое сообщение
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
@@ -358,39 +393,57 @@ export async function sendTripMessageWithButtons(
 ) {
   try {
     // Генерируем красивое сообщение
-    let message = `🌅 <b>Доброго времени суток!</b>\n\n`
-    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
-    message += `🚛 На Вас запланирован рейс <b>${tripData.trip_identifier}</b>\n`
-    message += `🚗 Транспорт: <b>${tripData.vehicle_number}</b>\n`
-    message += `⏰ Плановое время погрузки: <b>${tripData.planned_loading_time}</b>\n\n`
+    let message = `🌅 <b>Доброго времени суток!</b>
+
+`
+    message += `👤 Уважаемый, <b>${firstName}</b>
+
+`
+    message += `🚛 На Вас запланирован рейс <b>${tripData.trip_identifier}</b>
+`
+    message += `🚗 Транспорт: <b>${tripData.vehicle_number}</b>
+`
+    message += `⏰ Плановое время погрузки: <b>${tripData.planned_loading_time}</b>
+
+`
 
     // Пункты погрузки
     if (loadingPoints.length > 0) {
-      message += `📦 <b>Погрузка:</b>\n`
+      message += `📦 <b>Погрузка:</b>
+`
       loadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_name}</b>\n`
+        message += `${index + 1}) <b>${point.point_name}</b>
+`
       })
-      message += `\n`
+      message += `
+`
     }
 
     // Пункты разгрузки
     if (unloadingPoints.length > 0) {
-      message += `📤 <b>Разгрузка:</b>\n`
+      message += `📤 <b>Разгрузка:</b>
+`
       unloadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_name}</b>\n`
+        message += `${index + 1}) <b>${point.point_name}</b>
+`
 
         // Окна приемки для пункта разгрузки
         const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
         if (windows.length > 0) {
-          message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
+          message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>
+`
         }
-        message += `\n`
+        message += `
+`
       })
     }
 
     // Комментарий
     if (tripData.driver_comment && tripData.driver_comment.trim()) {
-      message += `💬 <b>Комментарий по рейсу:</b>\n<i>${tripData.driver_comment}</i>\n\n`
+      message += `💬 <b>Комментарий по рейсу:</b>
+<i>${tripData.driver_comment}</i>
+
+`
     }
 
     // Строим маршрут: сначала все точки погрузки, потом все точки разгрузки
@@ -398,7 +451,9 @@ export async function sendTripMessageWithButtons(
     const routeUrl = buildRouteUrl(routePoints)
 
     if (routeUrl) {
-      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
+      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>
+
+`
     }
 
     message += `🙏 <b>Просьба подтвердить рейс</b>`

@@ -114,12 +114,11 @@ export default function TripDetailPage() {
   const [resendingPhone, setResendingPhone] = useState<string | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
-const [correctionModal, setCorrectionModal] = useState<{
-  isOpen: boolean
-  phone: string
-  driverName: string
-  initialCorrections: TripCorrection[] // Добавлено
-} | null>(null)
+  const [correctionModal, setCorrectionModal] = useState<{
+    isOpen: boolean
+    phone: string
+    driverName: string
+  } | null>(null)
 
   // Проверяем можно ли удалить рассылку (все подтверждены или завершены)
   const canDeleteTrip = () => {
@@ -1105,34 +1104,13 @@ const [correctionModal, setCorrectionModal] = useState<{
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Button
-                          onClick={() => {
-                    // ФИКС: Правильный синтаксис стрелочной функции в JSX
-                    setCorrectionModal({
-                      isOpen: true,
-                      phone: driver.phone,
-                      driverName: driver.full_name || driver.first_name || "Неизвестный",
-                      initialCorrections: driver.trips.flatMap(trip => {
-                        const pointsForTrip = tripPoints.filter(p => p.trip_identifier === trip.trip_identifier);
-                        return pointsForTrip.map(point => ({
-                          phone: driver.phone,
-                          trip_identifier: trip.trip_identifier,
-                          vehicle_number: trip.vehicle_number,
-                          planned_loading_time: trip.planned_loading_time,
-                          driver_comment: trip.driver_comment || "",
-                          message_id: trip.messageId,
-                          point_type: point.point_type,
-                          point_num: point.point_num,
-                          point_id: point.point_id,
-                          point_name: point.point_name || "", // Используем существующее имя точки
-                          door_open_1: point.door_open_1,
-                          door_open_2: point.door_open_2,
-                          door_open_3: point.door_open_3,
-                          latitude: "",
-                          longitude: "",
-                        }));
-                      })
-                    });
-                  }}
+                          onClick={() =>
+                            setCorrectionModal({
+                              isOpen: true,
+                              phone: driver.phone,
+                              driverName: driver.full_name || driver.first_name || "Неизвестный",
+                            })
+                          }
                           variant="outline"
                           size="sm"
                           className="mb-1 w-full"
@@ -1199,17 +1177,16 @@ const [correctionModal, setCorrectionModal] = useState<{
           </div>
         </div>
       )}
-     {correctionModal && (
+      {correctionModal && (
         <TripCorrectionModal
           isOpen={correctionModal.isOpen}
           onClose={() => setCorrectionModal(null)}
           tripId={tripId}
           phone={correctionModal.phone}
-          initialCorrections={correctionModal.initialCorrections}
           driverName={correctionModal.driverName}
-          onSave={() => {
-            fetchMessages();
-            setCorrectionModal(null);
+          onCorrectionSent={() => {
+            fetchMessages()
+            setCorrectionModal(null)
           }}
         />
       )}
