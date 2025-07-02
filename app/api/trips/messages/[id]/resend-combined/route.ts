@@ -53,7 +53,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       previousTelegramMessageId = previousMessageResult[0].telegram_message_id;
     }
 
-    // Получаем ВСЕ активные сообщения для этого пользователя и рейса, исключая удаленные
+    // Получаем ВСЕ активные сообщения для этого пользователя и рейса
     const messagesResult = await sql`
       SELECT DISTINCT
         tm.id,
@@ -66,7 +66,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         AND tm.phone = ${phone}
         AND tm.status = 'sent'
         AND tm.trip_identifier IS NOT NULL
-        AND tm.trip_identifier NOT IN (${sql.array(deletedTrips, 'text')})
       ORDER BY tm.trip_identifier
     `;
 
@@ -76,7 +75,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     );
 
     if (messagesResult.length === 0) {
-      return NextResponse.json({ success: false, error: "No active messages found to resend" }, { status: 404 });
+      return NextResponse.json({ success: false, error: "No messages found to resend" }, { status: 404 });
     }
 
     // Собираем данные о рейсах для новой функции
@@ -145,7 +144,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       driverName,
       messageId,
       isCorrection,
-      previousTelegramMessageId
+      previousTelegramMessageId // Передаем старый telegram_message_id
     );
 
     // Обновляем статусы всех сообщений
