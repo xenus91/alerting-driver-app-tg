@@ -138,28 +138,33 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`Prepared ${trips.length} trips for sending`);
 
     // Отправляем сообщение через новую функцию, передавая старый telegram_message_id
-    const telegramResult = await sendMultipleTripMessageWithButtons(
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+    const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
       user.telegram_id,
       trips,
       driverName,
       messageId,
       isCorrection,
-      previousTelegramMessageId // Передаем старый telegram_message_id
+      previousTelegramMessageId
     );
+    // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
     // Обновляем статусы всех сообщений
     const messageIdsToUpdate = messagesResult.map((m) => m.id);
 
     for (const msgId of messageIdsToUpdate) {
+      // === НАЧАЛО ИЗМЕНЕНИЙ ===
       await sql`
         UPDATE trip_messages 
-        SET telegram_message_id = ${telegramResult.message_id},
+        SET telegram_message_id = ${message_id},
             response_status = 'pending',
             response_comment = NULL,
             response_at = NULL,
-            sent_at = CURRENT_TIMESTAMP
+            sent_at = CURRENT_TIMESTAMP,
+            message = ${messageText}  -- Добавлено сохранение текста сообщения
         WHERE id = ${msgId}
       `;
+      // === КОНЕЦ ИЗМЕНЕНИЙ ===
     }
 
     console.log(`Successfully sent correction to ${user.telegram_id}, updated ${messageIdsToUpdate.length} messages`);
@@ -167,7 +172,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       success: true,
       message: "Correction sent successfully",
-      telegram_message_id: telegramResult.message_id,
+      telegram_message_id: message_id, // Изменено с telegramResult.message_id на message_id
       trips_count: trips.length,
       updated_messages: messageIdsToUpdate.length,
     });

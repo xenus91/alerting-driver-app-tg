@@ -133,78 +133,78 @@ export async function sendContactRequest(chatId: number) {
 export async function sendMultipleTripMessageWithButtons(
   chatId: number,
   trips: Array<{
-    trip_identifier: string
-    vehicle_number: string
-    planned_loading_time: string
-    driver_comment: string
+    trip_identifier: string;
+    vehicle_number: string;
+    planned_loading_time: string;
+    driver_comment: string;
     loading_points: Array<{
-      point_id: string
-      point_name: string
-      door_open_1?: string
-      door_open_2?: string
-      door_open_3?: string
-      latitude?: number | string
-      longitude?: number | string
-    }>
+      point_id: string;
+      point_name: string;
+      door_open_1?: string;
+      door_open_2?: string;
+      door_open_3?: string;
+      latitude?: number | string;
+      longitude?: number | string;
+    }>;
     unloading_points: Array<{
-      point_id: string
-      point_name: string
-      door_open_1?: string
-      door_open_2?: string
-      door_open_3?: string
-      latitude?: number | string
-      longitude?: number | string
-    }>
+      point_id: string;
+      point_name: string;
+      door_open_1?: string;
+      door_open_2?: string;
+      door_open_3?: string;
+      latitude?: number | string;
+      longitude?: number | string;
+    }>;
   }>,
   firstName: string,
   messageId: number,
   isCorrection = false,
-  previousTelegramMessageId?: number // Параметр для старого message_id
-) {
+  previousTelegramMessageId?: number
+): Promise<{ message_id: number; messageText: string }> {
   try {
-    console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`)
-    console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}`)
-    console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || 'None'}`)
+    console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`);
+    console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}`);
+    console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || 'None'}`);
 
     // Генерируем красивое сообщение для нового сообщения
-    let message = ""
+    let message = "";
 
     // Добавляем заголовок корректировки если нужно
     if (isCorrection) {
-      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`
+      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`;
     }
 
-    message += `🌅 <b>Доброго времени суток!</b>\n\n`
-    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
+    message += `🌅 <b>Доброго времени суток!</b>\n\n`;
+    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`;
 
     // Определяем множественное или единственное число
-    const isMultiple = trips.length > 1
-    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
+    const isMultiple = trips.length > 1;
+    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`;
 
     // Сортируем рейсы по времени погрузки
     const sortedTrips = [...trips].sort((a, b) => {
-      const timeA = new Date(a.planned_loading_time || "").getTime()
-      const timeB = new Date(b.planned_loading_time || "").getTime()
-      return timeA - timeB
-    })
+      const timeA = new Date(a.planned_loading_time || "").getTime();
+      const timeB = new Date(b.planned_loading_time || "").getTime();
+      return timeA - timeB;
+    });
 
     // Перебираем все рейсы
     sortedTrips.forEach((trip, tripIndex) => {
-      console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
+      console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`);
 
-      message += `<b>Рейс ${tripIndex + 1}:</b>\n`
-      message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
-      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
+      message += `<b>Рейс ${tripIndex + 1}:</b>\n`;
+      message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`;
+      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`;
 
       // Форматируем дату и время БЕЗ смещения часового пояса
       const formatDateTime = (dateTimeString: string): string => {
         try {
-          if (!dateTimeString) return "Не указано"
+          if (!dateTimeString) return "Не указано";
 
-          const date = new Date(dateTimeString)
-          if (isNaN(date.getTime())) return dateTimeString
+          const date = new Date(dateTimeString);
+          if (isNaN(date.getTime())) return dateTimeString;
 
-          const day = date.getDate()
+          const day = date.getDate();
           const monthNames = [
             "января",
             "февраля",
@@ -218,77 +218,77 @@ export async function sendMultipleTripMessageWithButtons(
             "октября",
             "ноября",
             "декабря",
-          ]
-          const month = monthNames[date.getMonth()]
+          ];
+          const month = monthNames[date.getMonth()];
 
-          const hours = date.getHours().toString().padStart(2, "0")
-          const minutes = date.getMinutes().toString().padStart(2, "0")
-          const time = `${hours}:${minutes}`
+          const hours = date.getHours().toString().padStart(2, "0");
+          const minutes = date.getMinutes().toString().padStart(2, "0");
+          const time = `${hours}:${minutes}`;
 
-          return `${day} ${month} ${time}`
+          return `${day} ${month} ${time}`;
         } catch (error) {
-          console.error("Error formatting date:", error)
-          return dateTimeString
+          console.error("Error formatting date:", error);
+          return dateTimeString;
         }
-      }
+      };
 
-      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
+      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`;
 
       // Пункты погрузки
       if (trip.loading_points.length > 0) {
-        message += `📦 <b>Погрузка:</b>\n`
+        message += `� O'D0' <b>Погрузка:</b>\n`;
         trip.loading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-        })
-        message += `\n`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
+        });
+        message += `\n`;
       }
 
       // Пункты разгрузки
       if (trip.unloading_points.length > 0) {
-        message += `📤 <b>Разгрузка:</b>\n`
+        message += `📤 <b>Разгрузка:</b>\n`;
         trip.unloading_points.forEach((point, index) => {
-          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
+          message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
 
           // Окна приемки для пункта разгрузки
-          const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
+          const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim());
           if (windows.length > 0) {
-            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
+            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`;
           }
-        })
-        message += `\n`
+        });
+        message += `\n`;
       }
 
       // Комментарий
       if (trip.driver_comment && trip.driver_comment.trim()) {
-        message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
+        message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`;
       }
 
       // Строим маршрут для этого рейса
-      const routePoints = [...trip.loading_points, ...trip.unloading_points]
+      const routePoints = [...trip.loading_points, ...trip.unloading_points];
       console.log(
         `Route points for trip ${trip.trip_identifier}:`,
         routePoints.map((p) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
-      )
+      );
 
-      const routeUrl = buildRouteUrl(routePoints)
+      const routeUrl = buildRouteUrl(routePoints);
 
       if (routeUrl) {
-        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
-        console.log(`Added route URL for trip ${trip.trip_identifier}`)
+        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`;
+        console.log(`Added route URL for trip ${trip.trip_identifier}`);
       } else {
-        console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
+        console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`);
       }
 
       // Добавляем разделитель между рейсами (кроме последнего)
       if (tripIndex < sortedTrips.length - 1) {
-        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`;
       }
-    })
+    });
 
-    message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`
+    message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`;
 
-    console.log(`Final message length: ${message.length}`)
-    console.log(`Message preview: ${message.substring(0, 200)}...`)
+    console.log(`Final message length: ${message.length}`);
+    console.log(`Message preview: ${message.substring(0, 200)}...`);
 
     // Если есть previousTelegramMessageId, редактируем старое сообщение
     if (previousTelegramMessageId) {
@@ -348,19 +348,19 @@ export async function sendMultipleTripMessageWithButtons(
           ],
         },
       }),
-    })
+    });
 
-    const data = await response.json()
+    const data = await response.json();
 
     if (!data.ok) {
-      throw new Error(data.description || "Failed to send multiple trip message with buttons")
+      throw new Error(data.description || "Failed to send multiple trip message with buttons");
     }
 
-    console.log(`Message sent successfully, message_id: ${data.result.message_id}`)
-    return data.result
+    console.log(`Message sent successfully, message_id: ${data.result.message_id}`);
+    return { message_id: data.result.message_id, messageText: message };
   } catch (error) {
-    console.error("Error sending multiple trip message with buttons:", error)
-    throw error
+    console.error("Error sending multiple trip message with buttons:", error);
+    throw error;
   }
 }
 

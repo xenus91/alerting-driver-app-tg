@@ -242,6 +242,17 @@ export default function TripDetailPage() {
       driver.trips.push(tripData)
     })
 
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+    // Сортировка рейсов каждого водителя по planned_loading_time
+    driverMap.forEach((driver) => {
+      driver.trips.sort((a, b) => {
+        const timeA = new Date(a.planned_loading_time).getTime()
+        const timeB = new Date(b.planned_loading_time).getTime()
+        return timeA - timeB // Сортировка по возрастанию
+      })
+    })
+    // === КОНЕЦ ИЗМЕНЕНИЙ ===
+
     // Определяем общий статус для каждого водителя
     driverMap.forEach((driver) => {
       // Общий статус отправки
