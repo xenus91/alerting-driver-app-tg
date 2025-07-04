@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server"
-import { Pool } from "@neondatabase/serverless"
+import { neon } from "@neondatabase/serverless"
 
-const pool = new Pool({ connectionString: process.env.DATABASE_URL })
+const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET(request: NextRequest, { params }: { params: { tableName: string } }) {
   const { tableName } = params
   console.log(`[API] Handling GET request for table: ${tableName}`)
 
+  // Проверка переменной окружения
   if (!process.env.DATABASE_URL) {
     console.error("[API] DATABASE_URL is not set")
     return NextResponse.json(
@@ -14,8 +15,6 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       { status: 500 }
     )
   }
-
-  const client = await pool.connect()
 
   try {
     // Проверка авторизации
@@ -38,30 +37,33 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
 
     // Проверка валидности таблицы
     console.log(`[API] Checking if table ${tableName} exists in public schema`)
-    const validTablesRes = await client.query(`
+    const validTables = await sql`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-    `)
-    const tableExists = validTablesRes.rows.some((t: any) => t.table_name === tableName)
+    `
+    const tableExists = validTables.some((t: any) => t.table_name === tableName)
     if (!tableExists) {
       console.error(`[API] Table ${tableName} does not exist`)
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // Выполнение основного запроса
+    // ✅ Исправленный запрос данных таблицы
     console.log(`[API] Executing query for table ${tableName}`)
-    const result = await client.query(`SELECT * FROM "${tableName.replace(/"/g, '""')}"`)
     
-    console.log(`[API] Query successful, returned ${result.rowCount} rows`)
-    return NextResponse.json({ success: true, data: result.rows })
+    // Вариант 1: Используем шаблонные литералы с экранированием
+    const data = await sql(`SELECT * FROM "${tableName.replace(/"/g, '""')}"`)
+
+    // ИЛИ Вариант 2: Используем параметризованный запрос (если поддерживается)
+    // const data = await sql`SELECT * FROM ${sql.identifier(tableName)}`
+
+    console.log(`[API] Query successful, returned ${data.length} rows`)
+    return NextResponse.json({ success: true, data })
   } catch (error: any) {
     console.error(`[API] Error fetching data for table ${tableName}:`, error)
     return NextResponse.json(
       { success: false, error: `Failed to fetch data for table ${tableName}: ${error.message}` },
       { status: 500 }
     )
-  } finally {
-    client.release()
   }
 }
