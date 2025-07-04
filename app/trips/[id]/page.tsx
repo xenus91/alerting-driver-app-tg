@@ -780,13 +780,22 @@ export default function TripDetailPage() {
   }
 
 
-      // === НАЧАЛО ИЗМЕНЕНИЙ ===
-  // Обновляем handleCorrectionSent для вызова fetchTripPoints
-  const handleCorrectionSent = async () => {
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+const handleCorrectionSent = async () => {
+  setIsLoading(true)
+  try {
     await Promise.all([fetchMessages(), fetchTripPoints()])
+    // Дополнительный вызов fetchTripPoints с задержкой для надёжности
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await fetchTripPoints()
+  } catch (error) {
+    console.error("Error in handleCorrectionSent:", error)
+  } finally {
+    setIsLoading(false)
     setCorrectionModal(null)
   }
-  // === КОНЕЦ ИЗМЕНЕНИЙ ===
+}
+// === КОНЕЦ ИЗМЕНЕНИЙ ===
 
   return (
     <div className="space-y-6">
