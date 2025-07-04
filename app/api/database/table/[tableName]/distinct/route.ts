@@ -73,8 +73,8 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       )
     }
 
-    // Запрос уникальных значений
-    const query = `SELECT DISTINCT "${column}" FROM "${tableName.replace(/"/g, '""')}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`
+    // Запрос уникальных значений, исключая пустые строки и NULL
+    const query = `SELECT DISTINCT "${column}" FROM "${tableName.replace(/"/g, '""')}" WHERE "${column}" IS NOT NULL AND "${column}" != '' ORDER BY "${column}"`
     console.log(`[API] Executing distinct query for table ${tableName}, column ${column}: ${query}`)
     const result = await client.query(query)
 
