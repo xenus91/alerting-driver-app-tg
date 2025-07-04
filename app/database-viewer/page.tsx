@@ -14,7 +14,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { 
   Loader2, 
   Trash2, 
@@ -239,6 +238,11 @@ export default function DatabaseViewer() {
     setFilterConditions(filterConditions.filter((_, i) => i !== index))
   }
 
+  // Очистка всех фильтров
+  const clearAllFilters = () => {
+    setFilterConditions([]);
+  }
+
   // Обработка сохранения редактирования ячейки
   const handleSaveEdit = async (row: TableData, columnId: string) => {
     if (!selectedTable || editValue === null) return
@@ -393,28 +397,76 @@ export default function DatabaseViewer() {
           </SelectContent>
         </Select>
 
-        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <Popover open={columnsOpen} onOpenChange={setColumnsOpen}>
           <PopoverTrigger asChild>
             <Button variant="outline">
-              <Filter className="mr-2 h-4 w-4" />
+              <Columns className="mr-2 h-4 w-4" />
+              Колонки
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-60">
+            <div className="space-y-2">
+              <h4 className="font-medium">Видимые колонки</h4>
+              {table.getAllLeafColumns().map(column => (
+                <div key={column.id} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={column.getIsVisible()}
+                    onChange={column.getToggleVisibilityHandler()}
+                    className="w-4 h-4"
+                  />
+                  <label className="text-sm font-medium leading-none">
+                    {column.id}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
+      </div>
+
+      {/* Блок фильтрации - теперь всегда видимый */}
+      {selectedTable && (
+        <div className="border rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between">
+            <h4 className="font-medium flex items-center gap-2">
+              <Filter className="h-4 w-4" />
               Фильтры
               {filterConditions.length > 0 && (
-                <span className="ml-2 bg-primary text-primary-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">
+                <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">
                   {filterConditions.length}
                 </span>
               )}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-[600px] max-h-[70vh] overflow-y-auto">
-            <div className="space-y-4">
-              <h4 className="font-medium">Условия фильтрации</h4>
-              
-              {filterConditions.length === 0 && (
-                <p className="text-sm text-muted-foreground">Нет условий фильтрации</p>
-              )}
-              
+            </h4>
+            <div className="flex gap-2">
+              <Button 
+                variant="secondary" 
+                size="sm"
+                onClick={addFilterCondition}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Добавить условие
+              </Button>
+              <Button 
+                variant="destructive" 
+                size="sm"
+                onClick={clearAllFilters}
+                disabled={filterConditions.length === 0}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Очистить все
+              </Button>
+            </div>
+          </div>
+          
+          {filterConditions.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">
+              Нет условий фильтрации. Нажмите "Добавить условие", чтобы создать фильтр.
+            </p>
+          ) : (
+            <div className="space-y-3">
               {filterConditions.map((condition, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 border rounded">
+                <div key={index} className="flex items-center gap-2 p-3 border rounded bg-muted/50">
                   <Select
                     value={condition.column}
                     onValueChange={value => updateFilterCondition(index, 'column', value)}
@@ -458,11 +510,9 @@ export default function DatabaseViewer() {
                       </SelectTrigger>
                       <SelectContent>
                         {getDistinctValues(condition.column).map(value => (
-                          // Используем специальный плейсхолдер для NULL значений
                           <SelectItem 
                             key={value} 
                             value={value}
-                            // Гарантируем что значение не пустое
                             disabled={value === ""}
                           >
                             {value === NULL_PLACEHOLDER ? "[пусто]" : value}
@@ -483,51 +533,16 @@ export default function DatabaseViewer() {
                     variant="ghost" 
                     size="icon"
                     onClick={() => removeFilterCondition(index)}
+                    title="Удалить условие"
                   >
                     <X className="h-4 w-4" />
                   </Button>
                 </div>
               ))}
-              
-              <Button 
-                variant="secondary" 
-                className="mt-2"
-                onClick={addFilterCondition}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Добавить условие
-              </Button>
             </div>
-          </PopoverContent>
-        </Popover>
-
-        <Popover open={columnsOpen} onOpenChange={setColumnsOpen}>
-          <PopoverTrigger asChild>
-            <Button variant="outline">
-              <Columns className="mr-2 h-4 w-4" />
-              Колонки
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-60">
-            <div className="space-y-2">
-              <h4 className="font-medium">Видимые колонки</h4>
-              {table.getAllLeafColumns().map(column => (
-                <div key={column.id} className="flex items-center space-x-2">
-                  <input
-                    type="checkbox"
-                    checked={column.getIsVisible()}
-                    onChange={column.getToggleVisibilityHandler()}
-                    className="w-4 h-4"
-                  />
-                  <label className="text-sm font-medium leading-none">
-                    {column.id}
-                  </label>
-                </div>
-              ))}
-            </div>
-          </PopoverContent>
-        </Popover>
-      </div>
+          )}
+        </div>
+      )}
 
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
