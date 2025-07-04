@@ -281,6 +281,8 @@ export default function DatabaseViewer() {
 
   const clearAllFilters = useCallback(() => {
     setPendingFilterConditions([]);
+    setFilterConditions([]); // Важное исправление
+    setPageIndex(0);
   }, []);
 
   const applyFilters = useCallback(() => {
