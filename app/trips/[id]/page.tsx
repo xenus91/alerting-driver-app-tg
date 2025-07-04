@@ -1302,10 +1302,7 @@ const handleCorrectionSent = async (corrections: CorrectionData[], deletedTrips:
           tripId={tripId}
           phone={correctionModal.phone}
           driverName={correctionModal.driverName}
-          onCorrectionSent={() => {
-            fetchMessages()
-            setCorrectionModal(null)
-          }}
+          onCorrectionSent={(corrections, deletedTrips) => handleCorrectionSent(corrections, deletedTrips)}
         />
       )}
     </div>
