@@ -86,81 +86,96 @@ export async function GET(
 
     // Обработка параметров запроса
     const searchParams = request.nextUrl.searchParams;
-    const filters: Record<string, string> = {};
     const conditions: string[] = [];
     const values: any[] = [];
     let paramIndex = 1;
 
+    // Сбор всех параметров фильтра
+    const filterParams: Record<string, string[]> = {};
+    searchParams.forEach((value, key) => {
+      if (!filterParams[key]) filterParams[key] = [];
+      filterParams[key].push(value);
+    });
+
     // Обработка фильтров
-    const filterParams = searchParams.getAll("filter");
-    for (const filterParam of filterParams) {
-      try {
-        const filter = JSON.parse(filterParam);
-        const column = filter.column;
-        const operator = filter.operator;
-        let value = filter.value;
+    const filterRegex = /filter\[(\d+)\]\.(\w+)/;
+    const filters: Record<number, any> = {};
 
-        if (!column || !operator || value === undefined) {
-          console.warn(`[API] Invalid filter parameter: ${filterParam}`);
+    for (const [key, values] of Object.entries(filterParams)) {
+      const match = key.match(filterRegex);
+      if (match) {
+        const index = parseInt(match[1]);
+        const field = match[2];
+        
+        if (!filters[index]) filters[index] = {};
+        
+        if (field === "value" && values.length > 1) {
+          // Множественные значения
+          filters[index][field] = values;
+        } else {
+          // Одиночные значения
+          filters[index][field] = values[0];
+        }
+      }
+    }
+
+    // Обработка каждого фильтра
+    for (const [index, filter] of Object.entries(filters)) {
+      const { column, operator, value } = filter;
+      
+      if (!column || !operator) continue;
+      
+      // Проверка существования колонки
+      if (!columnSchema[column]) {
+        console.warn(`[API] Invalid column ${column} for table ${tableName}`);
+        continue;
+      }
+      
+      // Обработка NULL-значений
+      if (value === "__NULL__") {
+        if (operator === "=") {
+          conditions.push(`"${column}" IS NULL`);
+        } else if (operator === "!=") {
+          conditions.push(`"${column}" IS NOT NULL`);
+        }
+        continue;
+      }
+      
+      // Обработка операторов
+      switch (operator) {
+        case "=":
+        case "!=":
+        case ">":
+        case "<":
+        case ">=":
+        case "<=":
+          conditions.push(`"${column}" ${operator} $${paramIndex}`);
+          values.push(value);
+          paramIndex++;
+          break;
+          
+        case "like":
+          conditions.push(`"${column}" ILIKE $${paramIndex}`);
+          values.push(`%${value}%`);
+          paramIndex++;
+          break;
+          
+        case "in":
+        case "not in":
+          const valueArray = Array.isArray(value) ? value : [value];
+          if (valueArray.length === 0) continue;
+          
+          const placeholders = valueArray.map((_, i) => `$${paramIndex + i}`).join(",");
+          conditions.push(
+            `"${column}" ${operator === "in" ? "IN" : "NOT IN"} (${placeholders})`
+          );
+          values.push(...valueArray);
+          paramIndex += valueArray.length;
+          break;
+          
+        default:
+          console.warn(`[API] Unsupported operator: ${operator}`);
           continue;
-        }
-
-        // Проверка существования колонки
-        if (!columnSchema[column]) {
-          console.warn(`[API] Invalid column ${column} for table ${tableName}`);
-          continue;
-        }
-
-        // Обработка NULL-значений
-        if (value === "__NULL__") {
-          if (operator === "=") {
-            conditions.push(`"${column}" IS NULL`);
-          } else if (operator === "!=") {
-            conditions.push(`"${column}" IS NOT NULL`);
-          }
-          continue;
-        }
-
-        // Обработка операторов
-        switch (operator) {
-          case "=":
-          case "!=":
-          case ">":
-          case "<":
-          case ">=":
-          case "<=":
-            conditions.push(`"${column}" ${operator} $${paramIndex}`);
-            values.push(value);
-            paramIndex++;
-            break;
-            
-          case "like":
-            conditions.push(`"${column}" ILIKE $${paramIndex}`);
-            values.push(`%${value}%`);
-            paramIndex++;
-            break;
-            
-          case "in":
-          case "not in":
-            if (!Array.isArray(value)) {
-              value = [value];
-            }
-            if (value.length === 0) continue;
-            
-            const placeholders = value.map((_, i) => `$${paramIndex + i}`).join(",");
-            conditions.push(
-              `"${column}" ${operator === "in" ? "IN" : "NOT IN"} (${placeholders})`
-            );
-            values.push(...value);
-            paramIndex += value.length;
-            break;
-            
-          default:
-            console.warn(`[API] Unsupported operator: ${operator}`);
-            continue;
-        }
-      } catch (error) {
-        console.warn(`[API] Error parsing filter parameter: ${filterParam}`, error);
       }
     }
 
