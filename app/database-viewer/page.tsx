@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef, useCallback } from "react"
+import { useState, useEffect, useMemo, useRef } from "react"
 import {
   Table,
   TableBody,
@@ -14,19 +14,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Loader2, Trash2, Save, X, AlertTriangle } from "lucide-react"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { 
+  Loader2, 
+  Trash2, 
+  Save, 
+  X, 
+  AlertTriangle, 
+  Filter, 
+  Columns, 
+  ChevronDown, 
+  Plus,
+  Check
+} from "lucide-react"
 import {
   useReactTable,
   getCoreRowModel,
   getSortedRowModel,
-  getFilteredRowModel,
   getPaginationRowModel,
   ColumnDef,
   ColumnFiltersState,
   SortingState,
   flexRender,
+  VisibilityState,
 } from "@tanstack/react-table"
-import { debounce } from "lodash"
 
 interface TableData {
   [key: string]: any
@@ -36,6 +47,24 @@ interface TableSchema {
   name: string
   columns: { name: string; type: string }[]
 }
+
+interface FilterCondition {
+  column: string
+  operator: string
+  value: string | string[]
+}
+
+const OPERATORS = [
+  { value: "=", label: "Равно" },
+  { value: "!=", label: "Не равно" },
+  { value: ">", label: "Больше" },
+  { value: "<", label: "Меньше" },
+  { value: ">=", label: "Больше или равно" },
+  { value: "<=", label: "Меньше или равно" },
+  { value: "in", label: "В списке" },
+  { value: "not in", label: "Не в списке" },
+  { value: "like", label: "Содержит" },
+]
 
 export default function DatabaseViewer() {
   const [tables, setTables] = useState<TableSchema[]>([])
@@ -50,18 +79,17 @@ export default function DatabaseViewer() {
   const [pageIndex, setPageIndex] = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [totalRows, setTotalRows] = useState(0)
-  const [filterSearch, setFilterSearch] = useState<{ [column: string]: string }>({})
-  const [isDragging, setIsDragging] = useState(false)
-  const [startX, setStartX] = useState(0)
-  const [scrollLeft, setScrollLeft] = useState(0)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; row: TableData | null }>({ open: false, row: null })
+  const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [filtersOpen, setFiltersOpen] = useState(false)
+  const [columnsOpen, setColumnsOpen] = useState(false)
+  const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
   const tableRef = useRef<HTMLDivElement>(null)
 
   // Проверка авторизации
   useEffect(() => {
     const checkAuth = async () => {
       try {
-        console.log("[DatabaseViewer] Checking authentication...")
         const response = await fetch("/api/auth/me", { cache: "no-store" })
         const result = await response.json()
         if (!result.success || result.user?.role !== "admin") {
@@ -69,7 +97,6 @@ export default function DatabaseViewer() {
         }
       } catch (error) {
         setError(`Authentication error: ${error instanceof Error ? error.message : "Unknown error"}`)
-        console.error("[DatabaseViewer] Auth check error:", error)
       }
     }
     checkAuth()
@@ -81,7 +108,6 @@ export default function DatabaseViewer() {
       setIsLoading(true)
       setError(null)
       try {
-        console.log("[DatabaseViewer] Fetching tables...")
         const response = await fetch("/api/database/tables", { cache: "no-store" })
         const result = await response.json()
         if (result.success) {
@@ -91,7 +117,6 @@ export default function DatabaseViewer() {
         }
       } catch (error) {
         setError(`Error loading tables: ${error instanceof Error ? error.message : "Unknown error"}`)
-        console.error("[DatabaseViewer] Error fetching tables:", error)
       } finally {
         setIsLoading(false)
       }
@@ -99,7 +124,7 @@ export default function DatabaseViewer() {
     fetchTables()
   }, [])
 
-  // Загрузка данных таблицы с пагинацией и фильтрацией
+  // Загрузка данных таблицы
   useEffect(() => {
     if (!selectedTable) return
 
@@ -110,24 +135,28 @@ export default function DatabaseViewer() {
         const params = new URLSearchParams()
         params.append("offset", String(pageIndex * pageSize))
         params.append("limit", String(pageSize))
-        const validColumns = tables.find((t) => t.name === selectedTable)?.columns.map((c) => c.name) || []
-
-        // Добавляем фильтры в параметры запроса
-        columnFilters.forEach((filter) => {
-          if (validColumns.includes(filter.id) && filter.value && String(filter.value).trim() !== "") {
-            params.append(filter.id, String(filter.value))
-          }
-        })
-
+        
         // Добавляем сортировку
-        if (sorting.length > 0 && validColumns.includes(sorting[0].id)) {
+        if (sorting.length > 0) {
           params.append("sortBy", sorting[0].id)
           params.append("sortOrder", sorting[0].desc ? "DESC" : "ASC")
         }
 
-        console.log(`[DatabaseViewer] Fetching data for table ${selectedTable} with params: ${params.toString()}`)
+        // Добавляем условия фильтрации
+        filterConditions.forEach((condition, index) => {
+          params.append(`filter[${index}].column`, condition.column)
+          params.append(`filter[${index}].operator`, condition.operator)
+          
+          if (Array.isArray(condition.value)) {
+            condition.value.forEach(val => params.append(`filter[${index}].value`, val))
+          } else {
+            params.append(`filter[${index}].value`, condition.value)
+          }
+        })
+
         const response = await fetch(`/api/database/table/${selectedTable}?${params.toString()}`, { cache: "no-store" })
         const result = await response.json()
+        
         if (result.success) {
           setData(result.data)
           setTotalRows(result.total || result.data.length)
@@ -136,188 +165,56 @@ export default function DatabaseViewer() {
         }
       } catch (error) {
         setError(`Error loading table data: ${error instanceof Error ? error.message : "Unknown error"}`)
-        console.error(`[DatabaseViewer] Error fetching data for table ${selectedTable}:`, error)
       } finally {
         setIsLoading(false)
       }
     }
 
     fetchTableData()
-  }, [selectedTable, columnFilters, sorting, pageIndex, pageSize, tables])
+  }, [selectedTable, filterConditions, sorting, pageIndex, pageSize])
 
-  // Обработчики для горизонтальной прокрутки
-  const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (tableRef.current) {
-      setIsDragging(true)
-      setStartX(e.pageX - tableRef.current.offsetLeft)
-      setScrollLeft(tableRef.current.scrollLeft)
-    }
-  }
-
-  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!isDragging || !tableRef.current) return
-    e.preventDefault()
-    const x = e.pageX - tableRef.current.offsetLeft
-    const walk = (x - startX) * 2
-    tableRef.current.scrollLeft = scrollLeft - walk
-  }
-
-  const handleMouseUp = () => {
-    setIsDragging(false)
-  }
-
-  // Дебаунс для поиска в фильтрах
-  const debouncedSetFilterSearch = useMemo(
-    () =>
-      debounce((column: string, value: string) => {
-        setFilterSearch((prev) => ({ ...prev, [column]: value }))
-      }, 300),
-    []
-  )
-
-  // Получаем уникальные значения для фильтров из текущих данных
+  // Получение уникальных значений для колонки
   const getDistinctValues = (columnId: string) => {
     const values = new Set<string>()
-    
     data.forEach(row => {
-      if (row[columnId] !== null && row[columnId] !== undefined && String(row[columnId]).trim() !== "") {
-        values.add(String(row[columnId]).trim())
+      if (row[columnId] !== null && row[columnId] !== undefined) {
+        values.add(String(row[columnId]))
       }
     })
-    
     return Array.from(values).sort()
   }
 
-  const columns = useMemo<ColumnDef<TableData>[]>(
-    () => {
-      if (!selectedTable || tables.length === 0) return []
+  // Добавление нового условия фильтрации
+  const addFilterCondition = () => {
+    if (!selectedTable || tables.length === 0) return
+    
+    const firstColumn = tables.find(t => t.name === selectedTable)?.columns[0]?.name
+    if (!firstColumn) return
+    
+    setFilterConditions([
+      ...filterConditions,
+      { column: firstColumn, operator: "=", value: "" }
+    ])
+  }
 
-      const tableSchema = tables.find((t) => t.name === selectedTable)
-      if (!tableSchema) return []
+  // Обновление условия фильтрации
+  const updateFilterCondition = (index: number, field: keyof FilterCondition, value: any) => {
+    const newConditions = [...filterConditions]
+    newConditions[index] = { ...newConditions[index], [field]: value }
+    setFilterConditions(newConditions)
+  }
 
-      const baseColumns: ColumnDef<TableData>[] = tableSchema.columns.map((col) => ({
-        accessorKey: col.name,
-        header: col.name,
-        filterFn: "equals",
-        cell: ({ row, column }) => {
-          const value = row.getValue(column.id)
-          const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id
+  // Удаление условия фильтрации
+  const removeFilterCondition = (index: number) => {
+    setFilterConditions(filterConditions.filter((_, i) => i !== index))
+  }
 
-          return isEditing ? (
-            <div className="flex gap-2 items-center">
-              <Input
-                value={editValue ?? value}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="w-48 h-8"
-                autoFocus
-              />
-              <Button size="sm" onClick={() => handleSaveEdit(row.original, column.id)}>
-                <Save className="h-4 w-4" />
-              </Button>
-              <Button size="sm" variant="outline" onClick={() => setEditingCell(null)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <div
-              onDoubleClick={() => {
-                setEditingCell({ rowId: row.id, columnId: column.id })
-                setEditValue(value)
-              }}
-              className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
-            >
-              {value !== null && value !== undefined ? String(value) : "—"}
-            </div>
-          )
-        },
-        meta: {
-          filterComponent: ({ column }: { column: any }) => {
-            const columnName = column.id
-            const values = getDistinctValues(columnName)
-            const search = filterSearch[columnName] || ""
-
-            const filteredValues = values
-              .filter((val) => String(val).toLowerCase().includes(search.toLowerCase()))
-
-            return (
-              <div className="space-y-2">
-                <Input
-                  placeholder="Поиск значений..."
-                  value={search}
-                  onChange={(e) => debouncedSetFilterSearch(columnName, e.target.value)}
-                  className="h-8"
-                />
-                <Select
-                  value={String(column.getFilterValue() || "")}
-                  onValueChange={(value) => column.setFilterValue(value === "" ? undefined : value)}
-                >
-                  <SelectTrigger className="h-8">
-                    <SelectValue placeholder="Выберите значение" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto">
-                    <SelectItem value="">Все</SelectItem>
-                    {filteredValues.map((val) => {
-                      const stringVal = String(val).trim();
-                      return (
-                        <SelectItem key={stringVal} value={stringVal}>
-                          {stringVal || "—"}
-                        </SelectItem>
-                      );
-                    })}
-                  </SelectContent>
-                </Select>
-              </div>
-            )
-          },
-        },
-      }))
-
-      baseColumns.push({
-        id: "actions",
-        header: "Действия",
-        cell: ({ row }) => (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setDeleteDialog({ open: true, row: row.original })}
-            title="Удалить строку"
-          >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        ),
-      })
-
-      return baseColumns
-    },
-    [selectedTable, tables, editingCell, editValue, data, filterSearch, debouncedSetFilterSearch]
-  )
-
-  const table = useReactTable({
-    data,
-    columns,
-    state: { columnFilters, sorting, pagination: { pageIndex, pageSize } },
-    onColumnFiltersChange: setColumnFilters,
-    onSortingChange: setSorting,
-    onPaginationChange: (updater) => {
-      const newState = typeof updater === "function" ? updater({ pageIndex, pageSize }) : updater
-      setPageIndex(newState.pageIndex)
-      setPageSize(newState.pageSize)
-    },
-    getCoreRowModel: getCoreRowModel(),
-    getSortedRowModel: getSortedRowModel(),
-    getFilteredRowModel: getFilteredRowModel(),
-    getPaginationRowModel: getPaginationRowModel(),
-    manualPagination: true,
-    pageCount: Math.ceil(totalRows / pageSize),
-  })
-
+  // Обработка сохранения редактирования ячейки
   const handleSaveEdit = async (row: TableData, columnId: string) => {
     if (!selectedTable || editValue === null) return
 
     const originalValue = row[columnId]
-    setData((prev) =>
-      prev.map((r) => (r.id === row.id ? { ...r, [columnId]: editValue } : r))
-    )
+    setData(prev => prev.map(r => r.id === row.id ? { ...r, [columnId]: editValue } : r))
     setEditingCell(null)
     setIsLoading(true)
     setError(null)
@@ -331,27 +228,23 @@ export default function DatabaseViewer() {
 
       const result = await response.json()
       if (!result.success) {
-        setData((prev) =>
-          prev.map((r) => (r.id === row.id ? { ...r, [columnId]: originalValue } : r))
-        )
+        setData(prev => prev.map(r => r.id === row.id ? { ...r, [columnId]: originalValue } : r))
         setError(result.error || "Не удалось обновить строку")
       }
     } catch (error) {
-      setData((prev) =>
-        prev.map((r) => (r.id === row.id ? { ...r, [columnId]: originalValue } : r))
-      )
+      setData(prev => prev.map(r => r.id === row.id ? { ...r, [columnId]: originalValue } : r))
       setError(`Ошибка обновления строки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
-      console.error("[DatabaseViewer] Error updating row:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Обработка удаления строки
   const handleDeleteRow = async () => {
     if (!selectedTable || !deleteDialog.row) return
 
     const rowId = deleteDialog.row.id
-    setData((prev) => prev.filter((r) => r.id !== rowId))
+    setData(prev => prev.filter(r => r.id !== rowId))
     setDeleteDialog({ open: false, row: null })
     setIsLoading(true)
     setError(null)
@@ -365,20 +258,85 @@ export default function DatabaseViewer() {
 
       const result = await response.json()
       if (!result.success) {
-        setData((prev) => [...prev, deleteDialog.row!])
+        setData(prev => [...prev, deleteDialog.row!])
         setError(result.error || "Не удалось удалить строку")
       }
     } catch (error) {
-      setData((prev) => [...prev, deleteDialog.row!])
+      setData(prev => [...prev, deleteDialog.row!])
       setError(`Ошибка удаления строки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
-      console.error("[DatabaseViewer] Error deleting row:", error)
     } finally {
       setIsLoading(false)
     }
   }
 
+  // Создание колонок для таблицы
+  const columns = useMemo<ColumnDef<TableData>[]>(() => {
+    if (!selectedTable || tables.length === 0) return []
+
+    const tableSchema = tables.find(t => t.name === selectedTable)
+    if (!tableSchema) return []
+
+    return tableSchema.columns.map(col => ({
+      accessorKey: col.name,
+      header: col.name,
+      cell: ({ row, column }) => {
+        const value = row.getValue(column.id)
+        const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id
+
+        return isEditing ? (
+          <div className="flex gap-2 items-center">
+            <Input
+              value={editValue ?? value}
+              onChange={e => setEditValue(e.target.value)}
+              className="w-48 h-8"
+              autoFocus
+            />
+            <Button size="sm" onClick={() => handleSaveEdit(row.original, column.id)}>
+              <Save className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => setEditingCell(null)}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div
+            onDoubleClick={() => {
+              setEditingCell({ rowId: row.id, columnId: column.id })
+              setEditValue(value)
+            }}
+            className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
+          >
+            {value !== null && value !== undefined ? String(value) : "—"}
+          </div>
+        )
+      }
+    }))
+  }, [selectedTable, tables, editingCell, editValue])
+
+  const table = useReactTable({
+    data,
+    columns,
+    state: { 
+      columnVisibility,
+      sorting,
+      pagination: { pageIndex, pageSize } 
+    },
+    onSortingChange: setSorting,
+    onColumnVisibilityChange: setColumnVisibility,
+    onPaginationChange: (updater) => {
+      const newState = typeof updater === "function" ? updater({ pageIndex, pageSize }) : updater
+      setPageIndex(newState.pageIndex)
+      setPageSize(newState.pageSize)
+    },
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    manualPagination: true,
+    pageCount: Math.ceil(totalRows / pageSize),
+  })
+
   return (
-    <div className="space-y-6 p-4">
+    <div className="space-y-4 p-4">
       <div>
         <h1 className="text-2xl font-bold">Просмотр базы данных</h1>
         <p className="text-muted-foreground">Управление таблицами базы данных</p>
@@ -397,13 +355,142 @@ export default function DatabaseViewer() {
             <SelectValue placeholder="Выберите таблицу" />
           </SelectTrigger>
           <SelectContent>
-            {tables.map((table) => (
+            {tables.map(table => (
               <SelectItem key={table.name} value={table.name}>
                 {table.name}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
+
+        <Popover open={filtersOpen} onOpenChange={setFiltersOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline">
+              <Filter className="mr-2 h-4 w-4" />
+              Фильтры
+              {filterConditions.length > 0 && (
+                <span className="ml-2 bg-primary text-primary-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">
+                  {filterConditions.length}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[600px] max-h-[70vh] overflow-y-auto">
+            <div className="space-y-4">
+              <h4 className="font-medium">Условия фильтрации</h4>
+              
+              {filterConditions.length === 0 && (
+                <p className="text-sm text-muted-foreground">Нет условий фильтрации</p>
+              )}
+              
+              {filterConditions.map((condition, index) => (
+                <div key={index} className="flex items-center gap-2 p-3 border rounded">
+                  <Select
+                    value={condition.column}
+                    onValueChange={value => updateFilterCondition(index, 'column', value)}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Колонка" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tables.find(t => t.name === selectedTable)?.columns.map(col => (
+                        <SelectItem key={col.name} value={col.name}>
+                          {col.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  <Select
+                    value={condition.operator}
+                    onValueChange={value => updateFilterCondition(index, 'operator', value)}
+                  >
+                    <SelectTrigger className="w-40">
+                      <SelectValue placeholder="Оператор" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {OPERATORS.map(op => (
+                        <SelectItem key={op.value} value={op.value}>
+                          {op.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  
+                  {['in', 'not in'].includes(condition.operator) ? (
+                    <Select
+                      value={Array.isArray(condition.value) ? condition.value : []}
+                      onValueChange={value => updateFilterCondition(index, 'value', value)}
+                      multiple
+                    >
+                      <SelectTrigger className="w-60">
+                        <SelectValue placeholder="Выберите значения" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getDistinctValues(condition.column).map(value => (
+                          <SelectItem key={value} value={value}>
+                            {value}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <Input
+                      value={String(condition.value)}
+                      onChange={e => updateFilterCondition(index, 'value', e.target.value)}
+                      placeholder="Значение"
+                      className="w-60"
+                    />
+                  )}
+                  
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    onClick={() => removeFilterCondition(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+              
+              <Button 
+                variant="secondary" 
+                className="mt-2"
+                onClick={addFilterCondition}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Добавить условие
+              </Button>
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        <Popover open={columnsOpen} onOpenChange={setColumnsOpen}>
+          <PopoverTrigger asChild>
+            <Button variant="outline">
+              <Columns className="mr-2 h-4 w-4" />
+              Колонки
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-60">
+            <div className="space-y-2">
+              <h4 className="font-medium">Видимые колонки</h4>
+              {table.getAllLeafColumns().map(column => (
+                <div key={column.id} className="flex items-center space-x-2">
+                  <input
+                    type="checkbox"
+                    checked={column.getIsVisible()}
+                    onChange={column.getToggleVisibilityHandler()}
+                    className="w-4 h-4"
+                  />
+                  <label className="text-sm font-medium leading-none">
+                    {column.id}
+                  </label>
+                </div>
+              ))}
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
 
       {isLoading ? (
@@ -413,20 +500,12 @@ export default function DatabaseViewer() {
         </div>
       ) : selectedTable ? (
         <>
-          <div
-            ref={tableRef}
-            className="rounded-md border overflow-x-auto cursor-grab select-none"
-            onMouseDown={handleMouseDown}
-            onMouseMove={handleMouseMove}
-            onMouseUp={handleMouseUp}
-            onMouseLeave={handleMouseUp}
-            style={{ userSelect: isDragging ? "none" : "auto" }}
-          >
+          <div className="rounded-md border overflow-x-auto">
             <Table>
               <TableHeader>
-                {table.getHeaderGroups().map((headerGroup) => (
+                {table.getHeaderGroups().map(headerGroup => (
                   <TableRow key={headerGroup.id}>
-                    {headerGroup.headers.map((header) => (
+                    {headerGroup.headers.map(header => (
                       <TableHead key={header.id} className="min-w-[150px]">
                         <div className="flex items-center gap-1">
                           <div
@@ -440,28 +519,36 @@ export default function DatabaseViewer() {
                             }[header.column.getIsSorted() as string] ?? null}
                           </div>
                         </div>
-                        {header.column.getCanFilter() ? (
-                          <div className="mt-1">{header.column.columnDef.meta?.filterComponent?.({ column: header.column })}</div>
-                        ) : null}
                       </TableHead>
                     ))}
+                    <TableHead className="w-[100px]">Действия</TableHead>
                   </TableRow>
                 ))}
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows.length > 0 ? (
-                  table.getRowModel().rows.map((row) => (
+                  table.getRowModel().rows.map(row => (
                     <TableRow key={row.id}>
-                      {row.getVisibleCells().map((cell) => (
+                      {row.getVisibleCells().map(cell => (
                         <TableCell key={cell.id} className="min-w-[150px]">
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </TableCell>
                       ))}
+                      <TableCell>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => setDeleteDialog({ open: true, row: row.original })}
+                          title="Удалить строку"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </TableCell>
                     </TableRow>
                   ))
                 ) : (
                   <TableRow>
-                    <TableCell colSpan={table.getAllColumns().length} className="h-24 text-center">
+                    <TableCell colSpan={table.getAllColumns().length + 1} className="h-24 text-center">
                       Нет данных для отображения
                     </TableCell>
                   </TableRow>
@@ -469,18 +556,19 @@ export default function DatabaseViewer() {
               </TableBody>
             </Table>
           </div>
+          
           <div className="flex items-center justify-between p-4">
             <div className="flex items-center gap-2">
               <span>Строк на странице:</span>
               <Select
                 value={String(pageSize)}
-                onValueChange={(value) => setPageSize(Number(value))}
+                onValueChange={value => setPageSize(Number(value))}
               >
                 <SelectTrigger className="w-20">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {[10, 25, 50].map((size) => (
+                  {[10, 25, 50].map(size => (
                     <SelectItem key={size} value={String(size)}>
                       {size}
                     </SelectItem>
@@ -513,7 +601,7 @@ export default function DatabaseViewer() {
         </>
       ) : null}
 
-      <Dialog open={deleteDialog.open} onOpenChange={(open) => setDeleteDialog({ open, row: open ? deleteDialog.row : null })}>
+      <Dialog open={deleteDialog.open} onOpenChange={open => setDeleteDialog({ open, row: open ? deleteDialog.row : null })}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Подтверждение удаления</DialogTitle>
