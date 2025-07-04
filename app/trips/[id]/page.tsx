@@ -59,6 +59,27 @@ interface TripPoint {
   door_open_3?: boolean
 }
 
+/* ИЗМЕНЕНИЕ: Добавлены интерфейсы CorrectionData и PointData для типизации corrections */
+interface CorrectionData {
+  phone: string
+  trip_identifier: string
+  original_trip_identifier?: string
+  vehicle_number: string
+  planned_loading_time: string
+  driver_comment?: string
+  message_id: number
+  points: PointData[]
+}
+
+interface PointData {
+  point_type: "P" | "D"
+  point_num: number
+  point_id: string
+  point_name?: string
+  latitude?: string
+  longitude?: string
+}
+
 interface TripData {
   messageId: number
   trip_identifier: string
