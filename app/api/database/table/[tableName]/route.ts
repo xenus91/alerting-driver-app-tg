@@ -1,3 +1,4 @@
+// app/api/database/table/[tableName]/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "@neondatabase/serverless";
 
@@ -69,85 +70,125 @@ export async function GET(
       );
     }
 
-    // Получение схемы таблицы (имя столбца и тип данных)
-    const schemaRes = await client.query(`
+    // Получение схемы таблицы
+    const schemaRes = await client.query(
+      `
       SELECT column_name, data_type
       FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = $1
-    `, [tableName]);
+    `,
+      [tableName]
+    );
     const columnSchema = schemaRes.rows.reduce((acc: any, col: any) => {
       acc[col.column_name] = col.data_type;
       return acc;
     }, {});
 
-    // Формирование условий
+    // Обработка параметров запроса
     const searchParams = request.nextUrl.searchParams;
-    const filters = Object.fromEntries(searchParams.entries());
+    const filters: Record<string, string> = {};
     const conditions: string[] = [];
     const values: any[] = [];
+    let paramIndex = 1;
 
-    for (const [column, value] of Object.entries(filters)) {
-      if (
-        value &&
-        columnSchema[column] &&
-        column !== "offset" &&
-        column !== "limit" &&
-        column !== "sortBy" &&
-        column !== "sortOrder"
-      ) {
-        // Валидация значения в зависимости от типа данных
-        if (["integer", "bigint"].includes(columnSchema[column])) {
-          if (!/^-?\d+$/.test(value)) {
-            console.warn(
-              `[API] Invalid value ${value} for integer column ${column} in table ${tableName}`
-            );
-            continue;
-          }
-        } else if (columnSchema[column] === "timestamp without time zone") {
-          if (isNaN(Date.parse(value))) {
-            console.warn(
-              `[API] Invalid timestamp value ${value} for column ${column} in table ${tableName}`
-            );
-            continue;
-          }
+    // Обработка фильтров
+    const filterParams = searchParams.getAll("filter");
+    for (const filterParam of filterParams) {
+      try {
+        const filter = JSON.parse(filterParam);
+        const column = filter.column;
+        const operator = filter.operator;
+        let value = filter.value;
+
+        if (!column || !operator || value === undefined) {
+          console.warn(`[API] Invalid filter parameter: ${filterParam}`);
+          continue;
         }
-        conditions.push(`"${column}" = $${values.length + 1}`);
-        values.push(value);
-      } else if (value) {
-        console.warn(`[API] Invalid column ${column} for table ${tableName}`);
+
+        // Проверка существования колонки
+        if (!columnSchema[column]) {
+          console.warn(`[API] Invalid column ${column} for table ${tableName}`);
+          continue;
+        }
+
+        // Обработка NULL-значений
+        if (value === "__NULL__") {
+          if (operator === "=") {
+            conditions.push(`"${column}" IS NULL`);
+          } else if (operator === "!=") {
+            conditions.push(`"${column}" IS NOT NULL`);
+          }
+          continue;
+        }
+
+        // Обработка операторов
+        switch (operator) {
+          case "=":
+          case "!=":
+          case ">":
+          case "<":
+          case ">=":
+          case "<=":
+            conditions.push(`"${column}" ${operator} $${paramIndex}`);
+            values.push(value);
+            paramIndex++;
+            break;
+            
+          case "like":
+            conditions.push(`"${column}" ILIKE $${paramIndex}`);
+            values.push(`%${value}%`);
+            paramIndex++;
+            break;
+            
+          case "in":
+          case "not in":
+            if (!Array.isArray(value)) {
+              value = [value];
+            }
+            if (value.length === 0) continue;
+            
+            const placeholders = value.map((_, i) => `$${paramIndex + i}`).join(",");
+            conditions.push(
+              `"${column}" ${operator === "in" ? "IN" : "NOT IN"} (${placeholders})`
+            );
+            values.push(...value);
+            paramIndex += value.length;
+            break;
+            
+          default:
+            console.warn(`[API] Unsupported operator: ${operator}`);
+            continue;
+        }
+      } catch (error) {
+        console.warn(`[API] Error parsing filter parameter: ${filterParam}`, error);
       }
     }
 
-    // Пагинация
-    const offset = Number(searchParams.get("offset")) || 0;
-    const limit = Number(searchParams.get("limit")) || 10;
-
-    // Подсчёт общего количества строк
-    const countQuery = `SELECT COUNT(*) as total FROM "${tableName.replace(
-      /"/g,
-      '""'
-    )}"${conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : ""}`;
-    const countResult = await client.query(
-      countQuery,
-      conditions.length > 0 ? values : []
-    );
-    const total = Number(countResult.rows[0].total);
-
-    // Формирование основного запроса
-    let query = `SELECT * FROM "${tableName.replace(/"/g, '""')}"`;
-    if (conditions.length > 0) {
-      query += ` WHERE ${conditions.join(" AND ")}`;
-    }
-
+    // Сортировка
     const sortBy = searchParams.get("sortBy");
-    const sortOrder = searchParams.get("sortOrder")?.toUpperCase() === "DESC" ? "DESC" : "ASC";
+    const sortOrder = searchParams.get("sortOrder") === "DESC" ? "DESC" : "ASC";
+    let orderBy = "";
     if (sortBy && columnSchema[sortBy]) {
-      query += ` ORDER BY "${sortBy}" ${sortOrder}`;
+      orderBy = ` ORDER BY "${sortBy}" ${sortOrder}`;
     } else if (sortBy) {
       console.warn(`[API] Invalid sort column ${sortBy} for table ${tableName}`);
     }
 
-    query += ` LIMIT $${values.length + 1} OFFSET $${values.length + 2}`;
+    // Пагинация
+    const offset = parseInt(searchParams.get("offset") || "0");
+    const limit = parseInt(searchParams.get("limit") || "10");
+
+    // Подсчёт общего количества строк
+    const countQuery = `SELECT COUNT(*) as total FROM "${tableName}"${
+      conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : ""
+    }`;
+    const countResult = await client.query(countQuery, values);
+    const total = parseInt(countResult.rows[0].total);
+
+    // Формирование основного запроса
+    const query = `SELECT * FROM "${tableName}"${
+      conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : ""
+    }${orderBy} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     values.push(limit, offset);
 
     console.log(
@@ -157,10 +198,23 @@ export async function GET(
     );
     const result = await client.query(query, values);
 
+    // Преобразование пустых строк в null
+    const transformedData = result.rows.map((row: any) => {
+      const newRow: any = {};
+      for (const [key, val] of Object.entries(row)) {
+        newRow[key] = val === "" ? null : val;
+      }
+      return newRow;
+    });
+
     console.log(
       `[API] Query successful, returned ${result.rowCount} rows, total: ${total}`
     );
-    return NextResponse.json({ success: true, data: result.rows, total });
+    return NextResponse.json({
+      success: true,
+      data: transformedData,
+      total,
+    });
   } catch (error: any) {
     console.error(`[API] Error fetching data for table ${tableName}:`, error);
     return NextResponse.json(
