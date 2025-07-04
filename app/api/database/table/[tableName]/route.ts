@@ -48,9 +48,9 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // ✅ Исправленный запрос с безопасным экранированием имени таблицы
+    // ✅ Безопасный запрос с ручным экранированием имени таблицы
     console.log(`[API] Executing query for table ${tableName}: SELECT * FROM "${tableName}"`)
-    const data = await sql`SELECT * FROM ${sql.identifier([tableName])}`
+    const data = await sql`SELECT * FROM "${tableName}"`
 
     console.log(`[API] Query successful, returned ${data.length} rows`)
     return NextResponse.json({ success: true, data })
