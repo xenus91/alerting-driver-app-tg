@@ -35,7 +35,8 @@ import {
   flexRender,
   VisibilityState,
 } from "@tanstack/react-table"
-import FilterBlock, { FilterCondition } from "./FilterBlock"
+import FilterBlock, { FilterCondition } from "@/components/filter-block"
+
 
 interface TableData {
   [key: string]: any
