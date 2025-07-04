@@ -70,7 +70,7 @@ export async function GET(
       );
     }
 
-    // Получение схемы таблицы
+   // Получение схемы таблицы
     const schemaRes = await client.query(
       `
       SELECT column_name, data_type
@@ -91,37 +91,25 @@ export async function GET(
     let paramIndex = 1;
 
     // Сбор всех параметров фильтра
-    const filterParams: Record<string, string[]> = {};
+    const filters: { [key: string]: any } = {};
     searchParams.forEach((value, key) => {
-      if (!filterParams[key]) filterParams[key] = [];
-      filterParams[key].push(value);
+      const match = key.match(/filter\[(\d+)\]\.(\w+)/);
+      if (match) {
+        const index = match[1];
+        const field = match[2];
+        if (!filters[index]) filters[index] = {};
+        filters[index][field] = value;
+      }
     });
 
+    // Преобразование в массив и сортировка по индексу
+    const filterArray = Object.entries(filters)
+      .map(([index, data]) => ({ index: parseInt(index), ...data }))
+      .sort((a, b) => a.index - b.index);
+
     // Обработка фильтров
-    const filterRegex = /filter\[(\d+)\]\.(\w+)/;
-    const filters: Record<number, any> = {};
-
-    for (const [key, values] of Object.entries(filterParams)) {
-      const match = key.match(filterRegex);
-      if (match) {
-        const index = parseInt(match[1]);
-        const field = match[2];
-        
-        if (!filters[index]) filters[index] = {};
-        
-        if (field === "value" && values.length > 1) {
-          // Множественные значения
-          filters[index][field] = values;
-        } else {
-          // Одиночные значения
-          filters[index][field] = values[0];
-        }
-      }
-    }
-
-    // Обработка каждого фильтра
-    for (const [index, filter] of Object.entries(filters)) {
-      const { column, operator, value } = filter;
+    for (const filter of filterArray) {
+      const { column, operator, value, connector } = filter;
       
       if (!column || !operator) continue;
       
@@ -134,8 +122,14 @@ export async function GET(
       // Обработка NULL-значений
       if (value === "__NULL__") {
         if (operator === "=") {
+          if (conditions.length > 0) {
+            conditions.push(connector || 'AND');
+          }
           conditions.push(`"${column}" IS NULL`);
         } else if (operator === "!=") {
+          if (conditions.length > 0) {
+            conditions.push(connector || 'AND');
+          }
           conditions.push(`"${column}" IS NOT NULL`);
         }
         continue;
@@ -149,12 +143,18 @@ export async function GET(
         case "<":
         case ">=":
         case "<=":
+          if (conditions.length > 0) {
+            conditions.push(connector || 'AND');
+          }
           conditions.push(`"${column}" ${operator} $${paramIndex}`);
           values.push(value);
           paramIndex++;
           break;
           
         case "like":
+          if (conditions.length > 0) {
+            conditions.push(connector || 'AND');
+          }
           conditions.push(`"${column}" ILIKE $${paramIndex}`);
           values.push(`%${value}%`);
           paramIndex++;
@@ -162,10 +162,13 @@ export async function GET(
           
         case "in":
         case "not in":
-          const valueArray = Array.isArray(value) ? value : [value];
+          const valueArray = value.split(',');
           if (valueArray.length === 0) continue;
           
           const placeholders = valueArray.map((_, i) => `$${paramIndex + i}`).join(",");
+          if (conditions.length > 0) {
+            conditions.push(connector || 'AND');
+          }
           conditions.push(
             `"${column}" ${operator === "in" ? "IN" : "NOT IN"} (${placeholders})`
           );
@@ -194,23 +197,16 @@ export async function GET(
     const limit = parseInt(searchParams.get("limit") || "10");
 
     // Подсчёт общего количества строк
-    const countQuery = `SELECT COUNT(*) as total FROM "${tableName}"${
-      conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : ""
-    }`;
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' ')}` : '';
+    const countQuery = `SELECT COUNT(*) as total FROM "${tableName}" ${whereClause}`;
     const countResult = await client.query(countQuery, values);
     const total = parseInt(countResult.rows[0].total);
 
     // Формирование основного запроса
-    const query = `SELECT * FROM "${tableName}"${
-      conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : ""
-    }${orderBy} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
+    const query = `SELECT * FROM "${tableName}" ${whereClause} ${orderBy} LIMIT $${paramIndex} OFFSET $${paramIndex + 1}`;
     values.push(limit, offset);
 
-    console.log(
-      `[API] Executing query for table ${tableName}: ${query}, values: ${JSON.stringify(
-        values
-      )}`
-    );
+    console.log(`[API] Executing query: ${query}`, values);
     const result = await client.query(query, values);
 
     // Преобразование пустых строк в null
@@ -222,20 +218,17 @@ export async function GET(
       return newRow;
     });
 
-    console.log(
-      `[API] Query successful, returned ${result.rowCount} rows, total: ${total}`
-    );
     return NextResponse.json({
       success: true,
       data: transformedData,
       total,
     });
   } catch (error: any) {
-    console.error(`[API] Error fetching data for table ${tableName}:`, error);
+    console.error(`[API] Error:`, error);
     return NextResponse.json(
       {
         success: false,
-        error: `Failed to fetch data for table ${tableName}: ${error.message}`,
+        error: `Failed to fetch data: ${error.message}`,
       },
       { status: 500 }
     );
