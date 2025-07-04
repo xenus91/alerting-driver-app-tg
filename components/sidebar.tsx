@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Key,
+  Database, // ИЗМЕНЕНИЕ: Добавлен иконка Database для нового пункта меню
 } from "lucide-react"
 
 interface CurrentUser {
