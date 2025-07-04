@@ -14,7 +14,15 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Trash2, Save, AlertTriangle } from "lucide-react"
-import { useTable, useSortBy, useFilters, Column } from "react-table"
+import {
+  useReactTable,
+  getCoreRowModel,
+  getSortedRowModel,
+  getFilteredRowModel,
+  ColumnDef,
+  ColumnFiltersState,
+  SortingState,
+} from "@tanstack/react-table"
 
 interface TableData {
   [key: string]: any
@@ -33,6 +41,8 @@ export default function DatabaseViewer() {
   const [error, setError] = useState<string | null>(null)
   const [editingCell, setEditingCell] = useState<{ row: number; column: string } | null>(null)
   const [editValue, setEditValue] = useState<string | number | boolean | null>(null)
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
+  const [sorting, setSorting] = useState<SortingState>([])
 
   // Загрузка списка таблиц
   useEffect(() => {
@@ -64,7 +74,20 @@ export default function DatabaseViewer() {
         setIsLoading(true)
         setError(null)
         try {
-          const response = await fetch(`/api/database/table/${selectedTable}`)
+          // Формируем параметры фильтрации и сортировки для API
+          const params = new URLSearchParams()
+          columnFilters.forEach((filter) => {
+            params.append(filter.id, filter.value as string)
+          })
+          if (sorting.length > 0) {
+            params.append("sortBy", sorting[0].id)
+            params.append("sortOrder", sorting[0].desc ? "DESC" : "ASC")
+          }
+          const response = await fetch(`/api/database/table/${selectedTable}?${params.toString()}`, {
+            headers: {
+              "Cache-Control": "no-cache",
+            },
+          })
           const result = await response.json()
           if (result.success) {
             setData(result.data)
@@ -80,31 +103,52 @@ export default function DatabaseViewer() {
       }
       fetchTableData()
     }
-  }, [selectedTable])
+  }, [selectedTable, columnFilters, sorting])
 
-  // Определение столбцов для react-table
-  const columns: Column<TableData>[] = useMemo(() => {
+  // Определение столбцов для @tanstack/react-table
+  const columns: ColumnDef<TableData>[] = useMemo(() => {
     if (!selectedTable || !tables.length) return []
     const tableSchema = tables.find((t) => t.name === selectedTable)
     if (!tableSchema) return []
 
     return [
       ...tableSchema.columns.map((col) => ({
-        Header: col.name,
-        accessor: col.name,
-        Filter: ({ column }) => (
-          <Input
-            placeholder={`Filter ${col.name}`}
-            value={(column.filterValue as string) || ""}
-            onChange={(e) => column.setFilter(e.target.value || undefined)}
-          />
-        ),
-        sortType: "basic",
+        accessorKey: col.name,
+        header: col.name,
+        filterFn: "includesString", // Фильтрация по строковому совпадению
+        cell: ({ row, column }) => {
+          const value = row.getValue(column.id)
+          return editingCell?.row === row.index && editingCell?.column === column.id ? (
+            <div className="flex gap-2">
+              <Input
+                value={editValue ?? value}
+                onChange={(e) => setEditValue(e.target.value)}
+                className="w-full"
+              />
+              <Button
+                size="sm"
+                onClick={() => handleSaveEdit(row.original, column.id)}
+              >
+                <Save className="h-4 w-4" />
+              </Button>
+            </div>
+          ) : (
+            <div
+              onClick={() => {
+                setEditingCell({ row: row.index, column: column.id })
+                setEditValue(value)
+              }}
+              className="cursor-pointer"
+            >
+              {value ?? "—"}
+            </div>
+          )
+        },
       })),
       {
-        Header: "Actions",
         id: "actions",
-        Cell: ({ row }) => (
+        header: "Actions",
+        cell: ({ row }) => (
           <div className="flex gap-2">
             <Button
               variant="destructive"
@@ -118,27 +162,21 @@ export default function DatabaseViewer() {
         ),
       },
     ]
-  }, [selectedTable, tables])
+  }, [selectedTable, tables, editingCell, editValue])
 
-  // Инициализация react-table
-  const {
-    getTableProps,
-    getTableBodyProps,
-    headerGroups,
-    rows,
-    prepareRow,
-    setFilter,
-  } = useTable(
-    {
-      columns,
-      data,
-      initialState: { sortBy: [] },
-    },
-    useFilters,
-    useSortBy
-  )
+  // Инициализация таблицы
+  const table = useReactTable({
+    data,
+    columns,
+    state: { columnFilters, sorting },
+    onColumnFiltersChange: setColumnFilters,
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+    getFilteredRowModel: getFilteredRowModel(),
+  })
 
-  // Обработчик сохранения изменений в ячейке
+  // Обработчик сохранения изменений
   const handleSaveEdit = async (row: TableData, column: string) => {
     if (!selectedTable) return
     setIsLoading(true)
@@ -227,59 +265,46 @@ export default function DatabaseViewer() {
         </div>
       ) : selectedTable && data.length > 0 ? (
         <div className="border rounded-md">
-          <Table {...getTableProps()}>
+          <Table>
             <TableHeader>
-              {headerGroups.map((headerGroup) => (
-                <TableRow {...headerGroup.getHeaderGroupProps()}>
-                  {headerGroup.headers.map((column) => (
-                    <TableHead {...column.getHeaderProps(column.getSortByToggleProps())}>
-                      {column.render("Header")}
-                      {column.isSorted ? (column.isSortedDesc ? " ↓" : " ↑") : ""}
-                      {column.canFilter ? <div>{column.render("Filter")}</div> : null}
+              {table.getHeaderGroups().map((headerGroup) => (
+                <TableRow key={headerGroup.id}>
+                  {headerGroup.headers.map((header) => (
+                    <TableHead
+                      key={header.id}
+                      onClick={header.column.getToggleSortingHandler()}
+                      className="cursor-pointer"
+                    >
+                      {header.isPlaceholder ? null : header.column.columnDef.header}
+                      {{
+                        asc: " ↑",
+                        desc: " ↓",
+                      }[header.column.getIsSorted() as string] ?? null}
+                      {header.column.getCanFilter() ? (
+                        <Input
+                          placeholder={`Фильтр ${header.column.columnDef.header}`}
+                          value={(header.column.getFilterValue() as string) || ""}
+                          onChange={(e) => header.column.setFilterValue(e.target.value)}
+                          className="mt-1"
+                        />
+                      ) : null}
                     </TableHead>
                   ))}
                 </TableRow>
               ))}
             </TableHeader>
-            <TableBody {...getTableBodyProps()}>
-              {rows.map((row) => {
-                prepareRow(row)
-                return (
-                  <TableRow {...row.getRowProps()}>
-                    {row.cells.map((cell) => (
-                      <TableCell {...cell.getCellProps()}>
-                        {cell.column.id === "actions" ? (
-                          cell.render("Cell")
-                        ) : editingCell?.row === row.index && editingCell?.column === cell.column.id ? (
-                          <div className="flex gap-2">
-                            <Input
-                              value={editValue ?? cell.value}
-                              onChange={(e) => setEditValue(e.target.value)}
-                              className="w-full"
-                            />
-                            <Button
-                              size="sm"
-                              onClick={() => handleSaveEdit(row.original, cell.column.id)}
-                            >
-                              <Save className="h-4 w-4" />
-                            </Button>
-                          </div>
-                        ) : (
-                          <div
-                            onClick={() => {
-                              setEditingCell({ row: row.index, column: cell.column.id })
-                              setEditValue(cell.value)
-                            }}
-                            className="cursor-pointer"
-                          >
-                            {cell.value ?? "—"}
-                          </div>
-                        )}
-                      </TableCell>
-                    ))}
-                  </TableRow>
-                )
-              })}
+            <TableBody>
+              {table.getRowModel().rows.map((row) => (
+                <TableRow key={row.id}>
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {cell.column.id === "actions"
+                        ? cell.renderCell()
+                        : cell.renderCell()}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
             </TableBody>
           </Table>
         </div>
