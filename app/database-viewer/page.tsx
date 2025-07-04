@@ -128,56 +128,58 @@ export default function DatabaseViewer() {
     const tableSchema = tables.find(t => t.name === selectedTable)
     if (!tableSchema) return []
 
-    return [
-      ...tableSchema.columns.map(col => ({
-        accessorKey: col.name,
-        header: col.name,
-        cell: ({ row, column }) => {
-          const value = row.getValue(column.id)
-          const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id
+    const baseColumns: ColumnDef<TableData>[] = tableSchema.columns.map(col => ({
+      accessorKey: col.name,
+      header: col.name,
+      cell: ({ row, column }) => {
+        const value = row.getValue(column.id)
+        const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id
 
-          return isEditing ? (
-            <div className="flex gap-2 items-center">
-              <Input
-                value={editValue ?? value}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="w-full"
-              />
-              <Button
-                size="sm"
-                onClick={() => handleSaveEdit(row.original, column.id)}
-              >
-                <Save className="h-4 w-4" />
-              </Button>
-            </div>
-          ) : (
-            <div
-              onClick={() => {
-                setEditingCell({ rowId: row.id, columnId: column.id })
-                setEditValue(value)
-              }}
-              className="cursor-pointer hover:bg-gray-100 p-2 rounded"
+        return isEditing ? (
+          <div className="flex gap-2 items-center">
+            <Input
+              value={editValue ?? value}
+              onChange={(e) => setEditValue(e.target.value)}
+              className="w-full"
+            />
+            <Button
+              size="sm"
+              onClick={() => handleSaveEdit(row.original, column.id)}
             >
-              {value !== null && value !== undefined ? String(value) : "—"}
-            </div>
-          )
-        },
-      })),
-      {
-        id: "actions",
-        header: "Actions",
-        cell: ({ row }) => (
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => handleDeleteRow(row.original)}
-            title="Delete row"
+              <Save className="h-4 w-4" />
+            </Button>
+          </div>
+        ) : (
+          <div
+            onClick={() => {
+              setEditingCell({ rowId: row.id, columnId: column.id })
+              setEditValue(value)
+            }}
+            className="cursor-pointer hover:bg-gray-100 p-2 rounded"
           >
-            <Trash2 className="h-4 w-4" />
-          </Button>
-        ),
+            {value !== null && value !== undefined ? String(value) : "—"}
+          </div>
+        )
       },
-    ]
+    }))
+
+    // Добавляем колонку с действиями
+    baseColumns.push({
+      id: "actions",
+      header: "Actions",
+      cell: ({ row }) => (
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => handleDeleteRow(row.original)}
+          title="Delete row"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      ),
+    })
+
+    return baseColumns
   }, [selectedTable, tables, editingCell, editValue])
 
   const table = useReactTable({
@@ -339,7 +341,10 @@ export default function DatabaseViewer() {
                 ))
               ) : (
                 <TableRow>
-                  <TableCell colSpan={columns.length} className="h-24 text-center">
+                  <TableCell 
+                    colSpan={table.getAllColumns().length} 
+                    className="h-24 text-center"
+                  >
                     No data available
                   </TableCell>
                 </TableRow>
