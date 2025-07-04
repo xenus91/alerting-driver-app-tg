@@ -56,7 +56,7 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
     `
     const validColumnNames = validColumns.map((c: { column_name: string }) => c.column_name)
 
-    // Формирование запроса
+    // Формирование условий для фильтрации
     const searchParams = request.nextUrl.searchParams
     const filters = Object.fromEntries(searchParams.entries())
     const conditions: string[] = []
@@ -64,8 +64,8 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
 
     for (const [column, value] of Object.entries(filters)) {
       if (value && validColumnNames.includes(column)) {
-        conditions.push(`${column} ILIKE $${values.length + 1}`)
-        values.push(`%${value}%`)
+        conditions.push(`${column} ILIKE ${`%${value}%`}`)
+        values.push(value)
       } else if (value) {
         console.warn(`[API] Invalid column ${column} for table ${tableName}`)
       }
@@ -77,6 +77,7 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       query += ` WHERE ${conditions.join(" AND ")}`
     }
 
+    // Добавление сортировки
     const sortBy = searchParams.get("sortBy")
     const sortOrder = searchParams.get("sortOrder") || "ASC"
     if (sortBy && validColumnNames.includes(sortBy)) {
@@ -87,16 +88,8 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
 
     console.log(`[API] Executing query for table ${tableName}: ${query}, values: ${JSON.stringify(values)}`)
 
-    // Выполнение запроса с использованием тегированного шаблона
-    let data;
-    if (values.length > 0) {
-      // Для запросов с параметрами используем sql с плейсхолдерами
-      const parameterizedQuery = sql([query, ...values.map((_, i) => `$${i + 1}`)].join(" "));
-      data = await parameterizedQuery(...values);
-    } else {
-      // Для запросов без параметров используем простой тегированный шаблон
-      data = await sql`${query}`;
-    }
+    // Выполнение запроса
+    const data = await sql`${query}`
 
     console.log(`[API] Query successful, returned ${data.length} rows`)
     return NextResponse.json({ success: true, data })
