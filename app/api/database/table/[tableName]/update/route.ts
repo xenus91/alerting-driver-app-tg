@@ -1,7 +1,6 @@
 // app/api/database/table/[tableName]/update/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { Pool } from '@neondatabase/serverless';
-import { sql } from '@neondatabase/serverless'; // Импортируем sql для работы с идентификаторами
 
 export async function POST(
   request: NextRequest,
@@ -26,15 +25,14 @@ export async function POST(
   const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 
   try {
-    // Проверка валидности столбца
-    const validColumnsQuery = sql`
+    // Проверка валидности столбца (без sql-тега)
+    const validColumnsResult = await pool.query(`
       SELECT column_name
       FROM information_schema.columns
       WHERE table_schema = 'public' 
-        AND table_name = ${tableName}
-    `;
+        AND table_name = $1
+    `, [tableName]);
     
-    const validColumnsResult = await pool.query(validColumnsQuery);
     if (!validColumnsResult.rows.some(c => c.column_name === column)) {
       return NextResponse.json(
         { success: false, error: "Invalid column name" },
@@ -42,14 +40,13 @@ export async function POST(
       );
     }
 
-    // Обновление данных с экранированием идентификаторов
-    const updateQuery = sql`
-      UPDATE ${sql(tableName)}
-      SET ${sql(column)} = ${dbValue}
-      WHERE id = ${id}
-    `;
+    // Обновление данных с безопасным экранированием
+    await pool.query(`
+      UPDATE "${tableName.replace(/"/g, '""')}"
+      SET "${column.replace(/"/g, '""')}" = $1
+      WHERE id = $2
+    `, [dbValue, id]);
     
-    await pool.query(updateQuery);
     return NextResponse.json({ success: true });
   } catch (error) {
     console.error(`Error updating table ${tableName}:`, error);
