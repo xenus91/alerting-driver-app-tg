@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import {
   Table,
   TableBody,
@@ -13,7 +13,6 @@ import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { 
@@ -22,11 +21,8 @@ import {
   Save, 
   X, 
   AlertTriangle, 
-  Filter, 
   Columns, 
-  Plus,
-  Check
-  
+  Plus
 } from "lucide-react"
 import {
   useReactTable,
@@ -39,6 +35,7 @@ import {
   flexRender,
   VisibilityState,
 } from "@tanstack/react-table"
+import FilterBlock, { FilterCondition } from "./FilterBlock"
 
 interface TableData {
   [key: string]: any
@@ -47,13 +44,6 @@ interface TableData {
 interface TableSchema {
   name: string
   columns: { name: string; type: string }[]
-}
-
-interface FilterCondition {
-  column: string
-  operator: string
-  value: string | string[]
-  connector: 'AND' | 'OR' // Добавили оператор связи
 }
 
 const OPERATORS = [
@@ -68,7 +58,6 @@ const OPERATORS = [
   { value: "like", label: "Содержит" },
 ]
 
-// Константа для представления NULL значений
 const NULL_PLACEHOLDER = "__NULL__";
 
 export default function DatabaseViewer() {
@@ -79,7 +68,6 @@ export default function DatabaseViewer() {
   const [error, setError] = useState<string | null>(null)
   const [editingCell, setEditingCell] = useState<{ rowId: string; columnId: string } | null>(null)
   const [editValue, setEditValue] = useState<any>(null)
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([])
   const [sorting, setSorting] = useState<SortingState>([])
   const [pageIndex, setPageIndex] = useState(0)
   const [pageSize, setPageSize] = useState(10)
@@ -90,7 +78,7 @@ export default function DatabaseViewer() {
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
-  const [pendingFilterConditions, setPendingFilterConditions] = useState<FilterCondition[]>([]) // Фильтры перед применением
+  const [pendingFilterConditions, setPendingFilterConditions] = useState<FilterCondition[]>([])
 
   // Проверка авторизации
   useEffect(() => {
@@ -196,7 +184,7 @@ export default function DatabaseViewer() {
   }, [selectedTable, filterConditions, sorting, pageIndex, pageSize])
 
   // Получение уникальных значений для колонки
-  const getDistinctValues = (columnId: string) => {
+  const getDistinctValues = useCallback((columnId: string) => {
     const values = new Set<string>()
     data.forEach(row => {
       const value = row[columnId];
@@ -216,50 +204,14 @@ export default function DatabaseViewer() {
     });
     
     return Array.from(values).sort();
-  }
+  }, [data])
 
-  // Добавление нового условия фильтрации
-  const addFilterCondition = () => {
-    if (!selectedTable || tables.length === 0) return
-    
-    const firstColumn = tables.find(t => t.name === selectedTable)?.columns[0]?.name
-    if (!firstColumn) return
-    
-    setPendingFilterConditions([
-      ...pendingFilterConditions,
-      { 
-        column: firstColumn, 
-        operator: "=", 
-        value: "",
-        connector: pendingFilterConditions.length === 0 ? 'AND' : 'AND' // Для первого условия значение не важно
-      }
-    ])
-  }
-
-  // Обновление условия фильтрации
-  const updateFilterCondition = (index: number, field: keyof FilterCondition, value: any) => {
-    const newConditions = [...pendingFilterConditions]
-    newConditions[index] = { ...newConditions[index], [field]: value }
-    setPendingFilterConditions(newConditions)
-  }
-
-  // Удаление условия фильтрации
-  const removeFilterCondition = (index: number) => {
-    setPendingFilterConditions(pendingFilterConditions.filter((_, i) => i !== index))
-  }
-
-  // Очистка всех фильтров
-  const clearAllFilters = () => {
+  // Сброс фильтров при смене таблицы
+  useEffect(() => {
     setPendingFilterConditions([])
     setFilterConditions([])
     setPageIndex(0)
-  }
-
-  // Применение фильтров
-  const applyFilters = () => {
-    setFilterConditions([...pendingFilterConditions])
-    setPageIndex(0) // Сброс на первую страницу
-  }
+  }, [selectedTable])
 
   // Обработка сохранения редактирования ячейки
   const handleSaveEdit = async (row: TableData, columnId: string) => {
@@ -363,7 +315,7 @@ export default function DatabaseViewer() {
         )
       }
     }))
-  }, [selectedTable, tables, editingCell, editValue])
+  }, [selectedTable, tables, editingCell, editValue, handleSaveEdit])
 
   const table = useReactTable({
     data,
@@ -386,13 +338,6 @@ export default function DatabaseViewer() {
     manualPagination: true,
     pageCount: Math.ceil(totalRows / pageSize),
   })
-
-  // Сброс фильтров при смене таблицы
-  useEffect(() => {
-    setPendingFilterConditions([])
-    setFilterConditions([])
-    setPageIndex(0)
-  }, [selectedTable])
 
   return (
     <div className="space-y-4 p-4">
@@ -452,154 +397,16 @@ export default function DatabaseViewer() {
 
       {/* Блок фильтрации */}
       {selectedTable && (
-        <div className="border rounded-lg p-4 space-y-4">
-          <div className="flex items-center justify-between">
-            <h4 className="font-medium flex items-center gap-2">
-              <Filter className="h-4 w-4" />
-              Фильтры
-              {pendingFilterConditions.length > 0 && (
-                <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">
-                  {pendingFilterConditions.length}
-                </span>
-              )}
-            </h4>
-            <div className="flex gap-2">
-              <Button 
-                variant="secondary" 
-                size="sm"
-                onClick={addFilterCondition}
-              >
-                <Plus className="mr-2 h-4 w-4" />
-                Добавить фильтр
-              </Button>
-              <Button 
-                variant="destructive" 
-                size="sm"
-                onClick={clearAllFilters}
-                disabled={pendingFilterConditions.length === 0}
-              >
-                <Trash2 className="mr-2 h-4 w-4" />
-                Очистить все
-              </Button>
-            </div>
-          </div>
-          
-          {pendingFilterConditions.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">
-              Нет условий фильтрации. Нажмите "Добавить фильтр", чтобы создать условие.
-            </p>
-          ) : (
-            <div className="space-y-3">
-              {pendingFilterConditions.map((condition, index) => (
-                <div key={index} className="flex items-center gap-2 p-3 border rounded bg-muted/50">
-                  {/* Оператор связи (не показываем для первого условия) */}
-                  {index > 0 && (
-                    <Select
-                      value={condition.connector}
-                      onValueChange={value => updateFilterCondition(index, 'connector', value)}
-                      className="w-20"
-                    >
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="AND">И</SelectItem>
-                        <SelectItem value="OR">ИЛИ</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  )}
-                  
-                  <Select
-                    value={condition.column}
-                    onValueChange={value => updateFilterCondition(index, 'column', value)}
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Колонка" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {tables.find(t => t.name === selectedTable)?.columns.map(col => (
-                        <SelectItem key={col.name} value={col.name}>
-                          {col.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  <Select
-                    value={condition.operator}
-                    onValueChange={value => updateFilterCondition(index, 'operator', value)}
-                  >
-                    <SelectTrigger className="w-40">
-                      <SelectValue placeholder="Оператор" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {OPERATORS.map(op => (
-                        <SelectItem key={op.value} value={op.value}>
-                          {op.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  
-                  {['in', 'not in'].includes(condition.operator) ? (
-                    <Select
-                      value={Array.isArray(condition.value) ? condition.value : []}
-                      onValueChange={(values) => updateFilterCondition(index, 'value', values)}
-                      multiple
-                    >
-                      <SelectTrigger className="w-60">
-                        <SelectValue placeholder="Выберите значения" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {getDistinctValues(condition.column).map(value => (
-                          <SelectItem 
-                            key={value} 
-                            value={value}
-                            disabled={value === ""}
-                          >
-                            {value === NULL_PLACEHOLDER ? "[пусто]" : value}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                  ) : (
-                    <Input
-                      value={String(condition.value)}
-                      onChange={e => updateFilterCondition(index, 'value', e.target.value)}
-                      placeholder="Значение"
-                      className="w-60"
-                    />
-                  )}
-                  
-                  <Button 
-                    variant="ghost" 
-                    size="icon"
-                    onClick={() => removeFilterCondition(index)}
-                    title="Удалить условие"
-                  >
-                    <X className="h-4 w-4" />
-                  </Button>
-                </div>
-              ))}
-              
-              <div className="flex justify-end gap-2 pt-2">
-                <Button 
-                  variant="secondary"
-                  onClick={clearAllFilters}
-                  disabled={pendingFilterConditions.length === 0}
-                >
-                  Сбросить
-                </Button>
-                <Button 
-                  onClick={applyFilters}
-                  disabled={pendingFilterConditions.length === 0}
-                >
-                  Применить фильтры
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
+        <FilterBlock
+          tables={tables}
+          selectedTable={selectedTable}
+          pendingFilterConditions={pendingFilterConditions}
+          setPendingFilterConditions={setPendingFilterConditions}
+          filterConditions={filterConditions}
+          setFilterConditions={setFilterConditions}
+          setPageIndex={setPageIndex}
+          distinctValues={getDistinctValues}
+        />
       )}
 
       {isLoading ? (
