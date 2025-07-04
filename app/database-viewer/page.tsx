@@ -30,13 +30,11 @@ import {
   getSortedRowModel,
   getPaginationRowModel,
   ColumnDef,
-  ColumnFiltersState,
   SortingState,
   flexRender,
   VisibilityState,
 } from "@tanstack/react-table"
 import FilterBlock, { FilterCondition } from "@/components/filter-block"
-
 
 interface TableData {
   [key: string]: any
@@ -46,18 +44,6 @@ interface TableSchema {
   name: string
   columns: { name: string; type: string }[]
 }
-
-const OPERATORS = [
-  { value: "=", label: "Равно" },
-  { value: "!=", label: "Не равно" },
-  { value: ">", label: "Больше" },
-  { value: "<", label: "Меньше" },
-  { value: ">=", label: "Больше или равно" },
-  { value: "<=", label: "Меньше или равно" },
-  { value: "in", label: "В списке" },
-  { value: "not in", label: "Не в списке" },
-  { value: "like", label: "Содержит" },
-]
 
 const NULL_PLACEHOLDER = "__NULL__";
 
@@ -75,7 +61,6 @@ export default function DatabaseViewer() {
   const [totalRows, setTotalRows] = useState(0)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; row: TableData | null }>({ open: false, row: null })
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [columnsOpen, setColumnsOpen] = useState(false)
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
@@ -145,12 +130,10 @@ export default function DatabaseViewer() {
           
           if (Array.isArray(condition.value)) {
             condition.value.forEach(val => {
-              // Преобразуем плейсхолдер обратно в пустую строку для сервера
               const realValue = val === NULL_PLACEHOLDER ? "" : val;
               params.append(`filter[${index}].value`, realValue)
             })
           } else {
-            // Преобразуем плейсхолдер обратно в пустую строку для сервера
             const realValue = condition.value === NULL_PLACEHOLDER ? "" : condition.value;
             params.append(`filter[${index}].value`, realValue)
           }
@@ -160,7 +143,6 @@ export default function DatabaseViewer() {
         const result = await response.json()
         
         if (result.success) {
-          // Заменяем пустые строки на null
           const transformedData = result.data.map((row: TableData) => {
             const newRow: TableData = {};
             Object.keys(row).forEach(key => {
@@ -189,21 +171,12 @@ export default function DatabaseViewer() {
     const values = new Set<string>()
     data.forEach(row => {
       const value = row[columnId];
-      
-      // Для null используем специальный плейсхолдер
-      if (value === null || value === undefined) {
+      if (value === null || value === undefined || value === "") {
         values.add(NULL_PLACEHOLDER);
-      } 
-      // Для пустых строк также используем плейсхолдер
-      else if (value === "") {
-        values.add(NULL_PLACEHOLDER);
-      }
-      // Все остальные значения преобразуем в строку
-      else {
+      } else {
         values.add(String(value));
       }
     });
-    
     return Array.from(values).sort();
   }, [data])
 
@@ -273,6 +246,47 @@ export default function DatabaseViewer() {
       setIsLoading(false)
     }
   }
+
+  // Функции для управления фильтрами
+  const addFilterCondition = useCallback(() => {
+    setPendingFilterConditions(prev => [
+      ...prev,
+      { column: "", operator: "", value: "", connector: "AND" }
+    ]);
+  }, []);
+
+  const updateFilterCondition = useCallback((
+    index: number, 
+    field: keyof FilterCondition, 
+    value: any
+  ) => {
+    setPendingFilterConditions(prev => {
+      const newConditions = [...prev];
+      const condition = { ...newConditions[index] };
+      
+      // Обработка для операторов списка
+      if (field === 'operator' && (value === 'in' || value === 'not in')) {
+        condition.value = [];
+      }
+      
+      condition[field] = value;
+      newConditions[index] = condition;
+      return newConditions;
+    });
+  }, []);
+
+  const removeFilterCondition = useCallback((index: number) => {
+    setPendingFilterConditions(prev => prev.filter((_, i) => i !== index));
+  }, []);
+
+  const clearAllFilters = useCallback(() => {
+    setPendingFilterConditions([]);
+  }, []);
+
+  const applyFilters = useCallback(() => {
+    setFilterConditions(pendingFilterConditions);
+    setPageIndex(0);
+  }, [pendingFilterConditions]);
 
   // Создание колонок для таблицы
   const columns = useMemo<ColumnDef<TableData>[]>(() => {
@@ -368,7 +382,7 @@ export default function DatabaseViewer() {
           </SelectContent>
         </Select>
 
-        <Popover open={columnsOpen} onOpenChange={setColumnsOpen}>
+        <Popover>
           <PopoverTrigger asChild>
             <Button variant="outline">
               <Columns className="mr-2 h-4 w-4" />
@@ -402,11 +416,12 @@ export default function DatabaseViewer() {
           tables={tables}
           selectedTable={selectedTable}
           pendingFilterConditions={pendingFilterConditions}
-          setPendingFilterConditions={setPendingFilterConditions}
-          filterConditions={filterConditions}
-          setFilterConditions={setFilterConditions}
-          setPageIndex={setPageIndex}
           distinctValues={getDistinctValues}
+          addFilterCondition={addFilterCondition}
+          updateFilterCondition={updateFilterCondition}
+          removeFilterCondition={removeFilterCondition}
+          clearAllFilters={clearAllFilters}
+          applyFilters={applyFilters}
         />
       )}
 
