@@ -17,11 +17,12 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
   }
 
   try {
-    // Проверка авторизации
+    // ✅ ПЕРВОЕ - проверка авторизации (должна быть до любых запросов к БД)
     const authResponse = await fetch(`${request.nextUrl.origin}/api/auth/me`, {
       headers: { Cookie: request.headers.get("cookie") || "" },
       cache: "no-store",
     })
+    
     if (!authResponse.ok) {
       console.error(`[API] Auth request failed with status: ${authResponse.status}, ${authResponse.statusText}`)
       return NextResponse.json(
@@ -29,13 +30,14 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
         { status: authResponse.status }
       )
     }
+    
     const authData = await authResponse.json()
     if (!authData.success || authData.user?.role !== "admin") {
       console.warn(`[API] Access denied for table ${tableName}: user role=${authData.user?.role || "unknown"}`)
       return NextResponse.json({ success: false, error: "Access denied" }, { status: 403 })
     }
 
-    // Проверка валидности таблицы
+    // ✅ ВТОРОЕ - проверка существования таблицы
     console.log(`[API] Checking if table ${tableName} exists in public schema`)
     const validTables = await sql`
       SELECT table_name
@@ -48,29 +50,16 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // ✅ Исправленный запрос с использованием правильного метода
+    // ✅ ТРЕТЬЕ - выполнение основного запроса
     console.log(`[API] Executing query for table ${tableName}`)
     
-    // Используем параметризованный запрос через клиент SQL
-    const data = await sql(`
-      SELECT * 
-      FROM information_schema.columns 
-      WHERE table_schema = 'public' 
-        AND table_name = ${tableName}
-      ORDER BY ordinal_position
-    `)
+    // Используем правильный синтаксис для запроса
+    const escapedTableName = tableName.replace(/"/g, '""')
+    const query = `SELECT * FROM public."${escapedTableName}"`
+    const data = await sql.unsafe(query)
 
-    // Для получения данных таблицы используем другой подход
-    const tableData = await sql(`SELECT * FROM public."${tableName}"`)
-
-    console.log(`[API] Query successful, returned ${tableData.length} rows`)
-    return NextResponse.json({ 
-      success: true, 
-      data: {
-        columns: data,
-        rows: tableData
-      }
-    })
+    console.log(`[API] Query successful, returned ${data.length} rows`)
+    return NextResponse.json({ success: true, data })
   } catch (error: any) {
     console.error(`[API] Error fetching data for table ${tableName}:`, error)
     return NextResponse.json(
