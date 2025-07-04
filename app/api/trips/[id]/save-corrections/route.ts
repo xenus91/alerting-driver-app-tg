@@ -1,5 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+/* === ИСПРАВЛЕНИЕ ===
+ * Добавлен импорт функции sendMultipleTripMessageWithButtons из @/lib/telegram,
+ * чтобы устранить ошибку "ReferenceError: sendMultipleTripMessageWithButtons is not defined".
+ */
+import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
+/* === КОНЕЦ ИСПРАВЛЕНИЯ === */
 
 const sql = neon(process.env.DATABASE_URL!)
 
