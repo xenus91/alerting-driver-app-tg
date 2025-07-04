@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useRef } from "react"
+import { useState, useEffect, useMemo } from "react"
 import {
   Table,
   TableBody,
@@ -22,9 +22,7 @@ import {
   AlertTriangle, 
   Filter, 
   Columns, 
-  ChevronDown, 
-  Plus,
-  Check
+  Plus
 } from "lucide-react"
 import {
   useReactTable,
@@ -83,10 +81,8 @@ export default function DatabaseViewer() {
   const [totalRows, setTotalRows] = useState(0)
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; row: TableData | null }>({ open: false, row: null })
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
-  const [filtersOpen, setFiltersOpen] = useState(false)
   const [columnsOpen, setColumnsOpen] = useState(false)
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
-  const tableRef = useRef<HTMLDivElement>(null)
 
   // Проверка авторизации
   useEffect(() => {
@@ -445,7 +441,7 @@ export default function DatabaseViewer() {
                 onClick={addFilterCondition}
               >
                 <Plus className="mr-2 h-4 w-4" />
-                Добавить условие
+                Добавить фильтр
               </Button>
               <Button 
                 variant="destructive" 
@@ -461,7 +457,7 @@ export default function DatabaseViewer() {
           
           {filterConditions.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
-              Нет условий фильтрации. Нажмите "Добавить условие", чтобы создать фильтр.
+              Нет условий фильтрации. Нажмите "Добавить фильтр", чтобы создать условие.
             </p>
           ) : (
             <div className="space-y-3">
