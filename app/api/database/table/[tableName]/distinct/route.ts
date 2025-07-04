@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { Pool } from "@neondatabase/serverless"
 
-const sql = neon(process.env.DATABASE_URL!)
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
 export async function GET(request: NextRequest, { params }: { params: { tableName: string } }) {
   const { tableName } = params
@@ -25,6 +25,8 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
     )
   }
 
+  const client = await pool.connect()
+
   try {
     // Проверка авторизации
     const authResponse = await fetch(`${request.nextUrl.origin}/api/auth/me`, {
@@ -38,31 +40,31 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
         { status: authResponse.status }
       )
     }
-    const authData = await authResponse.json()
+    const authData = await response.json()
     if (!authData.success || authData.user?.role !== "admin") {
       console.warn(`[API] Access denied for table ${tableName}: user role=${authData.user?.role || "unknown"}`)
       return NextResponse.json({ success: false, error: "Access denied" }, { status: 403 })
     }
 
     // Проверка валидности таблицы
-    const validTables = await sql`
+    const validTablesRes = await client.query(`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-    `
-    const tableExists = validTables.some((t: { table_name: string }) => t.table_name === tableName)
+    `)
+    const tableExists = validTablesRes.rows.some((t: any) => t.table_name === tableName)
     if (!tableExists) {
       console.error(`[API] Table ${tableName} does not exist`)
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
     // Проверка валидности столбца
-    const validColumns = await sql`
+    const validColumnsRes = await client.query(`
       SELECT column_name
       FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = ${tableName}
-    `
-    const validColumnNames = validColumns.map((c: { column_name: string }) => c.column_name)
+      WHERE table_schema = 'public' AND table_name = $1
+    `, [tableName])
+    const validColumnNames = validColumnsRes.rows.map((c: any) => c.column_name)
     if (!validColumnNames.includes(column)) {
       console.error(`[API] Column ${column} does not exist in table ${tableName}`)
       return NextResponse.json(
@@ -72,18 +74,20 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
     }
 
     // Запрос уникальных значений
-    const query = `SELECT DISTINCT ${column} FROM ${tableName} WHERE ${column} IS NOT NULL ORDER BY ${column}`
+    const query = `SELECT DISTINCT "${column}" FROM "${tableName.replace(/"/g, '""')}" WHERE "${column}" IS NOT NULL ORDER BY "${column}"`
     console.log(`[API] Executing distinct query for table ${tableName}, column ${column}: ${query}`)
-    const data = await sql`${query}`
+    const result = await client.query(query)
 
-    const values = data.map((row: any) => row[column])
+    const values = result.rows.map((row: any) => row[column])
     console.log(`[API] Query successful, returned ${values.length} distinct values`)
     return NextResponse.json({ success: true, data: values })
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[API] Error fetching distinct values for table ${tableName}, column ${column}:`, error)
     return NextResponse.json(
       { success: false, error: `Failed to fetch distinct values: ${error.message}` },
       { status: 500 }
     )
+  } finally {
+    client.release()
   }
 }
