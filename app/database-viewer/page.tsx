@@ -22,7 +22,8 @@ import {
   AlertTriangle, 
   Filter, 
   Columns, 
-  Plus
+  Plus,
+  Check
 } from "lucide-react"
 import {
   useReactTable,
@@ -49,6 +50,7 @@ interface FilterCondition {
   column: string
   operator: string
   value: string | string[]
+  connector: 'AND' | 'OR' // Добавили оператор связи
 }
 
 const OPERATORS = [
@@ -82,7 +84,10 @@ export default function DatabaseViewer() {
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; row: TableData | null }>({ open: false, row: null })
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
   const [columnsOpen, setColumnsOpen] = useState(false)
+  
+  // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
+  const [pendingFilterConditions, setPendingFilterConditions] = useState<FilterCondition[]>([]) // Фильтры перед применением
 
   // Проверка авторизации
   useEffect(() => {
@@ -144,6 +149,7 @@ export default function DatabaseViewer() {
         filterConditions.forEach((condition, index) => {
           params.append(`filter[${index}].column`, condition.column)
           params.append(`filter[${index}].operator`, condition.operator)
+          params.append(`filter[${index}].connector`, condition.connector)
           
           if (Array.isArray(condition.value)) {
             condition.value.forEach(val => {
@@ -216,27 +222,40 @@ export default function DatabaseViewer() {
     const firstColumn = tables.find(t => t.name === selectedTable)?.columns[0]?.name
     if (!firstColumn) return
     
-    setFilterConditions([
-      ...filterConditions,
-      { column: firstColumn, operator: "=", value: "" }
+    setPendingFilterConditions([
+      ...pendingFilterConditions,
+      { 
+        column: firstColumn, 
+        operator: "=", 
+        value: "",
+        connector: pendingFilterConditions.length === 0 ? 'AND' : 'AND' // Для первого условия значение не важно
+      }
     ])
   }
 
   // Обновление условия фильтрации
   const updateFilterCondition = (index: number, field: keyof FilterCondition, value: any) => {
-    const newConditions = [...filterConditions]
+    const newConditions = [...pendingFilterConditions]
     newConditions[index] = { ...newConditions[index], [field]: value }
-    setFilterConditions(newConditions)
+    setPendingFilterConditions(newConditions)
   }
 
   // Удаление условия фильтрации
   const removeFilterCondition = (index: number) => {
-    setFilterConditions(filterConditions.filter((_, i) => i !== index))
+    setPendingFilterConditions(pendingFilterConditions.filter((_, i) => i !== index))
   }
 
   // Очистка всех фильтров
   const clearAllFilters = () => {
-    setFilterConditions([]);
+    setPendingFilterConditions([])
+    setFilterConditions([])
+    setPageIndex(0)
+  }
+
+  // Применение фильтров
+  const applyFilters = () => {
+    setFilterConditions([...pendingFilterConditions])
+    setPageIndex(0) // Сброс на первую страницу
   }
 
   // Обработка сохранения редактирования ячейки
@@ -365,6 +384,13 @@ export default function DatabaseViewer() {
     pageCount: Math.ceil(totalRows / pageSize),
   })
 
+  // Сброс фильтров при смене таблицы
+  useEffect(() => {
+    setPendingFilterConditions([])
+    setFilterConditions([])
+    setPageIndex(0)
+  }, [selectedTable])
+
   return (
     <div className="space-y-4 p-4">
       <div>
@@ -421,16 +447,16 @@ export default function DatabaseViewer() {
         </Popover>
       </div>
 
-      {/* Блок фильтрации - теперь всегда видимый */}
+      {/* Блок фильтрации */}
       {selectedTable && (
         <div className="border rounded-lg p-4 space-y-4">
           <div className="flex items-center justify-between">
             <h4 className="font-medium flex items-center gap-2">
               <Filter className="h-4 w-4" />
               Фильтры
-              {filterConditions.length > 0 && (
+              {pendingFilterConditions.length > 0 && (
                 <span className="bg-primary text-primary-foreground rounded-full w-5 h-5 text-xs flex items-center justify-center">
-                  {filterConditions.length}
+                  {pendingFilterConditions.length}
                 </span>
               )}
             </h4>
@@ -447,7 +473,7 @@ export default function DatabaseViewer() {
                 variant="destructive" 
                 size="sm"
                 onClick={clearAllFilters}
-                disabled={filterConditions.length === 0}
+                disabled={pendingFilterConditions.length === 0}
               >
                 <Trash2 className="mr-2 h-4 w-4" />
                 Очистить все
@@ -455,14 +481,31 @@ export default function DatabaseViewer() {
             </div>
           </div>
           
-          {filterConditions.length === 0 ? (
+          {pendingFilterConditions.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">
               Нет условий фильтрации. Нажмите "Добавить фильтр", чтобы создать условие.
             </p>
           ) : (
             <div className="space-y-3">
-              {filterConditions.map((condition, index) => (
+              {pendingFilterConditions.map((condition, index) => (
                 <div key={index} className="flex items-center gap-2 p-3 border rounded bg-muted/50">
+                  {/* Оператор связи (не показываем для первого условия) */}
+                  {index > 0 && (
+                    <Select
+                      value={condition.connector}
+                      onValueChange={value => updateFilterCondition(index, 'connector', value)}
+                      className="w-20"
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="AND">И</SelectItem>
+                        <SelectItem value="OR">ИЛИ</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  )}
+                  
                   <Select
                     value={condition.column}
                     onValueChange={value => updateFilterCondition(index, 'column', value)}
@@ -535,6 +578,22 @@ export default function DatabaseViewer() {
                   </Button>
                 </div>
               ))}
+              
+              <div className="flex justify-end gap-2 pt-2">
+                <Button 
+                  variant="secondary"
+                  onClick={clearAllFilters}
+                  disabled={pendingFilterConditions.length === 0}
+                >
+                  Сбросить
+                </Button>
+                <Button 
+                  onClick={applyFilters}
+                  disabled={pendingFilterConditions.length === 0}
+                >
+                  Применить фильтры
+                </Button>
+              </div>
             </div>
           )}
         </div>
