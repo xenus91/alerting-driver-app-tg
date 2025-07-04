@@ -45,16 +45,18 @@ interface TripMessage {
   trip_id?: number
 }
 
+/* ИЗМЕНЕНИЕ: Обновлён интерфейс TripPoint для поддержки phone и других необязательных полей */
 interface TripPoint {
-  point_type: "P" | "D"
-  point_num: number
   point_id: string
+  point_num: number
+  point_type: string
   point_name: string
-  point_short_id: string
-  door_open_1?: string
-  door_open_2?: string
-  door_open_3?: string
-  trip_identifier?: string
+  trip_identifier: string
+  phone?: string
+  point_short_id?: string
+  door_open_1?: boolean
+  door_open_2?: boolean
+  door_open_3?: boolean
 }
 
 interface TripData {
