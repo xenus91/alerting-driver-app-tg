@@ -161,19 +161,26 @@ export default function TripDetailPage() {
   }
 
   const fetchTripPoints = async () => {
-    try {
-      console.log(`Fetching points for trip ${tripId}`)
-      const response = await fetch(`/api/trips/${tripId}/points`)
-      const data = await response.json()
-      console.log("Trip points response:", data)
-      if (data.success) {
-        setTripPoints(data.points)
-        console.log("Trip points set:", data.points)
-      }
-    } catch (error) {
-      console.error("Error fetching trip points:", error)
+  try {
+    console.log(`Fetching points for trip ${tripId}`)
+    const response = await fetch(`/api/trips/${tripId}/points`, {
+      headers: {
+        'Cache-Control': 'no-cache',
+      },
+    })
+    const data = await response.json()
+    console.log("Trip points response:", data)
+    if (data.success) {
+      setTripPoints(data.points)
+      console.log("Trip points set:", data.points)
+      return data.points
     }
+    return []
+  } catch (error) {
+    console.error("Error fetching trip points:", error)
+    return []
   }
+}
 
   useEffect(() => {
     fetchMessages()
