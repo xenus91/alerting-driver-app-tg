@@ -37,36 +37,30 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
 
     // Проверка валидности таблицы
     console.log(`[API] Checking if table ${tableName} exists in public schema`)
-    
-    // Используем правильный синтаксис для проверки таблиц
-    const validTables = await sql`
+    const validTablesRes = await client.query(`
       SELECT table_name
       FROM information_schema.tables
       WHERE table_schema = 'public'
-    `
-    const tableExists = validTables.some((t: any) => t.table_name === tableName)
+    `)
+    const tableExists = validTablesRes.rows.some((t: any) => t.table_name === tableName)
     if (!tableExists) {
       console.error(`[API] Table ${tableName} does not exist`)
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // ✅ ИСПРАВЛЕННЫЙ ЗАПРОС - используем правильный синтаксис Neon
+    // Выполнение основного запроса
     console.log(`[API] Executing query for table ${tableName}`)
+    const result = await client.query(`SELECT * FROM "${tableName.replace(/"/g, '""')}"`)
     
-    // 1. Создаем безопасный SQL-запрос
-    const safeTableName = tableName.replace(/"/g, '""')
-    const query = `SELECT * FROM "${safeTableName}"`
-    
-    // 2. Используем правильный метод Neon для выполнения запроса
-    const data = await sql(query, { fullResults: true }) as any[]
-
-    console.log(`[API] Query successful, returned ${data.length} rows`)
-    return NextResponse.json({ success: true, data })
+    console.log(`[API] Query successful, returned ${result.rowCount} rows`)
+    return NextResponse.json({ success: true, data: result.rows })
   } catch (error: any) {
     console.error(`[API] Error fetching data for table ${tableName}:`, error)
     return NextResponse.json(
       { success: false, error: `Failed to fetch data for table ${tableName}: ${error.message}` },
       { status: 500 }
     )
+  } finally {
+    client.release()
   }
 }
