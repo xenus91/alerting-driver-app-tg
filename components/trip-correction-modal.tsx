@@ -288,7 +288,8 @@ export function TripCorrectionModal({
     if (data.success) {
       setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
       await new Promise((resolve) => setTimeout(resolve, 1000))
-      onCorrectionSent(tripIdentifiers, pointIds, points)
+              /* ИЗМЕНЕНИЕ: Исправлен вызов onCorrectionSent, чтобы передавать corrections и deletedTrips вместо tripIdentifiers, pointIds, points */
+        onCorrectionSent(corrections, deletedTrips)
       setTimeout(() => {
         onClose()
       }, 3000)
