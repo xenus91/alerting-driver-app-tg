@@ -48,7 +48,7 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // Формирование запроса с использованием тегированного шаблона
+    // Формирование запроса
     const searchParams = request.nextUrl.searchParams
     const filters = Object.fromEntries(searchParams.entries())
     const conditions: string[] = []
@@ -69,7 +69,7 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       }
     }
 
-    // Формируем запрос с использованием тегированного шаблона
+    // Формируем запрос с использованием sql.query для безопасной обработки параметров
     let query = `SELECT * FROM ${tableName}`
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(" AND ")}`
@@ -85,7 +85,7 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
     }
 
     console.log(`[API] Executing query for table ${tableName}: ${query}, values: ${JSON.stringify(values)}`)
-    const data = await sql(query, values)
+    const data = values.length > 0 ? await sql.query(query, values) : await sql`${query}`
     console.log(`[API] Query successful, returned ${data.length} rows`)
     return NextResponse.json({ success: true, data })
   } catch (error) {
