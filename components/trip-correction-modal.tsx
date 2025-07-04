@@ -236,8 +236,10 @@ export function TripCorrectionModal({
 
       if (data.success) {
         setSuccess("Корректировки сохранены успешно!")
+        return true // === ИЗМЕНЕНИЕ: Возвращаем true при успехе ===
       } else {
         setError(data.error || "Failed to save corrections")
+        return false
       }
     } catch (error) {
       setError("Error saving corrections")
@@ -250,9 +252,14 @@ export function TripCorrectionModal({
   const sendCorrection = async () => {
     setIsSending(true)
     setError(null)
+    setSuccess(null)
 
     try {
-      await saveCorrections()
+      // === ИЗМЕНЕНИЕ: Ждём успешного сохранения корректировок ===
+      const saveSuccess = await saveCorrections()
+      if (!saveSuccess) {
+        throw new Error("Failed to save corrections before sending")
+      }
       const messageIds = [...new Set(corrections.map((c) => c.message_id))]
 
       const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
@@ -272,6 +279,8 @@ export function TripCorrectionModal({
 
       if (data.success) {
         setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
+        // === ИЗМЕНЕНИЕ: Ждём небольшую задержку для синхронизации базы данных ===
+        await new Promise((resolve) => setTimeout(resolve, 1000))
         onCorrectionSent()
         setTimeout(() => {
           onClose()
