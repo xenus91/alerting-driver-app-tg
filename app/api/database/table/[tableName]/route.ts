@@ -17,12 +17,11 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
   }
 
   try {
-    // ✅ ПЕРВОЕ - проверка авторизации (должна быть до любых запросов к БД)
+    // Проверка авторизации
     const authResponse = await fetch(`${request.nextUrl.origin}/api/auth/me`, {
       headers: { Cookie: request.headers.get("cookie") || "" },
       cache: "no-store",
     })
-    
     if (!authResponse.ok) {
       console.error(`[API] Auth request failed with status: ${authResponse.status}, ${authResponse.statusText}`)
       return NextResponse.json(
@@ -30,15 +29,16 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
         { status: authResponse.status }
       )
     }
-    
     const authData = await authResponse.json()
     if (!authData.success || authData.user?.role !== "admin") {
       console.warn(`[API] Access denied for table ${tableName}: user role=${authData.user?.role || "unknown"}`)
       return NextResponse.json({ success: false, error: "Access denied" }, { status: 403 })
     }
 
-    // ✅ ВТОРОЕ - проверка существования таблицы
+    // Проверка валидности таблицы
     console.log(`[API] Checking if table ${tableName} exists in public schema`)
+    
+    // Используем правильный синтаксис для проверки таблиц
     const validTables = await sql`
       SELECT table_name
       FROM information_schema.tables
@@ -50,13 +50,15 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // ✅ ТРЕТЬЕ - выполнение основного запроса
+    // ✅ ИСПРАВЛЕННЫЙ ЗАПРОС - используем правильный синтаксис Neon
     console.log(`[API] Executing query for table ${tableName}`)
     
-    // Используем правильный синтаксис для запроса
-    const escapedTableName = tableName.replace(/"/g, '""')
-    const query = `SELECT * FROM public."${escapedTableName}"`
-    const data = await sql.unsafe(query)
+    // 1. Создаем безопасный SQL-запрос
+    const safeTableName = tableName.replace(/"/g, '""')
+    const query = `SELECT * FROM "${safeTableName}"`
+    
+    // 2. Используем правильный метод Neon для выполнения запроса
+    const data = await sql(query, { fullResults: true }) as any[]
 
     console.log(`[API] Query successful, returned ${data.length} rows`)
     return NextResponse.json({ success: true, data })
