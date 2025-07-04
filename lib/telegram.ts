@@ -159,6 +159,10 @@ export async function sendMultipleTripMessageWithButtons(
   firstName: string,
   messageId: number,
   isCorrection = false,
+  // === НАЧАЛО ИЗМЕНЕНИЙ ===
+  // Добавлен параметр isResend для различения первичной и повторной отправки
+  isResend = false,
+  // === КОНЕЦ ИЗМЕНЕНИЙ ===
   previousTelegramMessageId?: number
 ): Promise<{ message_id: number; messageText: string }> {
   try {
@@ -169,10 +173,14 @@ export async function sendMultipleTripMessageWithButtons(
     // Генерируем красивое сообщение для нового сообщения
     let message = "";
 
-    // Добавляем заголовок корректировки если нужно
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+    // Обновляем логику выбора шапки сообщения
     if (isCorrection) {
       message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`;
+    } else if (isResend) {
+      message += `🔄 <b>ПОВТОРНАЯ ОТПРАВКА ЗАЯВОК</b>\n\n`;
     }
+    // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
     message += `🌅 <b>Доброго времени суток!</b>\n\n`;
     message += `👤 Уважаемый, <b>${firstName}</b>\n\n`;
@@ -236,7 +244,7 @@ export async function sendMultipleTripMessageWithButtons(
 
       // Пункты погрузки
       if (trip.loading_points.length > 0) {
-        message += `� O'D0' <b>Погрузка:</b>\n`;
+        message += `📦 <b>Погрузка:</b>\n`
         trip.loading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
         });

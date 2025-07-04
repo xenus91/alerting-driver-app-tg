@@ -78,7 +78,145 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Функция для отправки существующих сообщений по tripId
+/* === НОВАЯ ФУНКЦИЯ ===
+ * Добавлена функция generateMessageText для формирования текста сообщения до создания записи в базе данных.
+ * Это устраняет ошибку NOT NULL для столбца message в таблице trip_messages.
+ * Логика формирования текста перенесена из sendFromUploadedData для идентичности с предыдущей реализацией.
+ */
+function generateMessageText(trips: any[], firstName: string): string {
+  let message = `🌅 <b>Доброго времени суток!</b>\n\n`
+  message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
+
+  const isMultiple = trips.length > 1
+  message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
+
+  const sortedTrips = [...trips].sort((a, b) => {
+    const timeA = new Date(a.planned_loading_time || "").getTime()
+    const timeB = new Date(b.planned_loading_time || "").getTime()
+    return timeA - timeB
+  })
+
+  sortedTrips.forEach((trip, tripIndex) => {
+    console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
+
+    message += `<b>Рейс ${tripIndex + 1}:</b>\n`
+    message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
+    message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
+
+    const formatDateTime = (dateTimeString: string): string => {
+      try {
+        if (!dateTimeString) return "Не указано"
+
+        const date = new Date(dateTimeString)
+        if (isNaN(date.getTime())) return dateTimeString
+
+        const day = date.getDate()
+        const monthNames = [
+          "января",
+          "февраля",
+          "марта",
+          "апреля",
+          "мая",
+          "июня",
+          "июля",
+          "августа",
+          "сентября",
+          "октября",
+          "ноября",
+          "декабря",
+        ]
+        const month = monthNames[date.getMonth()]
+
+        const hours = date.getHours().toString().padStart(2, "0")
+        const minutes = date.getMinutes().toString().padStart(2, "0")
+        const time = `${hours}:${minutes}`
+
+        return `${day} ${month} ${time}`
+      } catch (error) {
+        console.error("Error formatting date:", error)
+        return dateTimeString
+      }
+    }
+
+    message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
+
+    if (trip.loading_points.length > 0) {
+      message += `📦 <b>Погрузка:</b>\n`
+      trip.loading_points.forEach((point: any, index: number) => {
+        message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
+      })
+      message += `\n`
+    }
+
+    if (trip.unloading_points.length > 0) {
+      message += `📤 <b>Разгрузка:</b>\n`
+      trip.unloading_points.forEach((point: any, index: number) => {
+        message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
+
+        const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
+        if (windows.length > 0) {
+          message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
+        }
+      })
+      message += `\n`
+    }
+
+    if (trip.driver_comment && trip.driver_comment.trim()) {
+      message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
+    }
+
+    const routePoints = [...trip.loading_points, ...trip.unloading_points]
+    console.log(
+      `Route points for trip ${trip.trip_identifier}:`,
+      routePoints.map((p: any) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
+    )
+
+    const validPoints = routePoints.filter((p: any) => {
+      const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+      const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+      return lat && lng && !isNaN(lat) && !isNaN(lng)
+    })
+
+    let routeUrl = null
+    if (validPoints.length >= 2) {
+      const coordinates = validPoints
+        .map((p: any) => {
+          const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+          const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+          return `${lat},${lng}`
+        })
+        .join("~")
+
+      routeUrl = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
+      console.log(`Built route URL: ${routeUrl}`)
+    } else {
+      console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
+    }
+
+    if (routeUrl) {
+      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
+      console.log(`Added route URL for trip ${trip.trip_identifier}`)
+    }
+
+    if (tripIndex < sortedTrips.length - 1) {
+      message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+    }
+  })
+
+  message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`
+
+  console.log(`Final message length: ${message.length}`)
+  console.log(`Message preview: ${message.substring(0, 200)}...`)
+
+  return message
+}
+/* === КОНЕЦ НОВОЙ ФУНКЦИИ === */
+
+/* === ИЗМЕНЁННАЯ ФУНКЦИЯ ===
+ * Функция sendExistingMessages обновлена для совместимости с последней сигнатурой sendMultipleTripMessageWithButtons.
+ * Добавлены параметры isCorrection, isResend и prevMessageId, чтобы соответствовать вызову в sendFromUploadedData.
+ * Сохранено обновление message в базе данных через updateMessageStatus.
+ */
 async function sendExistingMessages(tripId: number, sql: any) {
   console.log(`=== SENDING EXISTING MESSAGES FOR TRIP ${tripId} ===`)
 
@@ -108,7 +246,7 @@ async function sendExistingMessages(tripId: number, sql: any) {
   for (const message of pendingMessages) {
     if (!message.telegram_id) {
       console.log(`Skipping message ${message.id} - no telegram_id`)
-      await updateMessageStatus(message.id, "error", "User not found in Telegram")
+      await updateMessageStatus(message.id, "error", "User not found in Telegram", null, null)
       continue
     }
 
@@ -129,7 +267,7 @@ async function sendExistingMessages(tripId: number, sql: any) {
       console.log(`Processing ${messages.length} messages for phone ${phone}`)
 
       const user = messages[0]
-      const messageIds = messages.map((m) => m.id)
+      const messageIds = messages.map((m: any) => m.id)
 
       // Получаем уникальные рейсы для этого телефона
       const uniqueTrips = new Map()
@@ -195,15 +333,23 @@ async function sendExistingMessages(tripId: number, sql: any) {
       console.log(`Sending message for ${tripsData.length} trips`)
 
       const telegramResult = await sendMultipleTripMessageWithButtons(
-        user.telegram_id,
+        Number(user.telegram_id),
         tripsData,
         user.first_name || "Водитель",
         messageIds[0],
+        false, // isCorrection
+        false, // isResend
+        null // prevMessageId
       )
 
-      // Обновляем статус всех сообщений для этого телефона
       for (const messageId of messageIds) {
-        await updateMessageStatus(messageId, "sent", undefined, telegramResult.message_id)
+        await updateMessageStatus(
+          messageId,
+          "sent",
+          undefined,
+          telegramResult.message_id,
+          telegramResult.messageText
+        )
       }
       sentCount += messageIds.length
 
@@ -211,9 +357,14 @@ async function sendExistingMessages(tripId: number, sql: any) {
     } catch (error) {
       console.error(`Error sending messages for phone ${phone}:`, error)
 
-      // Обновляем статус всех сообщений для этого телефона как ошибка
       for (const message of messages) {
-        await updateMessageStatus(message.id, "error", error instanceof Error ? error.message : "Unknown error")
+        await updateMessageStatus(
+          message.id,
+          "error",
+          error instanceof Error ? error.message : "Unknown error",
+          null,
+          null
+        )
       }
       errorCount += messages.length
     }
@@ -229,26 +380,29 @@ async function sendExistingMessages(tripId: number, sql: any) {
     errors: errorCount,
   })
 }
+/* === КОНЕЦ ИЗМЕНЁННОЙ ФУНКЦИИ === */
 
-// Функция для отправки из загруженных данных (обновленная версия)
+/* === ИЗМЕНЁННАЯ ФУНКЦИЯ ===
+ * Функция sendFromUploadedData переработана для устранения ошибки NOT NULL.
+ * Текст сообщения формируется до создания записей в trip_messages с помощью generateMessageText.
+ * Текст передаётся в createTripMessage, чтобы столбец message был заполнен.
+ * Добавлены параметры isCorrection, isResend и prevMessageId в вызов sendMultipleTripMessageWithButtons.
+ * Сохранена логика отправки одного сообщения и обновления всех записей после отправки.
+ */
 async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any) {
   console.log(`Processing ${tripData.length} trips for sending`)
 
-  // Создаем основной trip ТОЛЬКО при отправке с carpark текущего пользователя
   const mainTrip = await createTrip(currentUser.carpark)
   console.log(`Created main trip with ID: ${mainTrip.id} and carpark: ${currentUser.carpark}`)
 
-  // Получаем все доступные пункты из базы данных
   const allPoints = await getAllPoints()
   console.log(`Found ${allPoints.length} points in database`)
 
-  // Создаем карту пунктов для быстрого поиска
   const pointsMap = new Map<string, Point>()
   for (const point of allPoints) {
     pointsMap.set(point.point_id, point)
   }
 
-  // Группируем рейсы по телефонам
   const phoneGroups = new Map<string, any[]>()
 
   for (const tripDataItem of tripData) {
@@ -268,14 +422,12 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
     details: [] as any[],
   }
 
-  // Обрабатываем каждую группу телефонов
   for (const [phone, phoneTrips] of phoneGroups) {
     try {
       results.total++
 
       console.log(`Processing ${phoneTrips.length} trips for phone: ${phone}`)
 
-      // Ищем пользователя по номеру телефона
       const user = await getUserByPhone(phone)
       if (!user) {
         console.log(`User not found for phone: ${phone}`)
@@ -288,7 +440,6 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
         continue
       }
 
-      // Проверяем верификацию пользователя
       if (user.verified === false) {
         console.log(`User not verified for phone: ${phone}`)
         results.errors++
@@ -302,7 +453,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
 
       console.log(`Processing trips for user: ${user.first_name || user.name}`)
 
-      // Подготавливаем данные для отправки и создания сообщения
+      // Подготавливаем данные для отправки
       const tripsForSending = phoneTrips.map((tripDataItem) => {
         const loadingPointsData = []
         const unloadingPointsData = []
@@ -351,132 +502,13 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
 
       const firstName = user.first_name || user.full_name || "Водитель"
 
-      // Генерируем текст сообщения (аналогично sendMultipleTripMessageWithButtons)
-      let message = `🌅 <b>Доброго времени суток!</b>\n\n`
-      message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
-
-      const isMultiple = tripsForSending.length > 1
-      message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${tripsForSending.length} рейс${tripsForSending.length > 1 ? "а" : ""}:</b>\n\n`
-
-      const sortedTrips = [...tripsForSending].sort((a, b) => {
-        const timeA = new Date(a.planned_loading_time || "").getTime()
-        const timeB = new Date(b.planned_loading_time || "").getTime()
-        return timeA - timeB
-      })
-
-      sortedTrips.forEach((trip, tripIndex) => {
-        console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
-
-        message += `<b>Рейс ${tripIndex + 1}:</b>\n`
-        message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
-        message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
-
-        const formatDateTime = (dateTimeString: string): string => {
-          try {
-            if (!dateTimeString) return "Не указано"
-
-            const date = new Date(dateTimeString)
-            if (isNaN(date.getTime())) return dateTimeString
-
-            const day = date.getDate()
-            const monthNames = [
-              "января",
-              "февраля",
-              "марта",
-              "апреля",
-              "мая",
-              "июня",
-              "июля",
-              "августа",
-              "сентября",
-              "октября",
-              "ноября",
-              "декабря",
-            ]
-            const month = monthNames[date.getMonth()]
-
-            const hours = date.getHours().toString().padStart(2, "0")
-            const minutes = date.getMinutes().toString().padStart(2, "0")
-            const time = `${hours}:${minutes}`
-
-            return `${day} ${month} ${time}`
-          } catch (error) {
-            console.error("Error formatting date:", error)
-            return dateTimeString
-          }
-        }
-
-        message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
-
-        if (trip.loading_points.length > 0) {
-          message += `📦 <b>Погрузка:</b>\n`
-          trip.loading_points.forEach((point, index) => {
-            message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-          })
-          message += `\n`
-        }
-
-        if (trip.unloading_points.length > 0) {
-          message += `📤 <b>Разгрузка:</b>\n`
-          trip.unloading_points.forEach((point, index) => {
-            message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-
-            const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
-            if (windows.length > 0) {
-              message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
-            }
-          })
-          message += `\n`
-        }
-
-        if (trip.driver_comment && trip.driver_comment.trim()) {
-          message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
-        }
-
-        const routePoints = [...trip.loading_points, ...trip.unloading_points]
-        console.log(
-          `Route points for trip ${trip.trip_identifier}:`,
-          routePoints.map((p) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
-        )
-
-        const validPoints = routePoints.filter((p) => {
-          const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
-          const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
-          return lat && lng && !isNaN(lat) && !isNaN(lng)
-        })
-
-        let routeUrl = null
-        if (validPoints.length >= 2) {
-          const coordinates = validPoints
-            .map((p) => {
-              const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
-              const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
-              return `${lat},${lng}`
-            })
-            .join("~")
-
-          routeUrl = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
-          console.log(`Built route URL: ${routeUrl}`)
-        } else {
-          console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
-        }
-
-        if (routeUrl) {
-          message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
-          console.log(`Added route URL for trip ${trip.trip_identifier}`)
-        }
-
-        if (tripIndex < sortedTrips.length - 1) {
-          message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-        }
-      })
-
-      message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`
-
-      console.log(`Final message length: ${message.length}`)
-      console.log(`Message preview: ${message.substring(0, 200)}...`)
+      // Формируем текст сообщения до создания записей в базе
+      const messageText = generateMessageText(tripsForSending, firstName)
+      console.log(`Generated message text length: ${messageText.length}`)
+      console.log(`Message preview: ${messageText.substring(0, 200)}...`)
 
       // Создаем записи в БД для всех рейсов этого пользователя
+      const messageIds: number[] = []
       for (const tripDataItem of phoneTrips) {
         // Создаем пункты для этого рейса
         for (const loadingPoint of tripDataItem.loading_points || []) {
@@ -513,11 +545,11 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
           console.log(`Created unloading point: ${unloadingPoint.point_id}`)
         }
 
-        // Создаем сообщение для этого рейса с отформатированным текстом
-        await createTripMessage(
+        // Создаем сообщение с текстом
+        const message = await createTripMessage(
           mainTrip.id,
           tripDataItem.phone,
-          message, // Сохраняем отформатированное сообщение
+          messageText,
           user.telegram_id,
           {
             trip_identifier: tripDataItem.trip_identifier,
@@ -526,74 +558,66 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             driver_comment: tripDataItem.driver_comment,
           },
         )
+        messageIds.push(message.id)
+        console.log(`Created trip message for trip ${tripDataItem.trip_identifier}`)
       }
 
       // Отправляем ОДНО сообщение со всеми рейсами
+      const telegramResult = await sendMultipleTripMessageWithButtons(
+        Number(user.telegram_id),
+        tripsForSending,
+        firstName,
+        messageIds[0],
+        false, // isCorrection
+        false, // isResend
+        null // prevMessageId
+      )
+
+      // Обновляем статус ВСЕХ сообщений для этого пользователя
+      await sql`
+        UPDATE trip_messages 
+        SET status = 'sent', 
+            sent_at = ${new Date().toISOString()},
+            telegram_message_id = ${telegramResult.message_id},
+            message = ${telegramResult.messageText}
+        WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
+      `
+
+      console.log(`Updated message status to 'sent' for phone: ${phone}`)
+
+      results.sent++
+      results.details.push({
+        phone: phone,
+        status: "sent",
+        user_name: firstName,
+        trips_count: phoneTrips.length,
+        telegram_message_id: telegramResult.message_id,
+      })
+
+      console.log(`Messages sent successfully to ${phone}`)
+    } catch (sendError) {
+      const errorMessage = sendError instanceof Error ? sendError.message : "Ошибка отправки"
+      console.error(`Failed to send message to ${phone}:`, sendError)
+
       try {
-        const telegramResult = await sendMultipleTripMessageWithButtons(
-          user.telegram_id,
-          tripsForSending,
-          firstName,
-          mainTrip.id,
-        )
-
-        console.log(`Telegram API result:`, telegramResult)
-
-        // Обновляем статус ВСЕХ сообщений для этого пользователя на "sent"
         await sql`
           UPDATE trip_messages 
-          SET status = 'sent', 
-              sent_at = ${new Date().toISOString()},
-              telegram_message_id = ${telegramResult.message_id}
+          SET status = 'error', 
+              error_message = ${errorMessage}
           WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
         `
-
-        console.log(`Updated message status to 'sent' for phone: ${phone}`)
-
-        results.sent++
-        results.details.push({
-          phone: phone,
-          status: "sent",
-          user_name: firstName,
-          trips_count: phoneTrips.length,
-          telegram_message_id: telegramResult.message_id,
-        })
-
-        console.log(`Messages sent successfully to ${phone}`)
-      } catch (sendError) {
-        const errorMessage = sendError instanceof Error ? sendError.message : "Ошибка отправки"
-        console.error(`Failed to send message to ${phone}:`, sendError)
-
-        // Обновляем статус на "error" при ошибке
-        try {
-          await sql`
-            UPDATE trip_messages 
-            SET status = 'error', 
-                error_message = ${errorMessage}
-            WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
-          `
-        } catch (updateError) {
-          console.error("Error updating message status to error:", updateError)
-        }
-
-        results.errors++
-        results.details.push({
-          phone: phone,
-          status: "error",
-          error: errorMessage,
-        })
+      } catch (updateError) {
+        console.error("Error updating message status to error:", updateError)
       }
-    } catch (error) {
-      console.error(`Error processing trips for phone ${phone}:`, error)
+
       results.errors++
       results.details.push({
         phone: phone,
         status: "error",
-        error: error instanceof Error ? error.message : "Unknown error",
+        error: errorMessage,
       })
     }
 
-    // Задержка между отправками
     await new Promise((resolve) => setTimeout(resolve, 100))
   }
 
@@ -608,3 +632,4 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
     results,
   })
 }
+/* === КОНЕЦ ИЗМЕНЁННОЙ ФУНКЦИИ === */

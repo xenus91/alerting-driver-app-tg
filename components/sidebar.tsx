@@ -18,6 +18,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Key,
+  Database, // ИЗМЕНЕНИЕ: Добавлен иконка Database для нового пункта меню
 } from "lucide-react"
 
 interface CurrentUser {
@@ -68,6 +69,14 @@ const menuItems = [
     icon: Bot,
     roles: ["admin"], // Только для администраторов
   },
+  /* ИЗМЕНЕНИЕ: Добавлен новый пункт меню для DatabaseViewer */
+  {
+    title: "Просмотр базы данных",
+    href: "/database-viewer",
+    icon: Database,
+    roles: ["admin"],
+  },
+  /* КОНЕЦ ИЗМЕНЕНИЯ */
 ]
 
 interface SidebarProps {

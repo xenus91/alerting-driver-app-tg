@@ -1,5 +1,11 @@
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+/* === ИСПРАВЛЕНИЕ ===
+ * Добавлен импорт функции sendMultipleTripMessageWithButtons из @/lib/telegram,
+ * чтобы устранить ошибку "ReferenceError: sendMultipleTripMessageWithButtons is not defined".
+ */
+import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
+/* === КОНЕЦ ИСПРАВЛЕНИЯ === */
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -140,7 +146,111 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           }
         }
       }
+   /* === ИСПРАВЛЕННЫЙ БЛОК ===
+       * Исправлена ошибка обращения к несуществующему столбцу tm.driver_name.
+       * Вместо tm.driver_name используется u.first_name из таблицы users.
+       * Добавлено соединение с таблицей users в SQL-запросе для получения имени водителя.
+       * Сохранена остальная логика формирования trips и отправки сообщения.
+       */
+      // Получаем данные о рейсах для отправки сообщения
+      const messages = await sql`
+        SELECT 
+          tm.id,
+          tm.trip_identifier,
+          tm.vehicle_number,
+          tm.planned_loading_time,
+          tm.driver_comment,
+          tm.telegram_id,
+          u.first_name,
+          u.full_name,
+          tm.telegram_message_id,
+          tp.point_id,
+          p.point_name,
+          tp.point_type,
+          tp.point_num,
+          p.latitude,
+          p.longitude,
+          p.door_open_1,
+          p.door_open_2,
+          p.door_open_3
+        FROM trip_messages tm
+        LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
+        LEFT JOIN points p ON tp.point_id = p.id
+        LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+        WHERE tm.trip_id = ${tripId}
+        AND tm.phone = ${phone}
+        ORDER BY tm.planned_loading_time
+      `
 
+      if (messages.length === 0) {
+        await sql`ROLLBACK`
+        return NextResponse.json({ success: false, error: "Messages not found" }, { status: 404 })
+      }
+
+      // Группируем точки по trip_identifier
+      const tripsMap = new Map<string, any>()
+      for (const row of messages) {
+        if (!tripsMap.has(row.trip_identifier)) {
+          tripsMap.set(row.trip_identifier, {
+            trip_identifier: row.trip_identifier,
+            vehicle_number: row.vehicle_number,
+            planned_loading_time: row.planned_loading_time,
+            driver_comment: row.driver_comment || "",
+            loading_points: [],
+            unloading_points: [],
+          })
+        }
+
+        if (row.point_id) {
+          const point = {
+            point_id: row.point_id,
+            point_name: row.point_name,
+            door_open_1: row.door_open_1,
+            door_open_2: row.door_open_2,
+            door_open_3: row.door_open_3,
+            latitude: row.latitude,
+            longitude: row.longitude,
+          }
+          const trip = tripsMap.get(row.trip_identifier)!
+          if (row.point_type === "P") {
+            trip.loading_points.push(point)
+          } else if (row.point_type === "D") {
+            trip.unloading_points.push(point)
+          }
+        }
+      }
+
+      const trips = Array.from(tripsMap.values())
+      trips.sort((a, b) => new Date(a.planned_loading_time).getTime() - new Date(b.planned_loading_time).getTime())
+
+      const telegramId = messages[0].telegram_id
+      const driverName = messages[0].first_name || messages[0].full_name || "Водитель"
+      const previousTelegramMessageId = messages[0].telegram_message_id
+      const messageIds = messages.map((m) => m.id)
+
+      // Отправляем сообщение с корректировкой
+      const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
+        Number(telegramId),
+        trips,
+        driverName,
+        messageIds[0], // Используем первый messageId для callback_data
+        true, // isCorrection = true
+        false, // isResend = false
+        previousTelegramMessageId
+      )
+
+      // Обновляем все сообщения водителя с новым telegram_message_id и текстом
+      await sql`
+        UPDATE trip_messages
+        SET 
+          telegram_message_id = ${message_id},
+          status = 'sent',
+          sent_at = NOW(),
+          message = ${messageText}
+        WHERE id = ANY(${messageIds})
+        AND phone = ${phone}
+      `
+      /* === КОНЕЦ ИСПРАВЛЕННОГО БЛОКА === */
       await sql`COMMIT`
 
       console.log(
