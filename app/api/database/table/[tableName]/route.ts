@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { Pool } from "@neondatabase/serverless"
 
-const sql = neon(process.env.DATABASE_URL!)
+const pool = new Pool({ connectionString: process.env.DATABASE_URL })
 
 export async function GET(request: NextRequest, { params }: { params: { tableName: string } }) {
   const { tableName } = params
   console.log(`[API] Handling GET request for table: ${tableName}`)
 
-  // Проверка переменной окружения
   if (!process.env.DATABASE_URL) {
     console.error("[API] DATABASE_URL is not set")
     return NextResponse.json(
@@ -15,6 +14,8 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       { status: 500 }
     )
   }
+
+  const client = await pool.connect()
 
   try {
     // Проверка авторизации
