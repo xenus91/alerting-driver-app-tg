@@ -107,9 +107,14 @@ export default function DatabaseViewer() {
         const response = await fetch(`/api/database/table/${table}/distinct?column=${column}`, { cache: "no-store" })
         const result = await response.json()
         if (result.success) {
-          // Фильтруем пустые строки и null
-          const filteredData = result.data.filter((val: any) => val !== null && val !== "");
+          // Фильтруем null, пустые строки и пробелы
+          const filteredData = result.data
+            .filter((val: any) => val !== null && val !== undefined && String(val).trim() !== "")
+            .map((val: any) => String(val).trim());
+          console.log(`[DatabaseViewer] Distinct values for ${column}:`, filteredData);
           setDistinctValues((prev) => ({ ...prev, [column]: filteredData }))
+        } else {
+          console.error(`[DatabaseViewer] Failed to fetch distinct values for ${column}:`, result.error);
         }
       } catch (error) {
         console.error(`[DatabaseViewer] Error fetching distinct values for ${column}:`, error)
@@ -132,7 +137,7 @@ export default function DatabaseViewer() {
         const validColumns = tables.find((t) => t.name === selectedTable)?.columns.map((c) => c.name) || []
 
         columnFilters.forEach((filter) => {
-          if (validColumns.includes(filter.id) && filter.value) {
+          if (validColumns.includes(filter.id) && filter.value && String(filter.value).trim() !== "") {
             params.append(filter.id, String(filter.value))
           } else {
             console.warn(`[DatabaseViewer] Invalid or empty filter column ${filter.id} for table ${selectedTable}`)
@@ -243,9 +248,11 @@ export default function DatabaseViewer() {
             const values = distinctValues[columnName] || []
             const search = filterSearch[columnName] || ""
 
-            const filteredValues = values.filter((val) =>
-              String(val).toLowerCase().includes(search.toLowerCase())
-            ).filter((val) => val !== "" && val !== null); // Исключаем пустые строки и null
+            const filteredValues = values
+              .filter((val) => String(val).toLowerCase().includes(search.toLowerCase()))
+              .filter((val) => val !== null && val !== undefined && String(val).trim() !== "");
+
+            console.log(`[DatabaseViewer] Filtered values for ${columnName}:`, filteredValues);
 
             return (
               <div className="space-y-2">
@@ -264,11 +271,14 @@ export default function DatabaseViewer() {
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
                     <SelectItem value="">Все</SelectItem>
-                    {filteredValues.map((val) => (
-                      <SelectItem key={val} value={String(val)}>
-                        {String(val) || "—"}
-                      </SelectItem>
-                    ))}
+                    {filteredValues.map((val) => {
+                      const stringVal = String(val).trim();
+                      return (
+                        <SelectItem key={stringVal} value={stringVal}>
+                          {stringVal || "—"}
+                        </SelectItem>
+                      );
+                    })}
                   </SelectContent>
                 </Select>
               </div>
