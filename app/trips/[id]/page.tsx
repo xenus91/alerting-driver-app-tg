@@ -779,6 +779,15 @@ export default function TripDetailPage() {
     }
   }
 
+
+      // === НАЧАЛО ИЗМЕНЕНИЙ ===
+  // Обновляем handleCorrectionSent для вызова fetchTripPoints
+  const handleCorrectionSent = async () => {
+    await Promise.all([fetchMessages(), fetchTripPoints()])
+    setCorrectionModal(null)
+  }
+  // === КОНЕЦ ИЗМЕНЕНИЙ ===
+
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
