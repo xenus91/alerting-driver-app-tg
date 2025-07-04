@@ -787,14 +787,53 @@ export default function TripDetailPage() {
   }
 
 
-    // === НАЧАЛО ИЗМЕНЕНИЙ ===
-const handleCorrectionSent = async () => {
+  const handleCorrectionSent = async (tripIdentifiers: string[], expectedPointIds: string[]) => {
   setIsLoading(true)
   try {
+    console.log("handleCorrectionSent: Starting with tripIdentifiers:", tripIdentifiers, "expectedPointIds:", expectedPointIds)
+
+    // Обновляем сообщения и точки одновременно
     await Promise.all([fetchMessages(), fetchTripPoints()])
-    // Дополнительный вызов fetchTripPoints с задержкой для надёжности
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    await fetchTripPoints()
+
+    // Дополнительный вызов fetchTripPoints для немедленного обновления
+    let points = await fetchTripPoints()
+
+    // Опрос fetchTripPoints до получения всех ожидаемых точек
+    let attempts = 0
+    const maxAttempts = 5
+    const pollInterval = 1000
+    let allPointsFound = false
+
+    while (attempts < maxAttempts && !allPointsFound) {
+      const pointsByTrip = tripIdentifiers.reduce((acc: Record<string, string[]>, tripId) => {
+        acc[tripId] = points
+          .filter((p: TripPoint) => p.trip_identifier === tripId)
+          .map((p: TripPoint) => p.point_id)
+        return acc
+      }, {})
+
+      allPointsFound = tripIdentifiers.every((tripId) =>
+        expectedPointIds.every((pointId) => pointsByTrip[tripId]?.includes(pointId))
+      )
+
+      if (!allPointsFound) {
+        console.log(
+          `Polling attempt ${attempts + 1}/${maxAttempts}: Missing points for tripIdentifiers`,
+          tripIdentifiers,
+          "current points:",
+          pointsByTrip
+        )
+        await new Promise((resolve) => setTimeout(resolve, pollInterval))
+        points = await fetchTripPoints()
+        attempts++
+      } else {
+        console.log("Polling successful: All expected points found:", pointsByTrip)
+      }
+    }
+
+    if (!allPointsFound) {
+      console.warn("Failed to fetch all expected trip points after max attempts. Final points:", points)
+    }
   } catch (error) {
     console.error("Error in handleCorrectionSent:", error)
   } finally {
@@ -802,7 +841,6 @@ const handleCorrectionSent = async () => {
     setCorrectionModal(null)
   }
 }
-// === КОНЕЦ ИЗМЕНЕНИЙ ===
 
   return (
     <div className="space-y-6">
