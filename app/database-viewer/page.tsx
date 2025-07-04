@@ -50,7 +50,6 @@ export default function DatabaseViewer() {
   const [pageIndex, setPageIndex] = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [totalRows, setTotalRows] = useState(0)
-  const [distinctValues, setDistinctValues] = useState<{ [column: string]: string[] }>({})
   const [filterSearch, setFilterSearch] = useState<{ [column: string]: string }>({})
   const [isDragging, setIsDragging] = useState(false)
   const [startX, setStartX] = useState(0)
@@ -100,30 +99,7 @@ export default function DatabaseViewer() {
     fetchTables()
   }, [])
 
-  // Загрузка уникальных значений для фильтров
-  const fetchDistinctValues = useCallback(
-    async (table: string, column: string) => {
-      try {
-        const response = await fetch(`/api/database/table/${table}/distinct?column=${column}`, { cache: "no-store" })
-        const result = await response.json()
-        if (result.success) {
-          // Фильтруем null, пустые строки и пробелы
-          const filteredData = result.data
-            .filter((val: any) => val !== null && val !== undefined && String(val).trim() !== "")
-            .map((val: any) => String(val).trim());
-          console.log(`[DatabaseViewer] Distinct values for ${column}:`, filteredData);
-          setDistinctValues((prev) => ({ ...prev, [column]: filteredData }))
-        } else {
-          console.error(`[DatabaseViewer] Failed to fetch distinct values for ${column}:`, result.error);
-        }
-      } catch (error) {
-        console.error(`[DatabaseViewer] Error fetching distinct values for ${column}:`, error)
-      }
-    },
-    []
-  )
-
-  // Загрузка данных таблицы с пагинацией
+  // Загрузка данных таблицы с пагинацией и фильтрацией
   useEffect(() => {
     if (!selectedTable) return
 
@@ -136,14 +112,14 @@ export default function DatabaseViewer() {
         params.append("limit", String(pageSize))
         const validColumns = tables.find((t) => t.name === selectedTable)?.columns.map((c) => c.name) || []
 
+        // Добавляем фильтры в параметры запроса
         columnFilters.forEach((filter) => {
           if (validColumns.includes(filter.id) && filter.value && String(filter.value).trim() !== "") {
             params.append(filter.id, String(filter.value))
-          } else {
-            console.warn(`[DatabaseViewer] Invalid or empty filter column ${filter.id} for table ${selectedTable}`)
           }
         })
 
+        // Добавляем сортировку
         if (sorting.length > 0 && validColumns.includes(sorting[0].id)) {
           params.append("sortBy", sorting[0].id)
           params.append("sortOrder", sorting[0].desc ? "DESC" : "ASC")
@@ -155,7 +131,6 @@ export default function DatabaseViewer() {
         if (result.success) {
           setData(result.data)
           setTotalRows(result.total || result.data.length)
-          validColumns.forEach((column) => fetchDistinctValues(selectedTable, column))
         } else {
           setError(result.error || `Failed to load data for table ${selectedTable}`)
         }
@@ -168,7 +143,7 @@ export default function DatabaseViewer() {
     }
 
     fetchTableData()
-  }, [selectedTable, columnFilters, sorting, pageIndex, pageSize, tables, fetchDistinctValues])
+  }, [selectedTable, columnFilters, sorting, pageIndex, pageSize, tables])
 
   // Обработчики для горизонтальной прокрутки
   const handleMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -199,6 +174,19 @@ export default function DatabaseViewer() {
       }, 300),
     []
   )
+
+  // Получаем уникальные значения для фильтров из текущих данных
+  const getDistinctValues = (columnId: string) => {
+    const values = new Set<string>()
+    
+    data.forEach(row => {
+      if (row[columnId] !== null && row[columnId] !== undefined && String(row[columnId]).trim() !== "") {
+        values.add(String(row[columnId]).trim())
+      }
+    })
+    
+    return Array.from(values).sort()
+  }
 
   const columns = useMemo<ColumnDef<TableData>[]>(
     () => {
@@ -245,14 +233,11 @@ export default function DatabaseViewer() {
         meta: {
           filterComponent: ({ column }: { column: any }) => {
             const columnName = column.id
-            const values = distinctValues[columnName] || []
+            const values = getDistinctValues(columnName)
             const search = filterSearch[columnName] || ""
 
             const filteredValues = values
               .filter((val) => String(val).toLowerCase().includes(search.toLowerCase()))
-              .filter((val) => val !== null && val !== undefined && String(val).trim() !== "");
-
-            console.log(`[DatabaseViewer] Filtered values for ${columnName}:`, filteredValues);
 
             return (
               <div className="space-y-2">
@@ -304,7 +289,7 @@ export default function DatabaseViewer() {
 
       return baseColumns
     },
-    [selectedTable, tables, editingCell, editValue, distinctValues, filterSearch, debouncedSetFilterSearch]
+    [selectedTable, tables, editingCell, editValue, data, filterSearch, debouncedSetFilterSearch]
   )
 
   const table = useReactTable({
