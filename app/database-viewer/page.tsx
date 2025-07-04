@@ -66,6 +66,9 @@ const OPERATORS = [
   { value: "like", label: "Содержит" },
 ]
 
+// Константа для представления NULL значений
+const NULL_PLACEHOLDER = "__NULL__";
+
 export default function DatabaseViewer() {
   const [tables, setTables] = useState<TableSchema[]>([])
   const [selectedTable, setSelectedTable] = useState<string | null>(null)
@@ -148,9 +151,15 @@ export default function DatabaseViewer() {
           params.append(`filter[${index}].operator`, condition.operator)
           
           if (Array.isArray(condition.value)) {
-            condition.value.forEach(val => params.append(`filter[${index}].value`, val))
+            condition.value.forEach(val => {
+              // Преобразуем плейсхолдер обратно в пустую строку для сервера
+              const realValue = val === NULL_PLACEHOLDER ? "" : val;
+              params.append(`filter[${index}].value`, realValue)
+            })
           } else {
-            params.append(`filter[${index}].value`, condition.value)
+            // Преобразуем плейсхолдер обратно в пустую строку для сервера
+            const realValue = condition.value === NULL_PLACEHOLDER ? "" : condition.value;
+            params.append(`filter[${index}].value`, realValue)
           }
         })
 
@@ -158,7 +167,16 @@ export default function DatabaseViewer() {
         const result = await response.json()
         
         if (result.success) {
-          setData(result.data)
+          // Заменяем пустые строки на null
+          const transformedData = result.data.map((row: TableData) => {
+            const newRow: TableData = {};
+            Object.keys(row).forEach(key => {
+              newRow[key] = row[key] === "" ? null : row[key];
+            });
+            return newRow;
+          });
+          
+          setData(transformedData)
           setTotalRows(result.total || result.data.length)
         } else {
           setError(result.error || `Failed to load data for table ${selectedTable}`)
@@ -177,11 +195,23 @@ export default function DatabaseViewer() {
   const getDistinctValues = (columnId: string) => {
     const values = new Set<string>()
     data.forEach(row => {
-      if (row[columnId] !== null && row[columnId] !== undefined) {
-        values.add(String(row[columnId]))
+      const value = row[columnId];
+      
+      // Для null используем специальный плейсхолдер
+      if (value === null || value === undefined) {
+        values.add(NULL_PLACEHOLDER);
+      } 
+      // Для пустых строк также используем плейсхолдер
+      else if (value === "") {
+        values.add(NULL_PLACEHOLDER);
       }
-    })
-    return Array.from(values).sort()
+      // Все остальные значения преобразуем в строку
+      else {
+        values.add(String(value));
+      }
+    });
+    
+    return Array.from(values).sort();
   }
 
   // Добавление нового условия фильтрации
@@ -420,7 +450,7 @@ export default function DatabaseViewer() {
                   {['in', 'not in'].includes(condition.operator) ? (
                     <Select
                       value={Array.isArray(condition.value) ? condition.value : []}
-                      onValueChange={value => updateFilterCondition(index, 'value', value)}
+                      onValueChange={(values) => updateFilterCondition(index, 'value', values)}
                       multiple
                     >
                       <SelectTrigger className="w-60">
@@ -428,8 +458,14 @@ export default function DatabaseViewer() {
                       </SelectTrigger>
                       <SelectContent>
                         {getDistinctValues(condition.column).map(value => (
-                          <SelectItem key={value} value={value}>
-                            {value}
+                          // Используем специальный плейсхолдер для NULL значений
+                          <SelectItem 
+                            key={value} 
+                            value={value}
+                            // Гарантируем что значение не пустое
+                            disabled={value === ""}
+                          >
+                            {value === NULL_PLACEHOLDER ? "[пусто]" : value}
                           </SelectItem>
                         ))}
                       </SelectContent>
