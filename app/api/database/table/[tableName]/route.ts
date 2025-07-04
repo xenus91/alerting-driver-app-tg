@@ -48,13 +48,15 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // ✅ Безопасный запрос с ручным экранированием имени таблицы
-    console.log(`[API] Executing query for table ${tableName}: SELECT * FROM "${tableName}"`)
-    const data = await sql`SELECT * FROM "${tableName}"`
+    // ✅ Безопасный запрос с ручным экранированием и использованием sql.unsafe
+    const escapedTableName = tableName.replace(/"/g, '""') // Экранирование двойных кавычек
+    console.log(`[API] Executing safe query for table ${tableName}: SELECT * FROM "${escapedTableName}"`)
+    
+    const data = await sql.unsafe(`SELECT * FROM "${escapedTableName}"`)
 
     console.log(`[API] Query successful, returned ${data.length} rows`)
     return NextResponse.json({ success: true, data })
-  } catch (error) {
+  } catch (error: any) {
     console.error(`[API] Error fetching data for table ${tableName}:`, error)
     return NextResponse.json(
       { success: false, error: `Failed to fetch data for table ${tableName}: ${error.message}` },
