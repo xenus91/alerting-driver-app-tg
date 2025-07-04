@@ -73,13 +73,13 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       )
     }
 
-    // Запрос уникальных значений, исключая пустые строки и NULL
-    const query = `SELECT DISTINCT "${column}" FROM "${tableName.replace(/"/g, '""')}" WHERE "${column}" IS NOT NULL AND "${column}" != '' ORDER BY "${column}"`
+    // Запрос уникальных значений, исключая NULL, пустые строки и пробелы
+    const query = `SELECT DISTINCT "${column}" FROM "${tableName.replace(/"/g, '""')}" WHERE "${column}" IS NOT NULL AND TRIM("${column}") != '' ORDER BY "${column}"`
     console.log(`[API] Executing distinct query for table ${tableName}, column ${column}: ${query}`)
     const result = await client.query(query)
 
     const values = result.rows.map((row: any) => row[column])
-    console.log(`[API] Query successful, returned ${values.length} distinct values`)
+    console.log(`[API] Query successful, returned ${values.length} distinct values:`, values)
     return NextResponse.json({ success: true, data: values })
   } catch (error: any) {
     console.error(`[API] Error fetching distinct values for table ${tableName}, column ${column}:`, error)
