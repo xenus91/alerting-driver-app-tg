@@ -244,7 +244,7 @@ export async function sendMultipleTripMessageWithButtons(
 
       // Пункты погрузки
       if (trip.loading_points.length > 0) {
-        message += `� O'D0' <b>Погрузка:</b>\n`;
+        message += `📦 <b>Погрузка:</b>\n`
         trip.loading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
         });
