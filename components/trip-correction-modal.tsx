@@ -28,14 +28,16 @@ interface PointData {
   longitude?: string
 }
 
+/* ИЗМЕНЕНИЕ: Обновлён интерфейс TripCorrectionModalProps, чтобы onCorrectionSent принимал corrections и deletedTrips вместо tripIdentifiers и pointIds */
 interface TripCorrectionModalProps {
   isOpen: boolean
   onClose: () => void
   tripId: number
   phone: string
   driverName: string
-  onCorrectionSent: () => void
+  onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
 }
+
 
 export function TripCorrectionModal({
   isOpen,
