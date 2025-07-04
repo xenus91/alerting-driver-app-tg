@@ -197,7 +197,7 @@ export default function TripDetailPage() {
     })
 
     // Собираем маршрут из point_short_id (это point_id из таблицы points)
-    const route = sortedPoints.map((point) => point.point_short_id || point.point_id).join("->")
+    const route = sortedPoints.map((point) => point.point_short_id || point.point_id).join("-")
 
     console.log(`Route for trip ${tripIdentifier}:`, route, sortedPoints)
     return route

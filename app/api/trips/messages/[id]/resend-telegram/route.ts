@@ -106,15 +106,18 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log(`Prepared trip data for resending:`, tripData)
 
-    // Отправляем сообщение в Telegram
-    const telegramResult = await sendTripMessageWithButtons(
-      message.telegram_id,
-      tripData,
-      loading_points,
-      unloading_points,
-      message.first_name || "Водитель",
+   // Отправляем сообщение в Telegram
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+    const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
+      Number(message.telegram_id),
+      trips,
+      message.first_name || message.full_name || "Водитель",
       messageId,
-    )
+      false, // isCorrection = false, так как это повторная отправка
+      true, // isResend = true для шапки "ПОВТОРНАЯ ОТПРАВКА ЗАЯВОК"
+      message.telegram_message_id
+    );
+    // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
     // Обновляем статус сообщения
     const updateResult = await sql`

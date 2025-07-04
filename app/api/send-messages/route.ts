@@ -194,8 +194,10 @@ async function sendExistingMessages(tripId: number, sql: any) {
 
       console.log(`Sending message for ${tripsData.length} trips`)
 
+      // === НАЧАЛО ИЗМЕНЕНИЙ ===
+      // Вызываем sendMultipleTripMessageWithButtons с явными параметрами isCorrection: false, isResend: false
       const telegramResult = await sendMultipleTripMessageWithButtons(
-        user.telegram_id,
+        Number(user.telegram_id),
         tripsData,
         user.first_name || "Водитель",
         messageIds[0],
@@ -203,8 +205,9 @@ async function sendExistingMessages(tripId: number, sql: any) {
         false, // isResend = false для первичной отправки
         null // Нет предыдущего сообщения
       )
+      // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
-      // Обновляем статус всех сообщений для этого телефона
+      // === НАЧАЛО ИЗМЕНЕНИЙ ===
       // Обновляем статус всех сообщений и сохраняем текст сообщения
       for (const messageId of messageIds) {
         await updateMessageStatus(
@@ -212,9 +215,10 @@ async function sendExistingMessages(tripId: number, sql: any) {
           "sent",
           undefined,
           telegramResult.message_id,
-          telegramResult.messageText // Сохраняем текст сообщения
+          telegramResult.messageText
         )
       }
+      // === КОНЕЦ ИЗМЕНЕНИЙ ===
       sentCount += messageIds.length
 
       console.log(`Successfully sent messages for phone ${phone}`)
@@ -523,11 +527,12 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
           console.log(`Created unloading point: ${unloadingPoint.point_id}`)
         }
 
-        // Создаем сообщение для этого рейса с отформатированным текстом
+        // === НАЧАЛО ИЗМЕНЕНИЙ ===
+        // Создаем сообщение без текста, так как он будет обновлён после отправки
         await createTripMessage(
           mainTrip.id,
           tripDataItem.phone,
-          message, // Сохраняем отформатированное сообщение
+          null,
           user.telegram_id,
           {
             trip_identifier: tripDataItem.trip_identifier,
@@ -536,31 +541,37 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             driver_comment: tripDataItem.driver_comment,
           },
         )
+        // === КОНЕЦ ИЗМЕНЕНИЙ ===
       }
 
-      // Отправляем ОДНО сообщение со всеми рейсами
+     // Отправляем ОДНО сообщение со всеми рейсами
       try {
+        // === НАЧАЛО ИЗМЕНЕНИЙ ===
+        // Вызываем sendMultipleTripMessageWithButtons с явными параметрами isCorrection: false, isResend: false
         const telegramResult = await sendMultipleTripMessageWithButtons(
-          user.telegram_id,
+          Number(user.telegram_id),
           tripsForSending,
           firstName,
           mainTrip.id,
-           false, // isCorrection = false для первичной отправки
+          false, // isCorrection = false для первичной отправки
           false, // isResend = false для первичной отправки
           null // Нет предыдущего сообщения
         )
+        // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
         console.log(`Telegram API result:`, telegramResult)
 
-        // Обновляем статус ВСЕХ сообщений для этого пользователя на "sent"
+        // === НАЧАЛО ИЗМЕНЕНИЙ ===
+        // Обновляем статус ВСЕХ сообщений для этого пользователя на "sent" и сохраняем текст сообщения
         await sql`
           UPDATE trip_messages 
           SET status = 'sent', 
               sent_at = ${new Date().toISOString()},
-              telegram_message_id = ${telegramResult.message_id}
+              telegram_message_id = ${telegramResult.message_id},
               message = ${telegramResult.messageText}
           WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
         `
+        // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
         console.log(`Updated message status to 'sent' for phone: ${phone}`)
 

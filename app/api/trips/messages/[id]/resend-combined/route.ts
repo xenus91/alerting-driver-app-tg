@@ -137,15 +137,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
     console.log(`Prepared ${trips.length} trips for sending`);
 
-    // Отправляем сообщение через новую функцию, передавая старый telegram_message_id
+    // Отправляем сообщение через новую функцию
     // === НАЧАЛО ИЗМЕНЕНИЙ ===
     const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
-      user.telegram_id,
+      Number(user.telegram_id),
       trips,
       driverName,
       messageId,
-      isCorrection,
-      isResend, // Передаём isResend
+      isCorrection, // Используем переданный isCorrection (обычно false для повторной отправки)
+      true, // isResend = true для повторной отправки
       previousTelegramMessageId
     );
     // === КОНЕЦ ИЗМЕНЕНИЙ ===
