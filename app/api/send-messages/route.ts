@@ -1,4 +1,3 @@
-```typescript
 import { type NextRequest, NextResponse } from "next/server"
 import { cookies } from "next/headers"
 import {
@@ -634,4 +633,3 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
   })
 }
 /* === КОНЕЦ ИЗМЕНЁННОЙ ФУНКЦИИ === */
-```
