@@ -264,11 +264,10 @@ export function TripCorrectionModal({
     }
 
     const messageIds = [...new Set(corrections.map((c) => c.message_id))]
-    const tripIdentifiers = corrections.map((c) => c.trip_identifier)
-    const pointIds = corrections.flatMap((c) => c.points.map((p) => p.point_id))
-    const points = corrections.flatMap((c) => c.points)
+    
 
-    console.log("sendCorrection: tripIdentifiers:", tripIdentifiers, "pointIds:", pointIds, "points:", points)
+    /* ИЗМЕНЕНИЕ: Передаём полные corrections и deletedTrips в onCorrectionSent вместо tripIdentifiers и pointIds */
+      console.log("sendCorrection: corrections:", corrections, "deletedTrips:", deletedTrips)
 
     const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
       method: "POST",
