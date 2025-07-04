@@ -107,7 +107,9 @@ export default function DatabaseViewer() {
         const response = await fetch(`/api/database/table/${table}/distinct?column=${column}`, { cache: "no-store" })
         const result = await response.json()
         if (result.success) {
-          setDistinctValues((prev) => ({ ...prev, [column]: result.data }))
+          // Фильтруем пустые строки и null
+          const filteredData = result.data.filter((val: any) => val !== null && val !== "");
+          setDistinctValues((prev) => ({ ...prev, [column]: filteredData }))
         }
       } catch (error) {
         console.error(`[DatabaseViewer] Error fetching distinct values for ${column}:`, error)
@@ -243,7 +245,7 @@ export default function DatabaseViewer() {
 
             const filteredValues = values.filter((val) =>
               String(val).toLowerCase().includes(search.toLowerCase())
-            )
+            ).filter((val) => val !== "" && val !== null); // Исключаем пустые строки и null
 
             return (
               <div className="space-y-2">
@@ -264,7 +266,7 @@ export default function DatabaseViewer() {
                     <SelectItem value="">Все</SelectItem>
                     {filteredValues.map((val) => (
                       <SelectItem key={val} value={String(val)}>
-                        {String(val)}
+                        {String(val) || "—"}
                       </SelectItem>
                     ))}
                   </SelectContent>
