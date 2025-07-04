@@ -48,20 +48,22 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
+    // Проверка валидности столбцов
+    const validColumns = await sql`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = ${tableName}
+    `
+    const validColumnNames = validColumns.map((c: { column_name: string }) => c.column_name)
+
     // Формирование запроса
     const searchParams = request.nextUrl.searchParams
     const filters = Object.fromEntries(searchParams.entries())
     const conditions: string[] = []
     const values: any[] = []
 
-    // Проверка валидности столбцов для фильтрации
-    const validColumns = await sql`
-      SELECT column_name
-      FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = ${tableName}
-    `
     for (const [column, value] of Object.entries(filters)) {
-      if (value && validColumns.some((c: { column_name: string }) => c.column_name === column)) {
+      if (value && validColumnNames.includes(column)) {
         conditions.push(`${column} ILIKE $${values.length + 1}`)
         values.push(`%${value}%`)
       } else if (value) {
@@ -69,23 +71,33 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       }
     }
 
-    // Формируем запрос с использованием sql.query для безопасной обработки параметров
+    // Формирование SQL-запроса с использованием тегированного шаблона
     let query = `SELECT * FROM ${tableName}`
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(" AND ")}`
     }
 
-    // Проверка валидности столбца для сортировки
     const sortBy = searchParams.get("sortBy")
     const sortOrder = searchParams.get("sortOrder") || "ASC"
-    if (sortBy && validColumns.some((c: { column_name: string }) => c.column_name === sortBy)) {
+    if (sortBy && validColumnNames.includes(sortBy)) {
       query += ` ORDER BY ${sortBy} ${sortOrder}`
     } else if (sortBy) {
       console.warn(`[API] Invalid sort column ${sortBy} for table ${tableName}`)
     }
 
     console.log(`[API] Executing query for table ${tableName}: ${query}, values: ${JSON.stringify(values)}`)
-    const data = values.length > 0 ? await sql.query(query, values) : await sql`${query}`
+
+    // Выполнение запроса с использованием тегированного шаблона
+    let data;
+    if (values.length > 0) {
+      // Для запросов с параметрами используем sql с плейсхолдерами
+      const parameterizedQuery = sql([query, ...values.map((_, i) => `$${i + 1}`)].join(" "));
+      data = await parameterizedQuery(...values);
+    } else {
+      // Для запросов без параметров используем простой тегированный шаблон
+      data = await sql`${query}`;
+    }
+
     console.log(`[API] Query successful, returned ${data.length} rows`)
     return NextResponse.json({ success: true, data })
   } catch (error) {
