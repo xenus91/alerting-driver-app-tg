@@ -49,12 +49,60 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // Выполнение основного запроса
-    console.log(`[API] Executing query for table ${tableName}`)
-    const result = await client.query(`SELECT * FROM "${tableName.replace(/"/g, '""')}"`)
-    
-    console.log(`[API] Query successful, returned ${result.rowCount} rows`)
-    return NextResponse.json({ success: true, data: result.rows })
+    // Проверка валидности столбцов
+    const validColumnsRes = await client.query(`
+      SELECT column_name
+      FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = $1
+    `, [tableName])
+    const validColumnNames = validColumnsRes.rows.map((c: any) => c.column_name)
+
+    // Формирование условий
+    const searchParams = request.nextUrl.searchParams
+    const filters = Object.fromEntries(searchParams.entries())
+    const conditions: string[] = []
+    const values: any[] = []
+
+    for (const [column, value] of Object.entries(filters)) {
+      if (value && validColumnNames.includes(column) && column !== "offset" && column !== "limit" && column !== "sortBy" && column !== "sortOrder") {
+        conditions.push(`"${column}" = $${values.length + 1}`)
+        values.push(value)
+      } else if (value) {
+        console.warn(`[API] Invalid column ${column} for table ${tableName}`)
+      }
+    }
+
+    // Пагинация
+    const offset = Number(searchParams.get("offset")) || 0
+    const limit = Number(searchParams.get("limit")) || 10
+
+    // Подсчёт общего количества строк
+    const countQuery = `SELECT COUNT(*) as total FROM "${tableName.replace(/"/g, '""')}"${conditions.length > 0 ? ` WHERE ${conditions.join(" AND ")}` : ""}`
+    const countResult = await client.query(countQuery, conditions.length > 0 ? values : [])
+    const total = Number(countResult.rows[0].total)
+
+    // Формирование основного запроса
+    let query = `SELECT * FROM "${tableName.replace(/"/g, '""')}"`
+    if (conditions.length > 0) {
+      query += ` WHERE ${conditions.join(" AND ")}`
+    }
+
+    const sortBy = searchParams.get("sortBy")
+    const sortOrder = searchParams.get("sortOrder")?.toUpperCase() === "DESC" ? "DESC" : "ASC"
+    if (sortBy && validColumnNames.includes(sortBy)) {
+      query += ` ORDER BY "${sortBy}" ${sortOrder}`
+    } else if (sortBy) {
+      console.warn(`[API] Invalid sort column ${sortBy} for table ${tableName}`)
+    }
+
+    query += ` LIMIT $${values.length + 1} OFFSET $${values.length + 2}`
+    values.push(limit, offset)
+
+    console.log(`[API] Executing query for table ${tableName}: ${query}, values: ${JSON.stringify(values)}`)
+    const result = await client.query(query, values)
+
+    console.log(`[API] Query successful, returned ${result.rowCount} rows, total: ${total}`)
+    return NextResponse.json({ success: true, data: result.rows, total })
   } catch (error: any) {
     console.error(`[API] Error fetching data for table ${tableName}:`, error)
     return NextResponse.json(
