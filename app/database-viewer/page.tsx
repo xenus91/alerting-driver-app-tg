@@ -22,7 +22,6 @@ import {
   ColumnDef,
   ColumnFiltersState,
   SortingState,
-  flexRender,
 } from "@tanstack/react-table"
 
 interface TableData {
@@ -297,7 +296,11 @@ export default function DatabaseViewer() {
         </Select>
       </div>
 
-      {selectedTable && data.length > 0 ? (
+      {isLoading ? (
+        <div className="flex items-center justify-center p-8">
+          <span className="animate-spin mr-2">⟳</span> Загрузка...
+        </div>
+      ) : selectedTable && data.length > 0 ? (
         <div className="border rounded-md">
           <Table>
             <TableHeader>
@@ -309,10 +312,7 @@ export default function DatabaseViewer() {
                       onClick={header.column.getToggleSortingHandler()}
                       className="cursor-pointer"
                     >
-                      {flexRender(
-                        header.column.columnDef.header,
-                        header.getContext()
-                      )}
+                      {header.isPlaceholder ? null : header.column.columnDef.header}
                       {{
                         asc: " ↑",
                         desc: " ↓",
@@ -320,7 +320,7 @@ export default function DatabaseViewer() {
                       {header.column.getCanFilter() ? (
                         <Input
                           placeholder={`Фильтр ${header.column.columnDef.header}`}
-                          value={(header.column.getFilterValue() as string) ?? ""}
+                          value={(header.column.getFilterValue() as string) || ""}
                           onChange={(e) => header.column.setFilterValue(e.target.value)}
                           className="mt-1"
                         />
@@ -335,10 +335,9 @@ export default function DatabaseViewer() {
                 <TableRow key={row.id}>
                   {row.getVisibleCells().map((cell) => (
                     <TableCell key={cell.id}>
-                      {flexRender(
-                        cell.column.columnDef.cell,
-                        cell.getContext()
-                      )}
+                      {cell.column.id === "actions"
+                        ? cell.renderCell()
+                        : cell.renderCell()}
                     </TableCell>
                   ))}
                 </TableRow>
