@@ -246,6 +246,7 @@ export function TripCorrectionModal({
     } catch (error) {
       setError("Error saving corrections")
       console.error("Error saving corrections:", error)
+      return false
     } finally {
       setIsSaving(false)
     }
