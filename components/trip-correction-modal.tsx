@@ -250,51 +250,56 @@ export function TripCorrectionModal({
   }
 
   const sendCorrection = async () => {
-    setIsSending(true)
-    setError(null)
-    setSuccess(null)
+  setIsSending(true)
+  setError(null)
+  setSuccess(null)
 
-    try {
-      // === ИЗМЕНЕНИЕ: Ждём успешного сохранения корректировок ===
-      const saveSuccess = await saveCorrections()
-      if (!saveSuccess) {
-        throw new Error("Failed to save corrections before sending")
-      }
-      const messageIds = [...new Set(corrections.map((c) => c.message_id))]
-
-      const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone,
-          messageIds,
-          isCorrection: true,
-          deletedTrips,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
-        // === ИЗМЕНЕНИЕ: Ждём небольшую задержку для синхронизации базы данных ===
-        await new Promise((resolve) => setTimeout(resolve, 1000))
-        onCorrectionSent()
-        setTimeout(() => {
-          onClose()
-        }, 3000)
-      } else {
-        setError(data.error || "Failed to send correction")
-      }
-    } catch (error) {
-      setError("Error sending correction")
-      console.error("Error sending correction:", error)
-    } finally {
-      setIsSending(false)
+  try {
+    console.log("sendCorrection: Starting saveCorrections")
+    const saveSuccess = await saveCorrections()
+    if (!saveSuccess) {
+      throw new Error("Failed to save corrections before sending")
     }
+
+    const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+    const tripIdentifiers = corrections.map((c) => c.trip_identifier)
+    const pointIds = corrections.flatMap((c) => c.points.map((p) => p.point_id))
+    const points = corrections.flatMap((c) => c.points)
+
+    console.log("sendCorrection: tripIdentifiers:", tripIdentifiers, "pointIds:", pointIds, "points:", points)
+
+    const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        phone,
+        messageIds,
+        isCorrection: true,
+        deletedTrips,
+      }),
+    })
+
+    const data = await response.json()
+
+    if (data.success) {
+      setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
+      await new Promise((resolve) => setTimeout(resolve, 1000))
+      onCorrectionSent(tripIdentifiers, pointIds, points)
+      setTimeout(() => {
+        onClose()
+      }, 3000)
+    } else {
+      setError(data.error || "Failed to send correction")
+    }
+  } catch (error) {
+    setError("Error sending correction")
+    console.error("Error sending correction:", error)
+  } finally {
+    setIsSending(false)
   }
+}
 
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""

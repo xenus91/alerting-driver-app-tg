@@ -161,26 +161,19 @@ export default function TripDetailPage() {
   }
 
   const fetchTripPoints = async () => {
-  try {
-    console.log(`Fetching points for trip ${tripId}`)
-    const response = await fetch(`/api/trips/${tripId}/points`, {
-      headers: {
-        'Cache-Control': 'no-cache',
-      },
-    })
-    const data = await response.json()
-    console.log("Trip points response:", data)
-    if (data.success) {
-      setTripPoints(data.points)
-      console.log("Trip points set:", data.points)
-      return data.points
+    try {
+      console.log(`Fetching points for trip ${tripId}`)
+      const response = await fetch(`/api/trips/${tripId}/points`)
+      const data = await response.json()
+      console.log("Trip points response:", data)
+      if (data.success) {
+        setTripPoints(data.points)
+        console.log("Trip points set:", data.points)
+      }
+    } catch (error) {
+      console.error("Error fetching trip points:", error)
     }
-    return []
-  } catch (error) {
-    console.error("Error fetching trip points:", error)
-    return []
   }
-}
 
   useEffect(() => {
     fetchMessages()
@@ -787,53 +780,14 @@ export default function TripDetailPage() {
   }
 
 
-  const handleCorrectionSent = async (tripIdentifiers: string[], expectedPointIds: string[]) => {
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+const handleCorrectionSent = async () => {
   setIsLoading(true)
   try {
-    console.log("handleCorrectionSent: Starting with tripIdentifiers:", tripIdentifiers, "expectedPointIds:", expectedPointIds)
-
-    // Обновляем сообщения и точки одновременно
     await Promise.all([fetchMessages(), fetchTripPoints()])
-
-    // Дополнительный вызов fetchTripPoints для немедленного обновления
-    let points = await fetchTripPoints()
-
-    // Опрос fetchTripPoints до получения всех ожидаемых точек
-    let attempts = 0
-    const maxAttempts = 5
-    const pollInterval = 1000
-    let allPointsFound = false
-
-    while (attempts < maxAttempts && !allPointsFound) {
-      const pointsByTrip = tripIdentifiers.reduce((acc: Record<string, string[]>, tripId) => {
-        acc[tripId] = points
-          .filter((p: TripPoint) => p.trip_identifier === tripId)
-          .map((p: TripPoint) => p.point_id)
-        return acc
-      }, {})
-
-      allPointsFound = tripIdentifiers.every((tripId) =>
-        expectedPointIds.every((pointId) => pointsByTrip[tripId]?.includes(pointId))
-      )
-
-      if (!allPointsFound) {
-        console.log(
-          `Polling attempt ${attempts + 1}/${maxAttempts}: Missing points for tripIdentifiers`,
-          tripIdentifiers,
-          "current points:",
-          pointsByTrip
-        )
-        await new Promise((resolve) => setTimeout(resolve, pollInterval))
-        points = await fetchTripPoints()
-        attempts++
-      } else {
-        console.log("Polling successful: All expected points found:", pointsByTrip)
-      }
-    }
-
-    if (!allPointsFound) {
-      console.warn("Failed to fetch all expected trip points after max attempts. Final points:", points)
-    }
+    // Дополнительный вызов fetchTripPoints с задержкой для надёжности
+    await new Promise((resolve) => setTimeout(resolve, 1000))
+    await fetchTripPoints()
   } catch (error) {
     console.error("Error in handleCorrectionSent:", error)
   } finally {
@@ -841,6 +795,7 @@ export default function TripDetailPage() {
     setCorrectionModal(null)
   }
 }
+// === КОНЕЦ ИЗМЕНЕНИЙ ===
 
   return (
     <div className="space-y-6">
