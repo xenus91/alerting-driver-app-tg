@@ -40,7 +40,7 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
         { status: authResponse.status }
       )
     }
-    const authData = await response.json()
+    const authData = await authResponse.json()
     if (!authData.success || authData.user?.role !== "admin") {
       console.warn(`[API] Access denied for table ${tableName}: user role=${authData.user?.role || "unknown"}`)
       return NextResponse.json({ success: false, error: "Access denied" }, { status: 403 })
