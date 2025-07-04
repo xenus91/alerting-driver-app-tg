@@ -147,8 +147,7 @@ export default function DatabaseViewer() {
         const result = await response.json()
         if (result.success) {
           setData(result.data)
-          setTotalRows(result.total || result.data.length) // Предполагается, что API возвращает total
-          // Загрузка уникальных значений для фильтров
+          setTotalRows(result.total || result.data.length)
           validColumns.forEach((column) => fetchDistinctValues(selectedTable, column))
         } else {
           setError(result.error || `Failed to load data for table ${selectedTable}`)
@@ -177,7 +176,7 @@ export default function DatabaseViewer() {
     if (!isDragging || !tableRef.current) return
     e.preventDefault()
     const x = e.pageX - tableRef.current.offsetLeft
-    const walk = (x - startX) * 2 // Ускорение прокрутки
+    const walk = (x - startX) * 2
     tableRef.current.scrollLeft = scrollLeft - walk
   }
 
@@ -204,7 +203,7 @@ export default function DatabaseViewer() {
       const baseColumns: ColumnDef<TableData>[] = tableSchema.columns.map((col) => ({
         accessorKey: col.name,
         header: col.name,
-        filterFn: "equalsString",
+        filterFn: "equals",
         cell: ({ row, column }) => {
           const value = row.getValue(column.id)
           const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id
@@ -249,7 +248,7 @@ export default function DatabaseViewer() {
             return (
               <div className="space-y-2">
                 <Input
-                  placeholder="Search values..."
+                  placeholder="Поиск значений..."
                   value={search}
                   onChange={(e) => debouncedSetFilterSearch(columnName, e.target.value)}
                   className="h-8"
@@ -259,10 +258,10 @@ export default function DatabaseViewer() {
                   onValueChange={(value) => column.setFilterValue(value === "" ? undefined : value)}
                 >
                   <SelectTrigger className="h-8">
-                    <SelectValue placeholder="Select a value" />
+                    <SelectValue placeholder="Выберите значение" />
                   </SelectTrigger>
                   <SelectContent className="max-h-60 overflow-y-auto">
-                    <SelectItem value="">All</SelectItem>
+                    <SelectItem value="">Все</SelectItem>
                     {filteredValues.map((val) => (
                       <SelectItem key={val} value={String(val)}>
                         {String(val)}
@@ -278,13 +277,13 @@ export default function DatabaseViewer() {
 
       baseColumns.push({
         id: "actions",
-        header: "Actions",
+        header: "Действия",
         cell: ({ row }) => (
           <Button
             variant="destructive"
             size="sm"
             onClick={() => setDeleteDialog({ open: true, row: row.original })}
-            title="Delete row"
+            title="Удалить строку"
           >
             <Trash2 className="h-4 w-4" />
           </Button>
@@ -338,13 +337,13 @@ export default function DatabaseViewer() {
         setData((prev) =>
           prev.map((r) => (r.id === row.id ? { ...r, [columnId]: originalValue } : r))
         )
-        setError(result.error || "Failed to update row")
+        setError(result.error || "Не удалось обновить строку")
       }
     } catch (error) {
       setData((prev) =>
         prev.map((r) => (r.id === row.id ? { ...r, [columnId]: originalValue } : r))
       )
-      setError(`Error updating row: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setError(`Ошибка обновления строки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
       console.error("[DatabaseViewer] Error updating row:", error)
     } finally {
       setIsLoading(false)
@@ -370,11 +369,11 @@ export default function DatabaseViewer() {
       const result = await response.json()
       if (!result.success) {
         setData((prev) => [...prev, deleteDialog.row!])
-        setError(result.error || "Failed to delete row")
+        setError(result.error || "Не удалось удалить строку")
       }
     } catch (error) {
       setData((prev) => [...prev, deleteDialog.row!])
-      setError(`Error deleting row: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setError(`Ошибка удаления строки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
       console.error("[DatabaseViewer] Error deleting row:", error)
     } finally {
       setIsLoading(false)
