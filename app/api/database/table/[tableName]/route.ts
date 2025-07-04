@@ -48,10 +48,9 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // Формирование запроса
+    // Формирование запроса с использованием тегированного шаблона
     const searchParams = request.nextUrl.searchParams
     const filters = Object.fromEntries(searchParams.entries())
-    let query = `SELECT * FROM ${tableName}`
     const conditions: string[] = []
     const values: any[] = []
 
@@ -70,6 +69,8 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       }
     }
 
+    // Формируем запрос с использованием тегированного шаблона
+    let query = `SELECT * FROM ${tableName}`
     if (conditions.length > 0) {
       query += ` WHERE ${conditions.join(" AND ")}`
     }
@@ -77,12 +78,10 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
     // Проверка валидности столбца для сортировки
     const sortBy = searchParams.get("sortBy")
     const sortOrder = searchParams.get("sortOrder") || "ASC"
-    if (sortBy) {
-      if (validColumns.some((c: { column_name: string }) => c.column_name === sortBy)) {
-        query += ` ORDER BY ${sortBy} ${sortOrder}`
-      } else {
-        console.warn(`[API] Invalid sort column ${sortBy} for table ${tableName}`)
-      }
+    if (sortBy && validColumns.some((c: { column_name: string }) => c.column_name === sortBy)) {
+      query += ` ORDER BY ${sortBy} ${sortOrder}`
+    } else if (sortBy) {
+      console.warn(`[API] Invalid sort column ${sortBy} for table ${tableName}`)
     }
 
     console.log(`[API] Executing query for table ${tableName}: ${query}, values: ${JSON.stringify(values)}`)
