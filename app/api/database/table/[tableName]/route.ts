@@ -42,21 +42,35 @@ export async function GET(request: NextRequest, { params }: { params: { tableNam
       FROM information_schema.tables
       WHERE table_schema = 'public'
     `
-    const tableExists = validTables.some((t: { table_name: string }) => t.table_name === tableName)
+    const tableExists = validTables.some((t: any) => t.table_name === tableName)
     if (!tableExists) {
       console.error(`[API] Table ${tableName} does not exist`)
       return NextResponse.json({ success: false, error: `Table ${tableName} does not exist` }, { status: 400 })
     }
 
-    // ✅ Исправленный запрос с правильным использованием API
-    const escapedTableName = tableName.replace(/"/g, '""')
-    console.log(`[API] Executing query: SELECT * FROM "${escapedTableName}"`)
+    // ✅ Исправленный запрос с использованием правильного метода
+    console.log(`[API] Executing query for table ${tableName}`)
     
-    // Используем правильный метод для выполнения запроса
-    const data = await sql(`SELECT * FROM "${escapedTableName}"`)
+    // Используем параметризованный запрос через клиент SQL
+    const data = await sql(`
+      SELECT * 
+      FROM information_schema.columns 
+      WHERE table_schema = 'public' 
+        AND table_name = ${tableName}
+      ORDER BY ordinal_position
+    `)
 
-    console.log(`[API] Query successful, returned ${Array.isArray(data) ? data.length : 0} rows`)
-    return NextResponse.json({ success: true, data })
+    // Для получения данных таблицы используем другой подход
+    const tableData = await sql(`SELECT * FROM public."${tableName}"`)
+
+    console.log(`[API] Query successful, returned ${tableData.length} rows`)
+    return NextResponse.json({ 
+      success: true, 
+      data: {
+        columns: data,
+        rows: tableData
+      }
+    })
   } catch (error: any) {
     console.error(`[API] Error fetching data for table ${tableName}:`, error)
     return NextResponse.json(
