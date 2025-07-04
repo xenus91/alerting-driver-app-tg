@@ -145,6 +145,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       driverName,
       messageId,
       isCorrection,
+      isResend, // Передаём isResend
       previousTelegramMessageId
     );
     // === КОНЕЦ ИЗМЕНЕНИЙ ===

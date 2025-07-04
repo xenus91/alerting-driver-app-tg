@@ -199,11 +199,21 @@ async function sendExistingMessages(tripId: number, sql: any) {
         tripsData,
         user.first_name || "Водитель",
         messageIds[0],
+        false, // isCorrection = false для первичной отправки
+        false, // isResend = false для первичной отправки
+        null // Нет предыдущего сообщения
       )
 
       // Обновляем статус всех сообщений для этого телефона
+      // Обновляем статус всех сообщений и сохраняем текст сообщения
       for (const messageId of messageIds) {
-        await updateMessageStatus(messageId, "sent", undefined, telegramResult.message_id)
+        await updateMessageStatus(
+          messageId,
+          "sent",
+          undefined,
+          telegramResult.message_id,
+          telegramResult.messageText // Сохраняем текст сообщения
+        )
       }
       sentCount += messageIds.length
 
@@ -535,6 +545,9 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
           tripsForSending,
           firstName,
           mainTrip.id,
+           false, // isCorrection = false для первичной отправки
+          false, // isResend = false для первичной отправки
+          null // Нет предыдущего сообщения
         )
 
         console.log(`Telegram API result:`, telegramResult)
@@ -545,6 +558,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
           SET status = 'sent', 
               sent_at = ${new Date().toISOString()},
               telegram_message_id = ${telegramResult.message_id}
+              message = ${telegramResult.messageText}
           WHERE trip_id = ${mainTrip.id} AND phone = ${phone}
         `
 

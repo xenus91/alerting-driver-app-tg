@@ -197,7 +197,7 @@ export default function TripDetailPage() {
     })
 
     // Собираем маршрут из point_short_id (это point_id из таблицы points)
-    const route = sortedPoints.map((point) => point.point_short_id || point.point_id).join("-")
+    const route = sortedPoints.map((point) => point.point_short_id || point.point_id).join("->")
 
     console.log(`Route for trip ${tripIdentifier}:`, route, sortedPoints)
     return route
@@ -241,6 +241,17 @@ export default function TripDetailPage() {
 
       driver.trips.push(tripData)
     })
+
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+    // Сортировка рейсов каждого водителя по planned_loading_time
+    driverMap.forEach((driver) => {
+      driver.trips.sort((a, b) => {
+        const timeA = new Date(a.planned_loading_time).getTime()
+        const timeB = new Date(b.planned_loading_time).getTime()
+        return timeA - timeB // Сортировка по возрастанию
+      })
+    })
+    // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
     // Определяем общий статус для каждого водителя
     driverMap.forEach((driver) => {
