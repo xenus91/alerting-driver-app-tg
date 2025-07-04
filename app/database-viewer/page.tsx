@@ -103,12 +103,19 @@ export default function DatabaseViewer() {
         setError(null)
         try {
           const params = new URLSearchParams()
+          const validColumns = tables.find((t) => t.name === selectedTable)?.columns.map((c) => c.name) || []
           columnFilters.forEach((filter) => {
-            params.append(filter.id, filter.value as string)
+            if (validColumns.includes(filter.id)) {
+              params.append(filter.id, filter.value as string)
+            } else {
+              console.warn(`[DatabaseViewer] Invalid filter column ${filter.id} for table ${selectedTable}`)
+            }
           })
-          if (sorting.length > 0) {
+          if (sorting.length > 0 && validColumns.includes(sorting[0].id)) {
             params.append("sortBy", sorting[0].id)
             params.append("sortOrder", sorting[0].desc ? "DESC" : "ASC")
+          } else if (sorting.length > 0) {
+            console.warn(`[DatabaseViewer] Invalid sort column ${sorting[0].id} for table ${selectedTable}`)
           }
           console.log(`[DatabaseViewer] Fetching data for table ${selectedTable} with params: ${params.toString()}`)
           const response = await fetch(`/api/database/table/${selectedTable}?${params.toString()}`, {
@@ -133,7 +140,7 @@ export default function DatabaseViewer() {
       }
       fetchTableData()
     }
-  }, [selectedTable, columnFilters, sorting])
+  }, [selectedTable, columnFilters, sorting, tables])
 
   const columns: ColumnDef<TableData>[] = useMemo(() => {
     if (!selectedTable || !tables.length) return []
