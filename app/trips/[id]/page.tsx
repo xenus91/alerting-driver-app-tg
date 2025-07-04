@@ -802,22 +802,89 @@ export default function TripDetailPage() {
   }
 
 
-    // === НАЧАЛО ИЗМЕНЕНИЙ ===
-const handleCorrectionSent = async () => {
-  setIsLoading(true)
-  try {
-    await Promise.all([fetchMessages(), fetchTripPoints()])
-    // Дополнительный вызов fetchTripPoints с задержкой для надёжности
-    await new Promise((resolve) => setTimeout(resolve, 1000))
-    await fetchTripPoints()
-  } catch (error) {
-    console.error("Error in handleCorrectionSent:", error)
-  } finally {
-    setIsLoading(false)
-    setCorrectionModal(null)
+ /* ИЗМЕНЕНИЕ: Обновлён handleCorrectionSent для принятия corrections и deletedTrips, реализовано оптимистичное обновление tripPoints и фоновая синхронизация */
+  const handleCorrectionSent = async (corrections: CorrectionData[], deletedTrips: string[]) => {
+    setIsLoading(true)
+    try {
+      console.log("handleCorrectionSent: Starting with corrections:", corrections, "deletedTrips:", deletedTrips)
+
+      // Оптимистичное обновление tripPoints
+      const optimisticPoints = corrections.flatMap((trip) =>
+        trip.points.map((point) => ({
+          point_id: point.point_id,
+          point_num: point.point_num,
+          point_type: point.point_type,
+          point_name: point.point_name || "",
+          trip_identifier: trip.trip_identifier,
+          phone: trip.phone,
+          point_short_id: point.point_id,
+          door_open_1: false,
+          door_open_2: false,
+          door_open_3: false,
+        }))
+      )
+
+      // Удаляем точки для удалённых рейсов и обновляем точки для скорректированных рейсов
+      setTripPoints((prev) => {
+        const otherPoints = prev.filter(
+          (p) =>
+            !corrections.some((c) => c.trip_identifier === p.trip_identifier && c.phone === p.phone) &&
+            !deletedTrips.includes(p.trip_identifier)
+        )
+        return [...otherPoints, ...optimisticPoints]
+      })
+      console.log("Optimistic update: tripPoints set to:", optimisticPoints)
+
+      // Обновляем сообщения
+      await fetchMessages()
+
+      // Фоновая синхронизация с сервером
+      const tripIdentifiers = corrections.map((c) => c.trip_identifier)
+      const expectedPointIds = corrections.flatMap((c) => c.points.map((p) => p.point_id))
+      let points = await fetchTripPoints()
+      let attempts = 0
+      const maxAttempts = 5
+      const pollInterval = 1000
+      let allPointsFound = false
+
+      while (attempts < maxAttempts && !allPointsFound) {
+        const pointsByTrip = tripIdentifiers.reduce((acc: Record<string, string[]>, tripId) => {
+          acc[tripId] = points
+            .filter((p: TripPoint) => p.trip_identifier === tripId && p.phone === corrections[0].phone)
+            .map((p: TripPoint) => p.point_id)
+          return acc
+        }, {})
+
+        allPointsFound = tripIdentifiers.every((tripId) =>
+          expectedPointIds.every((pointId) => pointsByTrip[tripId]?.includes(pointId))
+        )
+
+        if (!allPointsFound) {
+          console.log(
+            `Polling attempt ${attempts + 1}/${maxAttempts}: Missing points for tripIdentifiers`,
+            tripIdentifiers,
+            "current points:",
+            pointsByTrip
+          )
+          await new Promise((resolve) => setTimeout(resolve, pollInterval))
+          points = await fetchTripPoints()
+          attempts++
+        } else {
+          console.log("Polling successful: All expected points found:", pointsByTrip)
+        }
+      }
+
+      if (!allPointsFound) {
+        console.warn("Failed to fetch all expected trip points after max attempts. Final points:", points)
+        setTripPoints(points) // Откат к данным с сервера
+      }
+    } catch (error) {
+      console.error("Error in handleCorrectionSent:", error)
+    } finally {
+      setIsLoading(false)
+      setCorrectionModal(null)
+    }
   }
-}
-// === КОНЕЦ ИЗМЕНЕНИЙ ===
 
   return (
     <div className="space-y-6">
