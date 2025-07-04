@@ -18,7 +18,7 @@ const OPERATORS = [
 
 const NULL_PLACEHOLDER = "__NULL__";
 
-interface FilterCondition {
+export interface FilterCondition {
   column: string;
   operator: string;
   value: string | string[];
@@ -37,7 +37,7 @@ interface FilterBlockProps {
   applyFilters: () => void;
 }
 
-export function FilterBlock({
+export default function FilterBlock({
   tables,
   selectedTable,
   pendingFilterConditions,
