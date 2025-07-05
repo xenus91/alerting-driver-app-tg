@@ -638,8 +638,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                       <TableBody>
                         {trip.points.map((point, pointIndex) => {
                           const searchKey = `${driverIndex}-${tripIndex}-${pointIndex}`;
-                          const isFirst = pointIndex === 0;
-                          const isLast = pointIndex === trip.points.length - 1;
                           
                           return (
                             <TableRow key={pointIndex}>
@@ -717,26 +715,30 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                                 </Popover>
                               </TableCell>
                               <TableCell>
-                                <div className="flex gap-1">
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => movePointUp(driverIndex, tripIndex, pointIndex)}
-                                    disabled={isFirst}
-                                    title="Переместить вверх"
-                                  >
-                                    <ChevronUp className="h-4 w-4" />
-                                  </Button>
-                                  <Button
-                                    variant="outline"
-                                    size="icon"
-                                    onClick={() => movePointDown(driverIndex, tripIndex, pointIndex)}
-                                    disabled={isLast}
-                                    title="Переместить вниз"
-                                  >
-                                    <ChevronDown className="h-4 w-4" />
-                                  </Button>
-                                </div>
+                                {trip.points.length > 1 && (
+                                  <div className="flex flex-col gap-1 justify-center items-center">
+                                    {pointIndex > 0 && (
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => movePointUp(driverIndex, tripIndex, pointIndex)}
+                                        title="Переместить вверх"
+                                      >
+                                        <ChevronUp className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                    {pointIndex < trip.points.length - 1 && (
+                                      <Button
+                                        variant="outline"
+                                        size="icon"
+                                        onClick={() => movePointDown(driverIndex, tripIndex, pointIndex)}
+                                        title="Переместить вниз"
+                                      >
+                                        <ChevronDown className="h-4 w-4" />
+                                      </Button>
+                                    )}
+                                  </div>
+                                )}
                               </TableCell>
                               <TableCell>
                                 <Button
