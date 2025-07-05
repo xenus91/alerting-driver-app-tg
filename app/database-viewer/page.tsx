@@ -633,304 +633,299 @@ export default function DatabaseViewer() {
   })
 
   return (
-    <div className="relative min-h-screen">
-      {/* Боковая панель фильтров */}
-      <div 
-        className={`fixed top-0 left-0 h-full w-80 bg-white z-50 shadow-xl transform transition-transform duration-300 ${
-          showFilters ? 'translate-x-0' : '-translate-x-full'
-        }`}
-      >
-        <div className="p-4">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-lg font-bold">Фильтры</h2>
+    <div className="space-y-4 p-4">
+      <div>
+        <h1 className="text-2xl font-bold">Просмотр базы данных</h1>
+        <p className="text-muted-foreground">Управление таблицами базы данных</p>
+      </div>
+
+      {error && (
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {/* Строка управления */}
+      <div className="flex flex-wrap items-center gap-2">
+        {/* Выбор таблицы */}
+        <div className="flex-1 min-w-[200px]">
+          <Select value={selectedTable ?? ""} onValueChange={setSelectedTable} disabled={isLoading}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Выберите таблицу" />
+            </SelectTrigger>
+            <SelectContent>
+              {tables.map(table => (
+                <SelectItem key={table.name} value={table.name}>
+                  {table.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Кнопки управления */}
+        <div className="flex items-center gap-2">
+          {/* Кнопка фильтров */}
+          <Button 
+            variant={filtersOpen ? "default" : "outline"} 
+            size="icon"
+            title="Фильтры"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor">
+              <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+            </svg>
+          </Button>
+
+          {/* Управление колонками - только иконка */}
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="icon"
+                title="Управление колонками"
+              >
+                <Columns className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-60">
+              <div className="space-y-2">
+                <h4 className="font-medium">Видимые колонки</h4>
+                {table.getAllLeafColumns().map(column => (
+                  <div key={column.id} className="flex items-center space-x-2">
+                    <input
+                      type="checkbox"
+                      checked={column.getIsVisible()}
+                      onChange={column.getToggleVisibilityHandler()}
+                      className="w-4 h-4"
+                    />
+                    <label className="text-sm font-medium leading-none">
+                      {column.id}
+                    </label>
+                  </div>
+                ))}
+              </div>
+            </PopoverContent>
+          </Popover>
+
+          {/* Кнопка удаления выбранных - появляется только при выборе */}
+          {Object.keys(selectedRows).length > 0 && (
             <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => setShowFilters(false)}
+              variant="destructive" 
+              onClick={handleDeleteSelected}
+              className="whitespace-nowrap transition-all duration-300"
+              size="sm"
+              style={{
+                maxWidth: Object.keys(selectedRows).length > 0 ? '200px' : '0',
+                opacity: Object.keys(selectedRows).length > 0 ? 1 : 0
+              }}
             >
-              <X className="h-5 w-5" />
+              <Trash2 className="mr-1 h-4 w-4" />
+              Удалить ({Object.keys(selectedRows).length})
             </Button>
-          </div>
-          <FilterBlock
-            tables={tables}
-            selectedTable={selectedTable}
-            pendingFilterConditions={pendingFilterConditions}
-            distinctValues={getDistinctValues}
-            addFilterCondition={addFilterCondition}
-            updateFilterCondition={updateFilterCondition}
-            removeFilterCondition={removeFilterCondition}
-            clearAllFilters={clearAllFilters}
-            applyFilters={applyFilters}
-          />
+          )}
         </div>
       </div>
 
-      {/* Основной контент */}
-      <div className={`transition-all duration-300 ${showFilters ? 'ml-80' : 'ml-0'}`}>
-        <div className="space-y-4 p-4">
-          <div>
-            <h1 className="text-2xl font-bold">Просмотр базы данных</h1>
-            <p className="text-muted-foreground">Управление таблицами базы данных</p>
+      {/* Выезжающий блок фильтров */}
+      <div 
+        className="overflow-hidden transition-all duration-300 ease-in-out rounded-md border"
+        style={{ height: `${filtersHeight}px` }}
+      >
+        {filtersOpen && (
+          <div className="p-4">
+            <FilterBlock
+              tables={tables}
+              selectedTable={selectedTable}
+              pendingFilterConditions={pendingFilterConditions}
+              distinctValues={getDistinctValues}
+              addFilterCondition={addFilterCondition}
+              updateFilterCondition={updateFilterCondition}
+              removeFilterCondition={removeFilterCondition}
+              clearAllFilters={clearAllFilters}
+              applyFilters={applyFilters}
+              onClose={() => setFiltersOpen(false)}
+            />
           </div>
+        )}
+      </div>
 
-          {error && (
-            <Alert variant="destructive">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
+      {/* Остальной код без изменений */}
+      {isLoading ? (
+        <div className="flex items-center justify-center p-8">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          Загрузка...
+        </div>
+      ) : selectedTable ? (
+        <>
+          <div className="rounded-md border overflow-x-auto">
+            <Table>
+              <TableHeader>
+                {table.getHeaderGroups().map(headerGroup => (
+                  <TableRow key={headerGroup.id}>
+                    {/* Колонка с чекбоксом для выделения всех */}
+                    <TableHead className="w-12">
+                      <button 
+                        onClick={toggleSelectAll}
+                        className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
+                        title="Выделить все"
+                      >
+                        {Object.keys(selectedRows).length === data.length && data.length > 0 && (
+                          <Check className="h-4 w-4 text-blue-600" />
+                        )}
+                      </button>
+                    </TableHead>
+                    
+                    {headerGroup.headers.map(header => (
+                      <TableHead key={header.id} className="min-w-[150px]">
+                        <div className="flex items-center gap-1">
+                          <div
+                            onClick={header.column.getToggleSortingHandler()}
+                            className="cursor-pointer flex items-center gap-1"
+                          >
+                            {flexRender(header.column.columnDef.header, header.getContext())}
+                            {{
+                              asc: "↑",
+                              desc: "↓",
+                            }[header.column.getIsSorted() as string] ?? null}
+                          </div>
+                        </div>
+                      </TableHead>
+                    ))}
+                  </TableRow>
+                ))}
+              </TableHeader>
+              <TableBody>
+                {table.getRowModel().rows.length > 0 ? (
+                  table.getRowModel().rows.map(row => {
+                    const tableSchema = tables.find(t => t.name === selectedTable);
+                    if (!tableSchema) return null;
+                    
+                    return (
+                      <TableRow key={row.id}>
+                        {/* Чекбокс для выделения строки */}
+                        <TableCell>
+                          <button 
+                            onClick={() => toggleRowSelection(row.original.id)}
+                            className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
+                          >
+                            {selectedRows[row.original.id] && (
+                              <Check className="h-4 w-4 text-blue-600" />
+                            )}
+                          </button>
+                        </TableCell>
+                        
+                        {row.getVisibleCells().map(cell => {
+                          const columnId = cell.column.id;
+                          const columnDef = columns.find(col => col.accessorKey === columnId);
+                          const columnType = columnDef?.meta?.type || "text";
+                          const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
+                          const value = isEditing ? editValue : cell.getValue();
 
-          {/* Строка управления */}
-          <div className="flex flex-wrap items-center gap-2">
-            {/* Выбор таблицы */}
-            <div className={`flex-1 min-w-[200px] transition-all duration-300 ${showFilters ? 'max-w-[calc(100%-120px)]' : ''}`}>
-              <Select value={selectedTable ?? ""} onValueChange={setSelectedTable} disabled={isLoading}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder="Выберите таблицу" />
+                          return (
+                            <TableCell key={cell.id} className="min-w-[150px]">
+                              <div
+                                className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
+                                onDoubleClick={() => {
+                                  setEditingCell({ rowId: row.id, columnId });
+                                  setEditValue(value);
+                                }}
+                              >
+                                <TableCellRenderer
+                                  value={value}
+                                  columnType={columnType}
+                                  columnName={columnId}
+                                  tableSchema={tableSchema}
+                                  isEditing={isEditing}
+                                  onEditChange={setEditValue}
+                                  onSave={() => handleSaveEdit(row.original, columnId)}
+                                  onCancel={() => setEditingCell(null)}
+                                />
+                              </div>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
+                    );
+                  })
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={table.getAllColumns().length + 1} className="h-24 text-center">
+                      Нет данных для отображения
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          
+          {/* Пагинация без изменений */}
+          <div className="flex items-center justify-between p-4">
+            <div className="flex items-center gap-2">
+              <span>Строк на странице:</span>
+              <Select
+                value={String(pageSize)}
+                onValueChange={value => setPageSize(Number(value))}
+              >
+                <SelectTrigger className="w-20">
+                  <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  {tables.map(table => (
-                    <SelectItem key={table.name} value={table.name}>
-                      {table.name}
+                  {[10, 25, 50].map(size => (
+                    <SelectItem key={size} value={String(size)}>
+                      {size}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-
-            {/* Группа компактных кнопок */}
             <div className="flex items-center gap-2">
-              {/* Фильтры */}
-              <Button 
-                variant={showFilters ? "secondary" : "outline"} 
-                size="icon"
-                title="Фильтры"
-                onClick={() => setShowFilters(!showFilters)}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.previousPage()}
+                disabled={!table.getCanPreviousPage()}
               >
-                <Filter className="h-4 w-4" />
+                Назад
               </Button>
-
-              {/* Управление колонками - только иконка */}
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button 
-                    variant="outline" 
-                    size="icon"
-                    title="Управление колонками"
-                  >
-                    <Columns className="h-4 w-4" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-60">
-                  <div className="space-y-2">
-                    <h4 className="font-medium">Видимые колонки</h4>
-                    {table.getAllLeafColumns().map(column => (
-                      <div key={column.id} className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          checked={column.getIsVisible()}
-                          onChange={column.getToggleVisibilityHandler()}
-                          className="w-4 h-4"
-                        />
-                        <label className="text-sm font-medium leading-none">
-                          {column.id}
-                        </label>
-                      </div>
-                    ))}
-                  </div>
-                </PopoverContent>
-              </Popover>
-
-              {/* Кнопка удаления выбранных - компактная */}
-              {Object.keys(selectedRows).length > 0 && (
-                <Button 
-                  variant="destructive" 
-                  onClick={handleDeleteSelected}
-                  className="whitespace-nowrap"
-                  size="sm"
-                >
-                  <Trash2 className="mr-1 h-4 w-4" />
-                  Удалить ({Object.keys(selectedRows).length})
-                </Button>
-              )}
+              <span>
+                Страница {table.getState().pagination.pageIndex + 1} из {table.getPageCount()}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => table.nextPage()}
+                disabled={!table.getCanNextPage()}
+              >
+                Вперед
+              </Button>
             </div>
           </div>
+        </>
+      ) : null}
 
-          {isLoading ? (
-            <div className="flex items-center justify-center p-8">
-              <Loader2 className="h-6 w-6 animate-spin mr-2" />
-              Загрузка...
-            </div>
-          ) : selectedTable ? (
-            <>
-              <div className="rounded-md border overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    {table.getHeaderGroups().map(headerGroup => (
-                      <TableRow key={headerGroup.id}>
-                        {/* Колонка с чекбоксом для выделения всех */}
-                        <TableHead className="w-12">
-                          <button 
-                            onClick={toggleSelectAll}
-                            className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
-                            title="Выделить все"
-                          >
-                            {Object.keys(selectedRows).length === data.length && data.length > 0 && (
-                              <Check className="h-4 w-4 text-blue-600" />
-                            )}
-                          </button>
-                        </TableHead>
-                        
-                        {headerGroup.headers.map(header => (
-                          <TableHead key={header.id} className="min-w-[150px]">
-                            <div className="flex items-center gap-1">
-                              <div
-                                onClick={header.column.getToggleSortingHandler()}
-                                className="cursor-pointer flex items-center gap-1"
-                              >
-                                {flexRender(header.column.columnDef.header, header.getContext())}
-                                {{
-                                  asc: "↑",
-                                  desc: "↓",
-                                }[header.column.getIsSorted() as string] ?? null}
-                              </div>
-                            </div>
-                          </TableHead>
-                        ))}
-                      </TableRow>
-                    ))}
-                  </TableHeader>
-                  <TableBody>
-                    {table.getRowModel().rows.length > 0 ? (
-                      table.getRowModel().rows.map(row => {
-                        const tableSchema = tables.find(t => t.name === selectedTable);
-                        if (!tableSchema) return null;
-                        
-                        return (
-                          <TableRow key={row.id}>
-                            {/* Чекбокс для выделения строки */}
-                            <TableCell>
-                              <button 
-                                onClick={() => toggleRowSelection(row.original.id)}
-                                className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
-                              >
-                                {selectedRows[row.original.id] && (
-                                  <Check className="h-4 w-4 text-blue-600" />
-                                )}
-                              </button>
-                            </TableCell>
-                            
-                            {row.getVisibleCells().map(cell => {
-                              const columnId = cell.column.id;
-                              const columnDef = columns.find(col => col.accessorKey === columnId);
-                              const columnType = columnDef?.meta?.type || "text";
-                              const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
-                              const value = isEditing ? editValue : cell.getValue();
-
-                              return (
-                                <TableCell key={cell.id} className="min-w-[150px]">
-                                  <div
-                                    className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
-                                    onDoubleClick={() => {
-                                      setEditingCell({ rowId: row.id, columnId });
-                                      setEditValue(value);
-                                    }}
-                                  >
-                                    <TableCellRenderer
-                                      value={value}
-                                      columnType={columnType}
-                                      columnName={columnId}
-                                      tableSchema={tableSchema}
-                                      isEditing={isEditing}
-                                      onEditChange={setEditValue}
-                                      onSave={() => handleSaveEdit(row.original, columnId)}
-                                      onCancel={() => setEditingCell(null)}
-                                    />
-                                  </div>
-                                </TableCell>
-                              );
-                            })}
-                          </TableRow>
-                        );
-                      })
-                    ) : (
-                      <TableRow>
-                        <TableCell colSpan={table.getAllColumns().length + 1} className="h-24 text-center">
-                          Нет данных для отображения
-                        </TableCell>
-                      </TableRow>
-                    )}
-                  </TableBody>
-                </Table>
-              </div>
-              
-              <div className="flex items-center justify-between p-4">
-                <div className="flex items-center gap-2">
-                  <span>Строк на странице:</span>
-                  <Select
-                    value={String(pageSize)}
-                    onValueChange={value => setPageSize(Number(value))}
-                  >
-                    <SelectTrigger className="w-20">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {[10, 25, 50].map(size => (
-                        <SelectItem key={size} value={String(size)}>
-                          {size}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="flex items-center gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.previousPage()}
-                    disabled={!table.getCanPreviousPage()}
-                  >
-                    Назад
-                  </Button>
-                  <span>
-                    Страница {table.getState().pagination.pageIndex + 1} из {table.getPageCount()}
-                  </span>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => table.nextPage()}
-                    disabled={!table.getCanNextPage()}
-                  >
-                    Вперед
-                  </Button>
-                </div>
-              </div>
-            </>
-          ) : null}
-
-          {/* Диалог подтверждения удаления выбранных строк */}
-          <Dialog open={deleteDialog.open} onOpenChange={open => setDeleteDialog({ open, rowIds: open ? deleteDialog.rowIds : [] })}>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Подтверждение удаления</DialogTitle>
-                <DialogDescription>
-                  Вы уверены, что хотите удалить выбранные строки? Это действие нельзя отменить.
-                  <br />
-                  <span className="font-medium">Количество: {deleteDialog.rowIds.length}</span>
-                </DialogDescription>
-              </DialogHeader>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDeleteDialog({ open: false, rowIds: [] })}>
-                  Отмена
-                </Button>
-                <Button variant="destructive" onClick={confirmDeleteSelected}>
-                  Удалить
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        </div>
-      </div>
+      {/* Диалог подтверждения удаления выбранных строк */}
+      <Dialog open={deleteDialog.open} onOpenChange={open => setDeleteDialog({ open, rowIds: open ? deleteDialog.rowIds : [] })}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Подтверждение удаления</DialogTitle>
+            <DialogDescription>
+              Вы уверены, что хотите удалить выбранные строки? Это действие нельзя отменить.
+              <br />
+              <span className="font-medium">Количество: {deleteDialog.rowIds.length}</span>
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, rowIds: [] })}>
+              Отмена
+            </Button>
+            <Button variant="destructive" onClick={confirmDeleteSelected}>
+              Удалить
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
