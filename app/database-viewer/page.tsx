@@ -667,8 +667,7 @@ export default function DatabaseViewer() {
         {/* Выезжающий блок фильтров */}
         <div 
           className={`transition-all duration-300 ease-in-out overflow-hidden ${
-            filtersOpen ? 'w-[400px] opacity-100' : 'w-0 opacity-0'
-          }`}
+            filtersOpen ? 'w-[400px] opacity-100' : 'w-0 opacity-0'}`}
         >
           <div className="w-[400px]">
             <FilterBlock
