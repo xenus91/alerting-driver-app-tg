@@ -290,6 +290,8 @@ export default function DatabaseViewer() {
     rowIds: [] 
   })
   const [showFilters, setShowFilters] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  const [filtersHeight, setFiltersHeight] = useState(0);
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
@@ -398,6 +400,16 @@ export default function DatabaseViewer() {
 
     fetchTableData()
   }, [selectedTable, filterConditions, sorting, pageIndex, pageSize])
+
+
+   // Эффект для анимации открытия/закрытия фильтров
+  useEffect(() => {
+    if (filtersOpen) {
+      setFiltersHeight(300); // Примерная высота блока фильтров
+    } else {
+      setFiltersHeight(0);
+    }
+  }, [filtersOpen]);
 
   // Получение уникальных значений для колонки
   const getDistinctValues = useCallback((columnId: string) => {
