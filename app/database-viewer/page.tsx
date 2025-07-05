@@ -45,7 +45,7 @@ interface TableData {
 
 interface TableSchema {
   name: string
-  columns: { name: string; type: string }[]
+  columns: { name: string; type: string ; enumValues?: string[];}[]
 }
 
 const NULL_PLACEHOLDER = "__NULL__";
