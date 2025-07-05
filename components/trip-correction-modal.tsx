@@ -357,7 +357,7 @@ export function TripCorrectionModal({
     }))
   }, [])
 
-  / В родительском компоненте TripCorrectionModal
+  // В родительском компоненте TripCorrectionModal
 const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
   setCorrections(prev => {
     const newCorrections = [...prev];
