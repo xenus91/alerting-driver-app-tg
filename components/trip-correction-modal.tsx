@@ -214,7 +214,7 @@ export function TripCorrectionModal({
           driver_comment: trip.driver_comment,
           message_id: trip.message_id,
           point_type: point.point_type,
-          point_num: index + 1,
+          point_num: point.point_num,
           point_id: point.point_id,
           point_name: point.point_name,
           latitude: point.latitude,
