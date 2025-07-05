@@ -60,6 +60,15 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   const [driverSearchOpen, setDriverSearchOpen] = useState(false)
   const [pointSearchOpen, setPointSearchOpen] = useState<{ [key: string]: boolean }>({})
 
+
+  // Функция для переключения состояния поиска водителя
+  const toggleDriverSearch = (key: string) => {
+    setDriverSearchOpen(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
+
   // Загружаем данные при открытии модального окна
   useEffect(() => {
     if (isOpen) {
@@ -553,7 +562,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                     <label className="text-sm font-medium">Номер рейса *</label>
                     <Input
                       value={trip.trip_identifier}
-                      onChange={(e) => updateTrip(tripIndex, "trip_identifier", e.target.value)}
+                      onChange={(e) => updateTrip(driverIndex, tripIndex, "trip_identifier", e.target.value)}
                       placeholder="Введите номер рейса"
                     />
                   </div>
@@ -603,7 +612,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                             <Select
                               value={point.point_type}
                               onValueChange={(value: "P" | "D") =>
-                                updatePoint(tripIndex, pointIndex, "point_type", value)
+                                updatePoint(driverIndex, tripIndex, pointIndex, "point_type", value)
                               }
                             >
                               <SelectTrigger className="w-20">
@@ -628,7 +637,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                               type="number"
                               value={point.point_num}
                               onChange={(e) =>
-                                updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))
+                                updatePoint(driverIndex, tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))
                               }
                               className="w-16"
                             />
@@ -636,7 +645,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                           <TableCell>
                             <Popover
                               open={pointSearchOpen[searchKey] || false}
-                              onOpenChange={() => togglePointSearch(searchKey)}
+                              onOpenChange={() => togglePointSearch(`${driverIndex}-${tripIndex}-${pointIndex}`)}
                             >
                               <PopoverTrigger asChild>
                                 <Button
@@ -660,8 +669,8 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                                           key={availablePoint.point_id}
                                           value={`${availablePoint.point_id} ${availablePoint.point_name}`}
                                           onSelect={() => {
-                                            updatePoint(tripIndex, pointIndex, "point_id", availablePoint.point_id)
-                                            togglePointSearch(searchKey)
+                                            updatePoint(driverIndex, tripIndex, pointIndex, "point_id", availablePoint.point_id)
+                                            togglePointSearch(`${driverIndex}-${tripIndex}-${pointIndex}`)
                                           }}
                                         >
                                           <Check
@@ -684,7 +693,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                           </TableCell>
                           <TableCell>
                             <Button
-                              onClick={() => removePoint(tripIndex, pointIndex)}
+                              onClick={() => removePoint(driverIndex, tripIndex, pointIndex)}
                               variant="outline"
                               size="sm"
                               className="text-red-600"
