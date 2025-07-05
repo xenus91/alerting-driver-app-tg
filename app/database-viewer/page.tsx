@@ -797,18 +797,19 @@ export default function DatabaseViewer() {
                         }
                     
                     return (
-                      <TableRowRenderer
+                     <TableRowRenderer
                         key={row.id}
                         row={row}
                         columns={columns}
-                        tableSchema={tableSchema}
                         editingCell={editingCell}
                         editValue={editValue}
                         setEditingCell={setEditingCell}
                         setEditValue={setEditValue}
                         handleSaveEdit={handleSaveEdit}
                         setDeleteDialog={setDeleteDialog}
-                      />
+                        selectedTable={selectedTable}
+                        tables={tables}
+                        />
                     );
                   })
                 ) : (
