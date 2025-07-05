@@ -299,49 +299,49 @@ const TableCellRenderer = ({
 const TableRowRenderer = ({
   row,
   columns,
-  tableSchema,
   editingCell,
   editValue,
   setEditingCell,
   setEditValue,
   handleSaveEdit,
-  setDeleteDialog
+  setDeleteDialog,
+  selectedTable,
+  tables
 }: {
   row: Row<TableData>;
   columns: any[];
-  tableSchema: TableSchema | undefined;
   editingCell: { rowId: string; columnId: string } | null;
   editValue: any;
   setEditingCell: (cell: { rowId: string; columnId: string } | null) => void;
   setEditValue: (value: any) => void;
   handleSaveEdit: (row: TableData, columnId: string) => void;
   setDeleteDialog: (dialog: { open: boolean; row: TableData | null }) => void;
+  selectedTable: string | null;
+  tables: TableSchema[];
 }) => {
+  const tableSchema = useMemo(() => {
+    return tables.find(t => t.name === selectedTable);
+  }, [tables, selectedTable]);
+
+  if (!tableSchema) {
+    console.error("Table schema not loaded for:", selectedTable);
+    return null;
+  }
+
   return (
     <TableRow key={row.id}>
-    {row.getVisibleCells().map(cell => {
+      {row.getVisibleCells().map(cell => {
         const columnId = cell.column.id;
-        if (!columnId) {
-          console.error(`Undefined columnId for cell:`, cell);
-          return null;
-        }
         const columnDef = columns.find(col => col.accessorKey === columnId);
-            if (!columnDef) {
-            console.warn(`Column definition not found for: ${columnId}`);
-            return null;
-            }
         const columnType = columnDef?.meta?.type || "text";
         const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
         const value = isEditing ? editValue : cell.getValue();
 
-        console.log(`Cell: ${columnId}, type: ${columnType}, isEditing: ${isEditing}`);
-        
         return (
           <TableCell key={cell.id} className="min-w-[150px]">
             <div
               className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
               onDoubleClick={() => {
-                console.log(`Double click on cell: ${columnId}`);
                 setEditingCell({ rowId: row.id, columnId });
                 setEditValue(value);
               }}
@@ -349,7 +349,7 @@ const TableRowRenderer = ({
               <TableCellRenderer
                 value={value}
                 columnType={columnType}
-                columnName={columnId} // Передаем имя колонки
+                columnName={columnId}
                 tableSchema={tableSchema}
                 isEditing={isEditing}
                 onEditChange={setEditValue}
