@@ -379,14 +379,19 @@ const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
     const newCorrections = [...prev];
     const points = [...newCorrections[tripIndex].points];
     
-    // Меняем местами со следующей точкой
     if (pointIndex < points.length - 1) {
+      // Меняем местами со следующей точкой
       [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
+      
+      // Обновляем порядковые номера
+      points.forEach((p, i) => {
+        p.point_num = i + 1;
+      });
     }
     
     newCorrections[tripIndex] = {
       ...newCorrections[tripIndex],
-      points: points
+      points
     };
     
     return newCorrections;
