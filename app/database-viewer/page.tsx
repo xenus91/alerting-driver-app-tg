@@ -54,6 +54,8 @@ const NULL_PLACEHOLDER = "__NULL__";
 const TableCellRenderer = ({
   value,
   columnType,
+  columnName,
+  tableSchema,
   isEditing,
   onEditChange,
   onSave,
@@ -61,11 +63,33 @@ const TableCellRenderer = ({
 }: {
   value: any;
   columnType: string;
+  columnName: string;
+  tableSchema: TableSchema | undefined;
   isEditing: boolean;
   onEditChange: (value: any) => void;
   onSave: () => void;
   onCancel: () => void;
 }) => {
+  // Проверяем, является ли тип колонки временной меткой
+  const isTimestampType = columnType.includes('timestamp') || 
+                         columnType.includes('timestamptz') || 
+                         columnType.includes('datetime') || 
+                         columnType.includes('date') ||
+                         columnType.includes('time');
+  
+  // Проверяем, является ли тип колонки boolean
+  const isBooleanType = columnType === 'boolean' || columnType === 'bool';
+  
+  // Проверяем, является ли тип колонки enum
+  const isEnumType = columnType.includes('enum') || columnType === 'USER-DEFINED';
+  
+  // Получаем значения enum из схемы таблицы
+  const enumValues = useMemo(() => {
+    if (!tableSchema) return [];
+    const column = tableSchema.columns.find(c => c.name === columnName);
+    return column?.enumValues || [];
+  }, [tableSchema, columnName]);
+
   // Функция для преобразования даты в формат для datetime-local
   const toDateTimeLocal = (dateString: string) => {
     if (!dateString) return "";
@@ -100,14 +124,8 @@ const TableCellRenderer = ({
     return new Date(localString).toISOString();
   };
 
-  // Проверяем, является ли тип колонки временной меткой
-  const isTimestampType = columnType.includes('timestamp') || 
-                         columnType.includes('timestamptz') || 
-                         columnType.includes('datetime') || 
-                         columnType.includes('date') ||
-                         columnType.includes('time');
-
   if (isEditing) {
+    // Режим редактирования для временных меток
     if (isTimestampType) {
       const localValue = toDateTimeLocal(value);
       
@@ -129,7 +147,63 @@ const TableCellRenderer = ({
         </div>
       );
     }
+    
+    // Режим редактирования для boolean
+    if (isBooleanType) {
+      return (
+        <div className="flex gap-2 items-center">
+          <Select
+            value={String(value)}
+            onValueChange={val => onEditChange(val === 'true')}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Выберите значение" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="true">Да</SelectItem>
+              <SelectItem value="false">Нет</SelectItem>
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={onSave}>
+            <Save className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={onCancel}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    }
+    
+    // Режим редактирования для enum
+    if (isEnumType && enumValues.length > 0) {
+      return (
+        <div className="flex gap-2 items-center">
+          <Select
+            value={value || ''}
+            onValueChange={onEditChange}
+          >
+            <SelectTrigger className="w-48">
+              <SelectValue placeholder="Выберите значение" />
+            </SelectTrigger>
+            <SelectContent>
+              {enumValues.map(val => (
+                <SelectItem key={val} value={val}>
+                  {val}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Button size="sm" onClick={onSave}>
+            <Save className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={onCancel}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    }
 
+    // Стандартный режим редактирования
     return (
       <div className="flex gap-2 items-center">
         <Input
@@ -153,6 +227,7 @@ const TableCellRenderer = ({
     return <span>—</span>;
   }
 
+  // Отображение временных меток
   if (isTimestampType) {
     try {
       let dateValue: Date;
@@ -181,7 +256,13 @@ const TableCellRenderer = ({
       return <span>{String(value)}</span>;
     }
   }
+  
+  // Отображение boolean значений
+  if (isBooleanType) {
+    return <span>{value ? 'Да' : 'Нет'}</span>;
+  }
 
+  // Стандартное отображение
   return <span>{String(value)}</span>;
 };
 
