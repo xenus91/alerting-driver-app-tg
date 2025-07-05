@@ -55,7 +55,12 @@ export async function GET(request: NextRequest) {
       // Для enum-колонок получаем возможные значения
       const enhancedColumns = await Promise.all(
         columns.map(async (column) => {
-          if (column.udt_type.startsWith('enum_')) {
+          // Проверяем, является ли тип enum
+          const isEnumType = column.type === 'USER-DEFINED' || 
+                            column.udt_type.startsWith('enum_') ||
+                            column.udt_type === 'trip_messages_status'; // Ваш кастомный тип
+          
+          if (isEnumType) {
             try {
               const enumValues = await sql`
                 SELECT e.enumlabel AS value
