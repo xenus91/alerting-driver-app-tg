@@ -56,6 +56,14 @@ const MultiSelect = ({
   onSelect: (values: string[]) => void;
   placeholder?: string;
 }) => {
+  const [searchTerm, setSearchTerm] = useState("");
+  
+  // Фильтрация опций по поисковому запросу
+  const filteredOptions = options.filter(option => 
+    option.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (option === NULL_PLACEHOLDER && "[пусто]".includes(searchTerm.toLowerCase()))
+  );
+
   const toggleValue = (value: string) => {
     const newSelected = selected.includes(value)
       ? selected.filter(v => v !== value)
@@ -88,22 +96,36 @@ const MultiSelect = ({
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-64 p-1">
+        <div className="p-2">
+          <Input
+            placeholder="Поиск..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="h-7 text-xs mb-1"
+          />
+        </div>
         <ScrollArea className="h-64">
           <div className="space-y-1">
-            {options.map(option => (
-              <div 
-                key={option} 
-                className="flex items-center gap-2 p-2 hover:bg-accent rounded cursor-pointer"
-                onClick={() => toggleValue(option)}
-              >
-                <div className="flex items-center justify-center w-4 h-4 border rounded">
-                  {selected.includes(option) && <Check className="h-3 w-3" />}
+            {filteredOptions.length > 0 ? (
+              filteredOptions.map(option => (
+                <div 
+                  key={option} 
+                  className="flex items-center gap-2 p-2 hover:bg-accent rounded cursor-pointer"
+                  onClick={() => toggleValue(option)}
+                >
+                  <div className="flex items-center justify-center w-4 h-4 border rounded">
+                    {selected.includes(option) && <Check className="h-3 w-3" />}
+                  </div>
+                  <Label className="text-sm cursor-pointer">
+                    {option === NULL_PLACEHOLDER ? "[пусто]" : option}
+                  </Label>
                 </div>
-                <Label className="text-sm cursor-pointer">
-                  {option === NULL_PLACEHOLDER ? "[пусто]" : option}
-                </Label>
+              ))
+            ) : (
+              <div className="text-center py-4 text-muted-foreground text-sm">
+                Ничего не найдено
               </div>
-            ))}
+            )}
           </div>
         </ScrollArea>
       </PopoverContent>
