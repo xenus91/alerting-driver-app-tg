@@ -196,37 +196,38 @@ const TableCellRenderer = ({
       );
     }
     
+    // Режим редактирования для enum
     if (isEnumType) {
       console.log(`[TableCellRenderer] Rendering enum editor for ${columnName}`);
       
       if (enumValues.length > 0) {
         console.log(`[TableCellRenderer] Showing enum selector with ${enumValues.length} options`);
-      return (
-        <div className="flex gap-2 items-center">
-          <Select
-            value={value || ''}
-            onValueChange={onEditChange}
-          >
-            <SelectTrigger className="w-48">
-              <SelectValue placeholder="Выберите значение" />
-            </SelectTrigger>
-            <SelectContent>
-              {enumValues.map(val => (
-                <SelectItem key={val} value={val}>
-                  {val}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-          <Button size="sm" onClick={onSave}>
-            <Save className="h-4 w-4" />
-          </Button>
-          <Button size="sm" variant="outline" onClick={onCancel}>
-            <X className="h-4 w-4" />
-          </Button>
-        </div>
-      );
-    } else {
+        return (
+          <div className="flex gap-2 items-center">
+            <Select
+              value={value || ''}
+              onValueChange={onEditChange}
+            >
+              <SelectTrigger className="w-48">
+                <SelectValue placeholder="Выберите значение" />
+              </SelectTrigger>
+              <SelectContent>
+                {enumValues.map(val => (
+                  <SelectItem key={val} value={val}>
+                    {val}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={onSave}>
+              <Save className="h-4 w-4" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={onCancel}>
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+        );
+      } else {
         console.warn(`[TableCellRenderer] No enum values found for ${columnName}`);
       }
     }
