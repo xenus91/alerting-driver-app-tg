@@ -473,23 +473,25 @@ export default function DatabaseViewer() {
     setPageIndex(0);
   }, [pendingFilterConditions]);
 
-  // Создание колонок для таблицы
-  const columns = useMemo<ColumnDef<TableData>[]>(() => {
-    if (!selectedTable || tables.length === 0) return [];
+// Создание колонок для таблицы
+const columns = useMemo<ColumnDef<TableData>[]>(() => {
+  if (!selectedTable || tables.length === 0) return [];
 
-    const tableSchema = tables.find(t => t.name === selectedTable);
-    if (!tableSchema) return [];
+  const tableSchema = tables.find(t => t.name === selectedTable);
+  if (!tableSchema) return [];
 
-    return tableSchema.columns.map(col => ({
+  console.log("Creating columns for table:", selectedTable);
+  
+  return tableSchema.columns.map(col => {
+    console.log(`Column: ${col.name}, type: ${col.type}`);
+    return {
       accessorKey: col.name,
       header: col.name,
-      meta: { type: col.type }, // Добавляем тип колонки в метаданные
-      cell: ({ row, column }) => {
-        // Этот рендер теперь будет обрабатываться в TableRowRenderer
-        return null;
-      }
-    }));
-  }, [selectedTable, tables]);
+      meta: { type: col.type },
+      cell: () => null
+    };
+  });
+}, [selectedTable, tables]);
 
   const table = useReactTable({
     data,
