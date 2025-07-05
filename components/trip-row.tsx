@@ -186,6 +186,40 @@ export const TripRow = memo(
       });
     }; 
 
+    const movePointUp = (tripIndex: number, pointIndex: number) => {
+  setCorrections(prev => {
+    const newCorrections = [...prev];
+    const points = [...newCorrections[tripIndex].points];
+    
+    // Меняем местами с предыдущей точкой
+    [points[pointIndex], points[pointIndex - 1]] = [points[pointIndex - 1], points[pointIndex]];
+    
+    newCorrections[tripIndex] = {
+      ...newCorrections[tripIndex],
+      points: points
+    };
+    
+    return newCorrections;
+  });
+};
+
+const movePointDown = (tripIndex: number, pointIndex: number) => {
+  setCorrections(prev => {
+    const newCorrections = [...prev];
+    const points = [...newCorrections[tripIndex].points];
+    
+    // Меняем местами со следующей точкой
+    [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
+    
+    newCorrections[tripIndex] = {
+      ...newCorrections[tripIndex],
+      points: points
+    };
+    
+    return newCorrections;
+  });
+};
+
         // Создаем отсортированную версию точек для отображения
     const sortedPoints = sortPoints(trip.points);
 
