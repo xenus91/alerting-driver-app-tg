@@ -107,8 +107,10 @@ const PointSelector = memo(
               autoFocus
             />
           </div>
-          <div className="max-h-[200px] overflow-auto"
-          onWheel={(e) => e.stopPropagation()}>
+              <div 
+                className="max-h-[200px] overflow-auto"
+                onWheel={(e) => e.stopPropagation()}
+              >
             {filteredPoints.length === 0 ? (
               <div className="py-6 text-center text-sm">
                 {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
