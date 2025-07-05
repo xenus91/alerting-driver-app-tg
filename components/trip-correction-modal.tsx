@@ -95,8 +95,16 @@ export function TripCorrectionModal({
             longitude: item.longitude,
           })
           return acc
-        }, {})
-        setCorrections(Object.values(grouped))
+        }, {});
+              // Обновляем порядковые номера в соответствии с позицией
+          const groupedArray = Object.values(grouped);
+          groupedArray.forEach(trip => {
+            trip.points.forEach((point, i) => {
+              point.point_num = i + 1;
+            });
+          });
+          
+          setCorrections(groupedArray);
       } else {
         setError(data.error || "Failed to load driver details")
       }
@@ -205,7 +213,7 @@ export function TripCorrectionModal({
 
     try {
       const flatCorrections = corrections.flatMap((trip) =>
-        trip.points.map((point, index) => ({
+        trip.points.map((point) => ({
           phone: trip.phone,
           trip_identifier: trip.trip_identifier,
           original_trip_identifier: trip.original_trip_identifier,
