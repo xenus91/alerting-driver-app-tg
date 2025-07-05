@@ -375,21 +375,21 @@ const movePointDown = (tripIndex: number, pointIndex: number) => {
                   <TableCell>
                     {trip.points.length > 1 && (
                       <div className="flex flex-col gap-1 justify-center items-center">
-                        {pointIndex > 0 && (
+                        {originalIndex  > 0 && (
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => movePointUp(tripIndex, pointIndex)}
+                            onClick={() => movePointUp(tripIndex, originalIndex)}
                             title="Переместить вверх"
                           >
                             <ChevronUp className="h-4 w-4" />
                           </Button>
                         )}
-                        {pointIndex < trip.points.length - 1 && (
+                        {originalIndex  < trip.points.length - 1 && (
                           <Button
                             variant="outline"
                             size="icon"
-                            onClick={() => movePointDown(tripIndex, pointIndex)}
+                            onClick={() => movePointDown(tripIndex, originalIndex)}
                             title="Переместить вниз"
                           >
                             <ChevronDown className="h-4 w-4" />
