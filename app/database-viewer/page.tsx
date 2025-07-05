@@ -349,6 +349,8 @@ const TableRowRenderer = ({
               <TableCellRenderer
                 value={value}
                 columnType={columnType}
+                columnName={columnId} // Передаем имя колонки
+                tableSchema={tableSchema}
                 isEditing={isEditing}
                 onEditChange={setEditValue}
                 onSave={() => handleSaveEdit(row.original, columnId)}
@@ -644,8 +646,12 @@ export default function DatabaseViewer() {
     const columns = useMemo<ColumnDef<TableData>[]>(() => {
     if (!selectedTable || tables.length === 0) return [];
 
-    const tableSchema = tables.find(t => t.name === selectedTable);
-    if (!tableSchema) return [];
+    // В TableRowRenderer перед return
+        const tableSchema = tables.find(t => t.name === selectedTable);
+        if (!tableSchema) {
+        console.error("Table schema not found for:", selectedTable);
+        return null;
+        }
 
     return tableSchema.columns.map(col => ({
         id: col.name, // Явно задаём id
