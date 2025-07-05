@@ -66,20 +66,13 @@ const TableCellRenderer = ({
   onSave: () => void;
   onCancel: () => void;
 }) => {
-  console.log(`TableCellRenderer - columnType: ${columnType}, isEditing: ${isEditing}, value:`, value);
-  
   // Функция для преобразования даты в формат для datetime-local
   const toDateTimeLocal = (dateString: string) => {
-    console.log(`toDateTimeLocal input: ${dateString}`);
+    if (!dateString) return "";
     
-    if (!dateString) {
-      console.log("toDateTimeLocal: empty string, returning empty");
-      return "";
-    }
-    
-    // Пробуем разные форматы даты
     let date: Date;
     
+    // Пробуем разные форматы даты
     if (dateString.includes('T')) {
       // ISO формат
       date = new Date(dateString);
@@ -92,37 +85,30 @@ const TableCellRenderer = ({
     }
     
     if (isNaN(date.getTime())) {
-      console.error(`toDateTimeLocal: invalid date - ${dateString}`);
+      console.error(`Invalid date format: ${dateString}`);
       return "";
     }
     
-    const result = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
-    
-    console.log(`toDateTimeLocal result: ${result}`);
-    return result;
   };
 
   // Функция для преобразования обратно в ISO строку
   const fromDateTimeLocal = (localString: string) => {
-    console.log(`fromDateTimeLocal input: ${localString}`);
-    
-    if (!localString) {
-      console.log("fromDateTimeLocal: empty string, returning null");
-      return null;
-    }
-    
-    const result = new Date(localString).toISOString();
-    console.log(`fromDateTimeLocal result: ${result}`);
-    return result;
+    if (!localString) return null;
+    return new Date(localString).toISOString();
   };
 
+  // Проверяем, является ли тип колонки временной меткой
+  const isTimestampType = columnType.includes('timestamp') || 
+                         columnType.includes('timestamptz') || 
+                         columnType.includes('datetime') || 
+                         columnType.includes('date') ||
+                         columnType.includes('time');
+
   if (isEditing) {
-    console.log("Rendering editing mode");
-    
-    if (columnType === "timestamp" || columnType === "timestamptz" || columnType === "datetime") {
-      console.log("Rendering timestamp editor");
+    if (isTimestampType) {
       const localValue = toDateTimeLocal(value);
       
       return (
@@ -130,10 +116,7 @@ const TableCellRenderer = ({
           <Input
             type="datetime-local"
             value={localValue}
-            onChange={e => {
-              console.log("datetime-local changed:", e.target.value);
-              onEditChange(fromDateTimeLocal(e.target.value));
-            }}
+            onChange={e => onEditChange(fromDateTimeLocal(e.target.value))}
             className="w-48 h-8"
             autoFocus
           />
@@ -170,7 +153,7 @@ const TableCellRenderer = ({
     return <span>—</span>;
   }
 
-  if (columnType === "timestamp" || columnType === "timestamptz" || columnType === "datetime") {
+  if (isTimestampType) {
     try {
       let dateValue: Date;
       
