@@ -283,7 +283,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     return true;
   };
 
-  / Отправка данных
+  // Отправка данных
   const sendQuickTrip = async () => {
     if (!validateForm()) return;
 
