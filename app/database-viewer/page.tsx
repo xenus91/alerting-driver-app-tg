@@ -302,11 +302,11 @@ const removeFilterCondition = useCallback((index: number) => {
   });
 }, []);
 
-  const clearAllFilters = useCallback(() => {
-    setPendingFilterConditions([]);
-    setFilterConditions([]); // Важное исправление
-    setPageIndex(0);
-  }, []);
+const clearAllFilters = useCallback(() => {
+  setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
+  setFilterConditions([]);
+  setPageIndex(0);
+}, []);
 
   const applyFilters = useCallback(() => {
     setFilterConditions(pendingFilterConditions);
