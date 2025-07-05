@@ -66,31 +66,62 @@ const TableCellRenderer = ({
   onSave: () => void;
   onCancel: () => void;
 }) => {
+  console.log(`TableCellRenderer - columnType: ${columnType}, isEditing: ${isEditing}, value:`, value);
+  
   // Функция для преобразования даты в формат для datetime-local
   const toDateTimeLocal = (dateString: string) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "";
+    console.log(`toDateTimeLocal input: ${dateString}`);
     
-    return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+    if (!dateString) {
+      console.log("toDateTimeLocal: empty string, returning empty");
+      return "";
+    }
+    
+    const date = new Date(dateString);
+    
+    if (isNaN(date.getTime())) {
+      console.error(`toDateTimeLocal: invalid date - ${dateString}`);
+      return "";
+    }
+    
+    const result = new Date(date.getTime() - date.getTimezoneOffset() * 60000)
       .toISOString()
       .slice(0, 16);
+    
+    console.log(`toDateTimeLocal result: ${result}`);
+    return result;
   };
 
   // Функция для преобразования обратно в ISO строку
   const fromDateTimeLocal = (localString: string) => {
-    if (!localString) return null;
-    return new Date(localString).toISOString();
+    console.log(`fromDateTimeLocal input: ${localString}`);
+    
+    if (!localString) {
+      console.log("fromDateTimeLocal: empty string, returning null");
+      return null;
+    }
+    
+    const result = new Date(localString).toISOString();
+    console.log(`fromDateTimeLocal result: ${result}`);
+    return result;
   };
 
   if (isEditing) {
+    console.log("Rendering editing mode");
+    
     if (columnType === "timestamp") {
+      console.log("Rendering timestamp editor");
+      const localValue = toDateTimeLocal(value);
+      
       return (
         <div className="flex gap-2 items-center">
           <Input
             type="datetime-local"
-            value={toDateTimeLocal(value)}
-            onChange={e => onEditChange(fromDateTimeLocal(e.target.value))}
+            value={localValue}
+            onChange={e => {
+              console.log("datetime-local changed:", e.target.value);
+              onEditChange(fromDateTimeLocal(e.target.value));
+            }}
             className="w-48 h-8"
             autoFocus
           />
@@ -103,6 +134,24 @@ const TableCellRenderer = ({
         </div>
       );
     }
+
+    return (
+      <div className="flex gap-2 items-center">
+        <Input
+          value={value || ""}
+          onChange={e => onEditChange(e.target.value)}
+          className="w-48 h-8"
+          autoFocus
+        />
+        <Button size="sm" onClick={onSave}>
+          <Save className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="outline" onClick={onCancel}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
 
     return (
       <div className="flex gap-2 items-center">
