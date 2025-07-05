@@ -291,7 +291,7 @@ export default function DatabaseViewer() {
   })
   const [showFilters, setShowFilters] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  const [filtersHeight, setFiltersHeight] = useState(0);
+  const [filtersWidth, setFiltersWidth] = useState(0);
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
@@ -405,9 +405,9 @@ export default function DatabaseViewer() {
    // Эффект для анимации открытия/закрытия фильтров
   useEffect(() => {
     if (filtersOpen) {
-      setFiltersHeight(300); // Примерная высота блока фильтров
+      setFiltersWidth(300); // Примерная высота блока фильтров
     } else {
-      setFiltersHeight(0);
+      setFiltersWidth(0);
     }
   }, [filtersOpen]);
 
@@ -646,8 +646,8 @@ export default function DatabaseViewer() {
         </Alert>
       )}
 
-      {/* Строка управления */}
-      <div className="flex flex-wrap items-center gap-2">
+      {/* Строка управления с выезжающим фильтром */}
+      <div className="flex items-center gap-2 flex-wrap">
         {/* Выбор таблицы */}
         <div className="flex-1 min-w-[200px]">
           <Select value={selectedTable ?? ""} onValueChange={setSelectedTable} disabled={isLoading}>
@@ -662,6 +662,28 @@ export default function DatabaseViewer() {
               ))}
             </SelectContent>
           </Select>
+        </div>
+
+        {/* Выезжающий блок фильтров */}
+        <div 
+          className={`transition-all duration-300 ease-in-out overflow-hidden ${
+            filtersOpen ? 'w-[400px] opacity-100' : 'w-0 opacity-0'
+          }`}
+        >
+          <div className="w-[400px]">
+            <FilterBlock
+              tables={tables}
+              selectedTable={selectedTable}
+              pendingFilterConditions={pendingFilterConditions}
+              distinctValues={getDistinctValues}
+              addFilterCondition={addFilterCondition}
+              updateFilterCondition={updateFilterCondition}
+              removeFilterCondition={removeFilterCondition}
+              clearAllFilters={clearAllFilters}
+              applyFilters={applyFilters}
+              onClose={() => setFiltersOpen(false)}
+            />
+          </div>
         </div>
 
         {/* Кнопки управления */}
@@ -726,29 +748,6 @@ export default function DatabaseViewer() {
             </Button>
           )}
         </div>
-      </div>
-
-      {/* Выезжающий блок фильтров */}
-      <div 
-        className="overflow-hidden transition-all duration-300 ease-in-out rounded-md border"
-        style={{ height: `${filtersHeight}px` }}
-      >
-        {filtersOpen && (
-          <div className="p-4">
-            <FilterBlock
-              tables={tables}
-              selectedTable={selectedTable}
-              pendingFilterConditions={pendingFilterConditions}
-              distinctValues={getDistinctValues}
-              addFilterCondition={addFilterCondition}
-              updateFilterCondition={updateFilterCondition}
-              removeFilterCondition={removeFilterCondition}
-              clearAllFilters={clearAllFilters}
-              applyFilters={applyFilters}
-              onClose={() => setFiltersOpen(false)}
-            />
-          </div>
-        )}
       </div>
 
       {/* Остальной код без изменений */}
