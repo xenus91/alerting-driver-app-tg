@@ -40,8 +40,14 @@ interface QuickTripFormProps {
   onTripSent: () => void
 }
 
+interface DriverWithTrips {
+  driver: Driver;
+  trips: TripData[];
+}
+
 export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProps) {
-  const [trips, setTrips] = useState<TripData[]>([])
+  const [driverTrips, setDriverTrips] = useState<DriverWithTrips[]>([]);
+  //const [trips, setTrips] = useState<TripData[]>([])
   const [selectedDriver, setSelectedDriver] = useState<string>("")
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string }>>([])
@@ -57,16 +63,24 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   // Загружаем данные при открытии модального окна
   useEffect(() => {
     if (isOpen) {
-      loadDrivers()
-      loadAvailablePoints()
-      // Создаем один пустой рейс по умолчанию
-      setTrips([createEmptyTrip()])
-      setSelectedDriver("")
-      setError(null)
-      setSuccess(null)
-      setPointSearchOpen({})
+      loadDrivers();
+      loadAvailablePoints();
+      // Создаем одного пустого водителя с одним рейсом по умолчанию
+      setDriverTrips([{ driver: createEmptyDriver(), trips: [createEmptyTrip()] }]);
+      setError(null);
+      setSuccess(null);
+      setPointSearchOpen({});
+      setDriverSearchOpen({});
     }
-  }, [isOpen])
+  }, [isOpen]);
+
+  const createEmptyDriver = (): Driver => ({
+    phone: "",
+    name: "",
+    telegram_id: 0,
+    verified: true,
+  });
+
 
   const createEmptyTrip = (): TripData => ({
     trip_identifier: "",
@@ -116,47 +130,101 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     }
   }
 
-  const updateTrip = (tripIndex: number, field: keyof TripData, value: any) => {
-    const updated = [...trips]
-    updated[tripIndex] = { ...updated[tripIndex], [field]: value }
-    setTrips(updated)
-  }
+  // Обновление водителя по индексу
+  const updateDriver = (driverIndex: number, driver: Driver) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      updated[driverIndex] = { ...updated[driverIndex], driver };
+      return updated;
+    });
+  };
 
-  const updatePoint = (tripIndex: number, pointIndex: number, field: string, value: any) => {
-    const updated = [...trips]
-    updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
-    setTrips(updated)
-  }
+  const updateTrip = (driverIndex: number, tripIndex: number, field: keyof TripData, value: any) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      updated[driverIndex].trips[tripIndex] = { 
+        ...updated[driverIndex].trips[tripIndex], 
+        [field]: value 
+      };
+      return updated;
+    });
+  };
 
-  const addNewTrip = () => {
-    setTrips([...trips, createEmptyTrip()])
-  }
 
-  const removeTrip = (tripIndex: number) => {
-    if (trips.length > 1) {
-      const updated = trips.filter((_, i) => i !== tripIndex)
-      setTrips(updated)
+  // Обновление точки
+  const updatePoint = (driverIndex: number, tripIndex: number, pointIndex: number, field: string, value: any) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      updated[driverIndex].trips[tripIndex].points[pointIndex] = { 
+        ...updated[driverIndex].trips[tripIndex].points[pointIndex], 
+        [field]: value 
+      };
+      return updated;
+    });
+  };
+
+  // Добавление нового водителя
+  const addNewDriver = () => {
+    setDriverTrips(prev => [
+      ...prev, 
+      { driver: createEmptyDriver(), trips: [createEmptyTrip()] }
+    ]);
+  };
+
+  // Удаление водителя
+  const removeDriver = (driverIndex: number) => {
+    if (driverTrips.length > 1) {
+      setDriverTrips(prev => prev.filter((_, i) => i !== driverIndex));
     }
-  }
+  };
 
-  const addNewPoint = (tripIndex: number) => {
-    const updated = [...trips]
-    const maxPointNum = Math.max(...updated[tripIndex].points.map((p) => p.point_num || 0), 0)
-    updated[tripIndex].points.push({
-      point_type: "P",
-      point_num: maxPointNum + 1,
-      point_id: "",
-    })
-    setTrips(updated)
-  }
+   // Добавление рейса для конкретного водителя
+  const addNewTrip = (driverIndex: number) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      updated[driverIndex].trips = [...updated[driverIndex].trips, createEmptyTrip()];
+      return updated;
+    });
+  };
 
-  const removePoint = (tripIndex: number, pointIndex: number) => {
-    const updated = [...trips]
-    if (updated[tripIndex].points.length > 1) {
-      updated[tripIndex].points = updated[tripIndex].points.filter((_, i) => i !== pointIndex)
-    }
-    setTrips(updated)
-  }
+  // Удаление рейса
+  const removeTrip = (driverIndex: number, tripIndex: number) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      if (updated[driverIndex].trips.length > 1) {
+        updated[driverIndex].trips = updated[driverIndex].trips.filter((_, i) => i !== tripIndex);
+      }
+      return updated;
+    });
+  };
+
+  // Добавление точки
+  const addNewPoint = (driverIndex: number, tripIndex: number) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      const points = updated[driverIndex].trips[tripIndex].points;
+      const maxPointNum = Math.max(...points.map(p => p.point_num || 0), 0);
+      points.push({
+        point_type: "P",
+        point_num: maxPointNum + 1,
+        point_id: "",
+      });
+      return updated;
+    });
+  };
+
+ // Удаление точки
+  const removePoint = (driverIndex: number, tripIndex: number, pointIndex: number) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      const points = updated[driverIndex].trips[tripIndex].points;
+      if (points.length > 1) {
+        updated[driverIndex].trips[tripIndex].points = points.filter((_, i) => i !== pointIndex);
+      }
+      return updated;
+    });
+  };
+
 
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
@@ -181,64 +249,70 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     return dateString + ":00.000"
   }
 
+  // Валидация формы
   const validateForm = () => {
-    if (!selectedDriver) {
-      setError("Выберите водителя")
-      return false
-    }
-
-    for (const trip of trips) {
-      if (!trip.trip_identifier.trim()) {
-        setError("Заполните номер рейса для всех рейсов")
-        return false
-      }
-      if (!trip.vehicle_number.trim()) {
-        setError("Заполните номер транспорта для всех рейсов")
-        return false
-      }
-      if (!trip.planned_loading_time) {
-        setError("Укажите время погрузки для всех рейсов")
-        return false
+    for (const driverTrip of driverTrips) {
+      if (!driverTrip.driver.phone) {
+        setError("Выберите водителя для всех секций");
+        return false;
       }
 
-      for (const point of trip.points) {
-        if (!point.point_id) {
-          setError("Выберите все точки в рейсах")
-          return false
+      for (const trip of driverTrip.trips) {
+        if (!trip.trip_identifier.trim()) {
+          setError("Заполните номер рейса для всех рейсов");
+          return false;
+        }
+        if (!trip.vehicle_number.trim()) {
+          setError("Заполните номер транспорта для всех рейсов");
+          return false;
+        }
+        if (!trip.planned_loading_time) {
+          setError("Укажите время погрузки для всех рейсов");
+          return false;
+        }
+
+        for (const point of trip.points) {
+          if (!point.point_id) {
+            setError("Выберите все точки в рейсах");
+            return false;
+          }
         }
       }
     }
 
-    return true
-  }
+    return true;
+  };
 
+  / Отправка данных
   const sendQuickTrip = async () => {
-    if (!validateForm()) return
+    if (!validateForm()) return;
 
-    setIsSending(true)
-    setError(null)
+    setIsSending(true);
+    setError(null);
 
     try {
       // Подготавливаем данные для отправки
-      const tripData = trips.map((trip) => ({
-        phone: selectedDriver,
-        trip_identifier: trip.trip_identifier,
-        vehicle_number: trip.vehicle_number,
-        planned_loading_time: trip.planned_loading_time,
-        driver_comment: trip.driver_comment,
-        loading_points: trip.points
-          .filter((p) => p.point_type === "P")
-          .map((p) => ({
-            point_id: p.point_id,
-            point_num: p.point_num,
-          })),
-        unloading_points: trip.points
-          .filter((p) => p.point_type === "D")
-          .map((p) => ({
-            point_id: p.point_id,
-            point_num: p.point_num,
-          })),
-      }))
+      const tripData = driverTrips.flatMap(driverTrip => 
+        driverTrip.trips.map(trip => ({
+          phone: driverTrip.driver.phone,
+          trip_identifier: trip.trip_identifier,
+          vehicle_number: trip.vehicle_number,
+          planned_loading_time: trip.planned_loading_time,
+          driver_comment: trip.driver_comment,
+          loading_points: trip.points
+            .filter(p => p.point_type === "P")
+            .map(p => ({
+              point_id: p.point_id,
+              point_num: p.point_num,
+            })),
+          unloading_points: trip.points
+            .filter(p => p.point_type === "D")
+            .map(p => ({
+              point_id: p.point_id,
+              point_num: p.point_num,
+            })),
+        }))
+      );
 
       const response = await fetch("/api/send-messages", {
         method: "POST",
@@ -248,26 +322,26 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
         body: JSON.stringify({
           tripData,
         }),
-      })
+      });
 
-      const data = await response.json()
+      const data = await response.json();
 
       if (data.success) {
-        setSuccess(`Рассылка отправлена успешно! Отправлено ${data.results?.sent || 0} сообщений.`)
-        onTripSent()
+        setSuccess(`Рассылка отправлена успешно! Отправлено ${data.results?.sent || 0} сообщений.`);
+        onTripSent();
         setTimeout(() => {
-          onClose()
-        }, 3000)
+          onClose();
+        }, 3000);
       } else {
-        setError(data.error || "Ошибка при отправке рассылки")
+        setError(data.error || "Ошибка при отправке рассылки");
       }
     } catch (error) {
-      setError("Ошибка при отправке рассылки")
-      console.error("Error sending quick trip:", error)
+      setError("Ошибка при отправке рассылки");
+      console.error("Error sending quick trip:", error);
     } finally {
-      setIsSending(false)
+      setIsSending(false);
     }
-  }
+  };
 
   const getDriverDisplayName = (driver: Driver) => {
     return driver.full_name || driver.first_name || driver.name || `ID: ${driver.telegram_id}`
@@ -284,27 +358,25 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
 
   // Функция поиска водителей
   const filterDrivers = (searchValue: string) => {
-    if (!searchValue) return drivers
-
-    const search = searchValue.toLowerCase()
-    return drivers.filter((driver) => {
-      const fullName = (driver.full_name || driver.first_name || driver.name || "").toLowerCase()
-      const phone = driver.phone.toLowerCase()
-      return fullName.includes(search) || phone.includes(search)
-    })
-  }
+    if (!searchValue) return drivers;
+    const search = searchValue.toLowerCase();
+    return drivers.filter(driver => {
+      const fullName = (driver.full_name || driver.first_name || driver.name || "").toLowerCase();
+      const phone = driver.phone.toLowerCase();
+      return fullName.includes(search) || phone.includes(search);
+    });
+  };
 
   // Функция поиска точек
   const filterPoints = (searchValue: string) => {
-    if (!searchValue) return availablePoints
-
-    const search = searchValue.toLowerCase()
-    return availablePoints.filter((point) => {
-      const pointId = point.point_id.toLowerCase()
-      const pointName = (point.point_name || "").toLowerCase()
-      return pointId.includes(search) || pointName.includes(search)
-    })
-  }
+    if (!searchValue) return availablePoints;
+    const search = searchValue.toLowerCase();
+    return availablePoints.filter(point => {
+      const pointId = point.point_id.toLowerCase();
+      const pointName = (point.point_name || "").toLowerCase();
+      return pointId.includes(search) || pointName.includes(search);
+    });
+  };
 
   const getSelectedDriverName = () => {
     const driver = drivers.find((d) => d.phone === selectedDriver)
@@ -352,100 +424,130 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Выбор водителя с поиском */}
-            <div className="border rounded-lg p-4 bg-blue-50">
-              <div className="flex items-center gap-2 mb-3">
-                <User className="h-4 w-4 text-blue-600" />
-                <h3 className="font-medium text-blue-900">Выбор водителя</h3>
-              </div>
-
-              <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="outline"
-                    role="combobox"
-                    aria-expanded={driverSearchOpen}
-                    className="w-full justify-between"
-                  >
-                    {getSelectedDriverName()}
-                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-full p-0" align="start">
-                  <Command>
-                    <CommandInput placeholder="Поиск по имени или телефону..." />
-                    <CommandList>
-                      <CommandEmpty>Водители не найдены.</CommandEmpty>
-                      <CommandGroup>
-                        {filterDrivers("").map((driver) => (
-                          <CommandItem
-                            key={driver.phone}
-                            value={`${getDriverDisplayName(driver)} ${driver.phone}`}
-                            onSelect={() => {
-                              setSelectedDriver(driver.phone)
-                              setDriverSearchOpen(false)
-                            }}
-                          >
-                            <Check
-                              className={cn(
-                                "mr-2 h-4 w-4",
-                                selectedDriver === driver.phone ? "opacity-100" : "opacity-0",
-                              )}
-                            />
-                            <div className="flex flex-col">
-                              <span>{getDriverDisplayName(driver)}</span>
-                              <span className="text-sm text-gray-500">{formatPhone(driver.phone)}</span>
-                            </div>
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
-
-              {drivers.length === 0 && (
-                <p className="text-sm text-gray-500 mt-2">Нет доступных верифицированных водителей</p>
-              )}
-            </div>
-
-            {/* Кнопка добавления рейса */}
+            {/* Кнопка добавления водителя */}
             <div className="flex justify-end">
-              <Button onClick={addNewTrip} variant="outline" className="text-green-600">
+              <Button onClick={addNewDriver} variant="outline" className="text-green-600">
                 <Plus className="h-4 w-4 mr-2" />
-                Добавить рейс
+                Добавить водителя
               </Button>
             </div>
 
-            {/* Рейсы */}
-            {trips.map((trip, tripIndex) => (
-              <div key={tripIndex} className="border rounded-lg p-4">
+            {/* Цикл по водителям */}
+            {driverTrips.map((driverTrip, driverIndex) => (
+              <div key={driverIndex} className="border rounded-lg p-4">
                 <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold">Рейс #{tripIndex + 1}</h3>
+                  <h3 className="text-lg font-semibold">Водитель #{driverIndex + 1}</h3>
                   <div className="flex gap-2">
                     <Button
-                      onClick={() => addNewPoint(tripIndex)}
+                      onClick={() => addNewTrip(driverIndex)}
                       variant="outline"
                       size="sm"
                       className="text-blue-600"
                     >
                       <Plus className="h-4 w-4 mr-2" />
-                      Добавить точку
+                      Добавить рейс
                     </Button>
-                    {trips.length > 1 && (
+                    {driverTrips.length > 1 && (
                       <Button
-                        onClick={() => removeTrip(tripIndex)}
+                        onClick={() => removeDriver(driverIndex)}
                         variant="outline"
                         size="sm"
                         className="text-red-600"
                       >
                         <Trash2 className="h-4 w-4 mr-2" />
-                        Удалить рейс
+                        Удалить водителя
                       </Button>
                     )}
                   </div>
                 </div>
 
+                {/* Выбор водителя */}
+                <div className="border rounded-lg p-4 bg-blue-50 mb-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <User className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-blue-900">Выбор водителя</h3>
+                  </div>
+
+                  <Popover 
+                    open={driverSearchOpen[`driver-${driverIndex}`] || false} 
+                    onOpenChange={() => toggleDriverSearch(`driver-${driverIndex}`)}
+                  >
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={driverSearchOpen[`driver-${driverIndex}`] || false}
+                        className="w-full justify-between"
+                      >
+                        {driverTrip.driver.phone 
+                          ? `${getDriverDisplayName(driverTrip.driver)} (${formatPhone(driverTrip.driver.phone)})` 
+                          : "Выберите водителя"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput placeholder="Поиск по имени или телефону..." />
+                        <CommandList>
+                          <CommandEmpty>Водители не найдены.</CommandEmpty>
+                          <CommandGroup>
+                            {filterDrivers("").map(driver => (
+                              <CommandItem
+                                key={driver.phone}
+                                value={`${getDriverDisplayName(driver)} ${driver.phone}`}
+                                onSelect={() => {
+                                  updateDriver(driverIndex, driver);
+                                  toggleDriverSearch(`driver-${driverIndex}`);
+                                }}
+                              >
+                                <Check
+                                  className={cn(
+                                    "mr-2 h-4 w-4",
+                                    driverTrip.driver.phone === driver.phone ? "opacity-100" : "opacity-0",
+                                  )}
+                                />
+                                <div className="flex flex-col">
+                                  <span>{getDriverDisplayName(driver)}</span>
+                                  <span className="text-sm text-gray-500">{formatPhone(driver.phone)}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+
+                {/* Рейсы водителя */}
+                {driverTrip.trips.map((trip, tripIndex) => (
+                  <div key={tripIndex} className="border rounded-lg p-4 mb-4">
+                    <div className="flex items-center justify-between mb-4">
+                      <h3 className="text-lg font-semibold">Рейс #{tripIndex + 1}</h3>
+                      <div className="flex gap-2">
+                        <Button
+                          onClick={() => addNewPoint(driverIndex, tripIndex)}
+                          variant="outline"
+                          size="sm"
+                          className="text-blue-600"
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Добавить точку
+                        </Button>
+                        {driverTrip.trips.length > 1 && (
+                          <Button
+                            onClick={() => removeTrip(driverIndex, tripIndex)}
+                            variant="outline"
+                            size="sm"
+                            className="text-red-600"
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Удалить рейс
+                          </Button>
+                        )}
+                      </div>
+                    </div>
+{*//dasdsadasd}
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div>
                     <label className="text-sm font-medium">Номер рейса *</label>
