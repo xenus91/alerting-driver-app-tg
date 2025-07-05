@@ -1,8 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
-import { Plus, Trash2, Filter, X, Check } from "lucide-react";
+import { Plus, Trash2, Filter, X, Check, Loader2 } from "lucide-react";
 import {
   Popover,
   PopoverContent,
@@ -45,7 +45,6 @@ interface FilterBlockProps {
   applyFilters: () => void;
 }
 
-// Компонент для множественного выбора с чекбоксами
 const MultiSelect = ({ 
   options, 
   selected, 
@@ -125,7 +124,51 @@ export default function FilterBlock({
 }: FilterBlockProps) {
   if (!selectedTable) return null;
 
+  const [distinctValuesMap, setDistinctValuesMap] = useState<Record<string, string[]>>({});
+  const [loadingColumns, setLoadingColumns] = useState<Record<string, boolean>>({});
   const tableColumns = tables.find(t => t.name === selectedTable)?.columns || [];
+
+  // Функция для загрузки уникальных значений
+  const fetchDistinctValues = async (column: string) => {
+    if (!selectedTable || distinctValuesMap[column]) return;
+    
+    setLoadingColumns(prev => ({ ...prev, [column]: true }));
+    
+    try {
+      const response = await fetch(
+        `/api/database/table/${selectedTable}/distinct?column=${column}`
+      );
+      const result = await response.json();
+      
+      if (result.success) {
+        setDistinctValuesMap(prev => ({
+          ...prev,
+          [column]: result.data
+        }));
+      }
+    } catch (error) {
+      console.error("Failed to fetch distinct values:", error);
+    } finally {
+      setLoadingColumns(prev => ({ ...prev, [column]: false }));
+    }
+  };
+
+  // Обработчики изменений
+  const handleColumnChange = (index: number, value: string) => {
+    updateFilterCondition(index, 'column', value);
+    fetchDistinctValues(value);
+  };
+
+  const handleOperatorChange = (index: number, value: string) => {
+    updateFilterCondition(index, 'operator', value);
+    
+    if (value === "in" || value === "not in") {
+      const column = pendingFilterConditions[index].column;
+      if (column) {
+        fetchDistinctValues(column);
+      }
+    }
+  };
 
   return (
     <div className="z-50 rounded-md border bg-overlay shadow-md p-0 w-full max-w-3xl">
@@ -136,7 +179,6 @@ export default function FilterBlock({
           </div>
         ) : (
           pendingFilterConditions.map((condition, index) => {
-            const columnValues = distinctValues(condition.column);
             const selectedValues = Array.isArray(condition.value) 
               ? condition.value 
               : [];
@@ -147,7 +189,7 @@ export default function FilterBlock({
                 <div className="flex w-full items-center justify-between gap-2 px-3">
                   <Select
                     value={condition.column}
-                    onValueChange={value => updateFilterCondition(index, 'column', value)}
+                    onValueChange={value => handleColumnChange(index, value)}
                   >
                     <SelectTrigger className="w-32 h-7 text-xs px-2 py-1">
                       <SelectValue placeholder="Колонка" />
@@ -167,7 +209,7 @@ export default function FilterBlock({
                   
                   <Select
                     value={condition.operator}
-                    onValueChange={value => updateFilterCondition(index, 'operator', value)}
+                    onValueChange={value => handleOperatorChange(index, value)}
                   >
                     <SelectTrigger className="w-28 h-7 text-xs px-2 py-1">
                       <SelectValue placeholder="Оператор" />
@@ -187,12 +229,19 @@ export default function FilterBlock({
                   
                   <div className="flex-1">
                     {condition.operator === "in" || condition.operator === "not in" ? (
-                      <MultiSelect
-                        options={columnValues}
-                        selected={selectedValues}
-                        onSelect={(values) => updateFilterCondition(index, 'value', values)}
-                        placeholder="Выберите значения"
-                      />
+                      loadingColumns[condition.column] ? (
+                        <div className="flex items-center justify-center h-7 text-xs text-muted-foreground">
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Загрузка...
+                        </div>
+                      ) : (
+                        <MultiSelect
+                          options={distinctValuesMap[condition.column] || []}
+                          selected={selectedValues}
+                          onSelect={(values) => updateFilterCondition(index, 'value', values)}
+                          placeholder="Выберите значения"
+                        />
+                      )
                     ) : (
                       <Input
                         value={String(condition.value)}
@@ -217,19 +266,31 @@ export default function FilterBlock({
                 {/* Коннектор для следующего условия */}
                 {index < pendingFilterConditions.length - 1 && (
                   <div className="flex justify-center px-3">
-                    <div className="w-24">
-                      <Select
-                        value={pendingFilterConditions[index + 1].connector}
-                        onValueChange={value => updateFilterCondition(index + 1, 'connector', value)}
+                    <div className="flex items-center space-x-2 bg-muted rounded-full p-1">
+                      <Button
+                        variant={pendingFilterConditions[index + 1].connector === "AND" ? "default" : "ghost"}
+                        size="sm"
+                        className={`h-6 text-xs px-2 rounded-full ${
+                          pendingFilterConditions[index + 1].connector === "AND" 
+                            ? "bg-primary text-primary-foreground" 
+                            : ""
+                        }`}
+                        onClick={() => updateFilterCondition(index + 1, "connector", "AND")}
                       >
-                        <SelectTrigger className="h-6 text-xs px-2 py-0">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="AND" className="text-xs">И</SelectItem>
-                          <SelectItem value="OR" className="text-xs">ИЛИ</SelectItem>
-                        </SelectContent>
-                      </Select>
+                        И
+                      </Button>
+                      <Button
+                        variant={pendingFilterConditions[index + 1].connector === "OR" ? "default" : "ghost"}
+                        size="sm"
+                        className={`h-6 text-xs px-2 rounded-full ${
+                          pendingFilterConditions[index + 1].connector === "OR" 
+                            ? "bg-primary text-primary-foreground" 
+                            : ""
+                        }`}
+                        onClick={() => updateFilterCondition(index + 1, "connector", "OR")}
+                      >
+                        ИЛИ
+                      </Button>
                     </div>
                   </div>
                 )}
