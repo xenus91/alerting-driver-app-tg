@@ -349,19 +349,25 @@ export function TripCorrectionModal({
     }))
   }, [])
 
-  const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
+  / В родительском компоненте TripCorrectionModal
+const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
   setCorrections(prev => {
     const newCorrections = [...prev];
     const points = [...newCorrections[tripIndex].points];
     
-    // Меняем местами с предыдущей точкой
     if (pointIndex > 0) {
+      // Меняем местами с предыдущей точкой
       [points[pointIndex], points[pointIndex - 1]] = [points[pointIndex - 1], points[pointIndex]];
+      
+      // Обновляем порядковые номера
+      points.forEach((p, i) => {
+        p.point_num = i + 1;
+      });
     }
     
     newCorrections[tripIndex] = {
       ...newCorrections[tripIndex],
-      points: points
+      points
     };
     
     return newCorrections;
