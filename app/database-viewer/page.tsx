@@ -319,10 +319,18 @@ const TableRowRenderer = ({
 }) => {
   return (
     <TableRow key={row.id}>
-      {row.getVisibleCells().map(cell => {
+    {row.getVisibleCells().map(cell => {
         const columnId = cell.column.id;
-        const columnDef = columns.find((col: any) => col.accessorKey === columnId);
-        const columnType = columnDef?.meta?.type || "text";
+        if (!columnId) {
+          console.error(`Undefined columnId for cell:`, cell);
+          return null;
+        }
+        const columnDef = columns.find(col => col.accessorKey === columnId);
+            if (!columnDef) {
+            console.warn(`Column definition not found for: ${columnId}`);
+            return null;
+            }
+        const columnType = columnDef?.meta?.type || columnDef?.meta?.dataType || "text";
         const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
         const value = isEditing ? editValue : cell.getValue();
 
@@ -633,24 +641,20 @@ export default function DatabaseViewer() {
   }, [pendingFilterConditions]);
 
   // Создание колонок для таблицы
-  const columns = useMemo<ColumnDef<TableData>[]>(() => {
+    const columns = useMemo<ColumnDef<TableData>[]>(() => {
     if (!selectedTable || tables.length === 0) return [];
 
     const tableSchema = tables.find(t => t.name === selectedTable);
     if (!tableSchema) return [];
 
-    console.log("Creating columns for table:", selectedTable);
-    
-    return tableSchema.columns.map(col => {
-      console.log(`Column: ${col.name}, type: ${col.type}`);
-      return {
+    return tableSchema.columns.map(col => ({
+        id: col.name, // Явно задаём id
         accessorKey: col.name,
         header: col.name,
         meta: { type: col.type },
         cell: () => null
-      };
-    });
-  }, [selectedTable, tables]);
+    }));
+    }, [selectedTable, tables]);
 
   const table = useReactTable({
     data,
@@ -781,6 +785,10 @@ export default function DatabaseViewer() {
                 {table.getRowModel().rows.length > 0 ? (
                   table.getRowModel().rows.map(row => {
                     const tableSchema = tables.find(t => t.name === selectedTable);
+                        if (!tableSchema) {
+                        console.error("Table schema not loaded for:", selectedTable);
+                        return null;
+                        }
                     
                     return (
                       <TableRowRenderer
