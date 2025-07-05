@@ -81,7 +81,9 @@ const TableCellRenderer = ({
   const isBooleanType = columnType === 'boolean' || columnType === 'bool';
   
   // Проверяем, является ли тип колонки enum
-  const isEnumType = columnType.includes('enum') || columnType === 'USER-DEFINED';
+  const isEnumType = columnType === 'USER-DEFINED' || 
+                    columnType.includes('enum') || 
+                    columnType === 'trip_messages_status'; // Ваш кастомный тип
   
   // Получаем значения enum из схемы таблицы
   const enumValues = useMemo(() => {
