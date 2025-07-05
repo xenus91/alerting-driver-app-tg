@@ -283,17 +283,19 @@ export default function DatabaseViewer() {
 
 const removeFilterCondition = useCallback((index: number) => {
   setPendingFilterConditions(prev => {
+    if (prev.length === 1) {
+      // Если удаляем последний элемент - возвращаем пустой блок
+      return [{ column: '', operator: '', value: '', connector: 'AND' }];
+    }
+    
     const newConditions = [...prev];
     newConditions.splice(index, 1);
     
-    // После удаления условия, сбрасываем коннектор для следующего условия
+    // Обновляем коннекторы для оставшихся условий
     if (index < newConditions.length) {
-      // Первое условие после удаления не должно иметь коннектора
       if (index === 0 && newConditions.length > 0) {
         newConditions[0].connector = "AND";
-      }
-      // Обновляем коннектор для следующего условия
-      else if (index > 0) {
+      } else if (index > 0) {
         newConditions[index].connector = newConditions[index - 1].connector;
       }
     }
