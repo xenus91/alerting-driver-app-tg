@@ -77,7 +77,19 @@ const TableCellRenderer = ({
       return "";
     }
     
-    const date = new Date(dateString);
+    // Пробуем разные форматы даты
+    let date: Date;
+    
+    if (dateString.includes('T')) {
+      // ISO формат
+      date = new Date(dateString);
+    } else if (dateString.includes(' ')) {
+      // Формат с пробелом: YYYY-MM-DD HH:mm:ss
+      date = new Date(dateString.replace(' ', 'T'));
+    } else {
+      // Пробуем парсить как есть
+      date = new Date(dateString);
+    }
     
     if (isNaN(date.getTime())) {
       console.error(`toDateTimeLocal: invalid date - ${dateString}`);
@@ -109,7 +121,7 @@ const TableCellRenderer = ({
   if (isEditing) {
     console.log("Rendering editing mode");
     
-    if (columnType === "timestamp") {
+    if (columnType === "timestamp" || columnType === "timestamptz" || columnType === "datetime") {
       console.log("Rendering timestamp editor");
       const localValue = toDateTimeLocal(value);
       
@@ -153,35 +165,37 @@ const TableCellRenderer = ({
     );
   }
 
-    return (
-      <div className="flex gap-2 items-center">
-        <Input
-          value={value || ""}
-          onChange={e => onEditChange(e.target.value)}
-          className="w-48 h-8"
-          autoFocus
-        />
-        <Button size="sm" onClick={onSave}>
-          <Save className="h-4 w-4" />
-        </Button>
-        <Button size="sm" variant="outline" onClick={onCancel}>
-          <X className="h-4 w-4" />
-        </Button>
-      </div>
-    );
-  }
-
   // Отображение без редактирования
   if (value === null || value === undefined) {
     return <span>—</span>;
   }
 
-  if (columnType === "timestamp") {
+  if (columnType === "timestamp" || columnType === "timestamptz" || columnType === "datetime") {
     try {
-      const dateValue = typeof value === "string" ? parseISO(value) : new Date(value);
+      let dateValue: Date;
+      
+      if (typeof value === "string") {
+        if (value.includes('T')) {
+          dateValue = parseISO(value);
+        } else {
+          // Пробуем разные форматы
+          dateValue = new Date(value);
+          if (isNaN(dateValue.getTime())) {
+            dateValue = parseISO(value.replace(' ', 'T'));
+          }
+        }
+      } else {
+        dateValue = new Date(value);
+      }
+      
+      if (isNaN(dateValue.getTime())) {
+        throw new Error("Invalid date format");
+      }
+      
       return <span>{format(dateValue, "dd.MM.yyyy HH:mm", { locale: ru })}</span>;
     } catch (e) {
-      return <span>Неверный формат</span>;
+      console.error("Error formatting date:", e, "Value:", value);
+      return <span>{String(value)}</span>;
     }
   }
 
@@ -210,8 +224,6 @@ const TableRowRenderer = ({
   handleSaveEdit: (row: TableData, columnId: string) => void;
   setDeleteDialog: (dialog: { open: boolean; row: TableData | null }) => void;
 }) => {
-  console.log("Rendering TableRowRenderer");
-  
   return (
     <TableRow key={row.id}>
       {row.getVisibleCells().map(cell => {
@@ -527,25 +539,25 @@ export default function DatabaseViewer() {
     setPageIndex(0);
   }, [pendingFilterConditions]);
 
-// Создание колонок для таблицы
-const columns = useMemo<ColumnDef<TableData>[]>(() => {
-  if (!selectedTable || tables.length === 0) return [];
+  // Создание колонок для таблицы
+  const columns = useMemo<ColumnDef<TableData>[]>(() => {
+    if (!selectedTable || tables.length === 0) return [];
 
-  const tableSchema = tables.find(t => t.name === selectedTable);
-  if (!tableSchema) return [];
+    const tableSchema = tables.find(t => t.name === selectedTable);
+    if (!tableSchema) return [];
 
-  console.log("Creating columns for table:", selectedTable);
-  
-  return tableSchema.columns.map(col => {
-    console.log(`Column: ${col.name}, type: ${col.type}`);
-    return {
-      accessorKey: col.name,
-      header: col.name,
-      meta: { type: col.type },
-      cell: () => null
-    };
-  });
-}, [selectedTable, tables]);
+    console.log("Creating columns for table:", selectedTable);
+    
+    return tableSchema.columns.map(col => {
+      console.log(`Column: ${col.name}, type: ${col.type}`);
+      return {
+        accessorKey: col.name,
+        header: col.name,
+        meta: { type: col.type },
+        cell: () => null
+      };
+    });
+  }, [selectedTable, tables]);
 
   const table = useReactTable({
     data,
