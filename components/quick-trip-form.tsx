@@ -10,7 +10,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { RefreshCw, Send, Plus, Trash2, User, Zap, Check, ChevronsUpDown } from "lucide-react"
+import { RefreshCw, Send, Plus, Trash2, User, Zap, Check, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface TripData {
@@ -47,8 +47,6 @@ interface DriverWithTrips {
 
 export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProps) {
   const [driverTrips, setDriverTrips] = useState<DriverWithTrips[]>([]);
-  //const [trips, setTrips] = useState<TripData[]>([])
-  const [selectedDriver, setSelectedDriver] = useState<string>("")
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string }>>([])
   const [isLoading, setIsLoading] = useState(false)
@@ -60,14 +58,11 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   const [driverSearchOpen, setDriverSearchOpen] = useState<{ [key: string]: boolean }>({});
   const [pointSearchOpen, setPointSearchOpen] = useState<{ [key: string]: boolean }>({})
 
-
-
   // Загружаем данные при открытии модального окна
   useEffect(() => {
     if (isOpen) {
       loadDrivers();
       loadAvailablePoints();
-      // Создаем одного пустого водителя с одним рейсом по умолчанию
       setDriverTrips([{ driver: createEmptyDriver(), trips: [createEmptyTrip()] }]);
       setError(null);
       setSuccess(null);
@@ -82,7 +77,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     telegram_id: 0,
     verified: true,
   });
-
 
   const createEmptyTrip = (): TripData => ({
     trip_identifier: "",
@@ -105,7 +99,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
       const data = await response.json()
 
       if (data.success) {
-        // Фильтруем только верифицированных водителей
         const verifiedDrivers = data.users.filter((user: Driver) => user.verified && user.telegram_id)
         setDrivers(verifiedDrivers)
       } else {
@@ -152,7 +145,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     });
   };
 
-
   // Обновление точки
   const updatePoint = (driverIndex: number, tripIndex: number, pointIndex: number, field: string, value: any) => {
     setDriverTrips(prev => {
@@ -180,7 +172,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     }
   };
 
-   // Добавление рейса для конкретного водителя
+  // Добавление рейса для конкретного водителя
   const addNewTrip = (driverIndex: number) => {
     setDriverTrips(prev => {
       const updated = [...prev];
@@ -205,28 +197,73 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     setDriverTrips(prev => {
       const updated = [...prev];
       const points = updated[driverIndex].trips[tripIndex].points;
-      const maxPointNum = Math.max(...points.map(p => p.point_num || 0), 0);
+      const newPointNum = points.length > 0 ? Math.max(...points.map(p => p.point_num)) + 1 : 1;
+      
       points.push({
         point_type: "P",
-        point_num: maxPointNum + 1,
+        point_num: newPointNum,
         point_id: "",
       });
       return updated;
     });
   };
 
- // Удаление точки
+  // Удаление точки
   const removePoint = (driverIndex: number, tripIndex: number, pointIndex: number) => {
     setDriverTrips(prev => {
       const updated = [...prev];
       const points = updated[driverIndex].trips[tripIndex].points;
       if (points.length > 1) {
-        updated[driverIndex].trips[tripIndex].points = points.filter((_, i) => i !== pointIndex);
+        points.splice(pointIndex, 1);
+        // Пересчитываем порядок точек после удаления
+        recalculatePointOrder(updated[driverIndex].trips[tripIndex].points);
       }
       return updated;
     });
   };
 
+  // Перемещение точки вверх
+  const movePointUp = (driverIndex: number, tripIndex: number, pointIndex: number) => {
+    if (pointIndex === 0) return;
+    
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      const points = updated[driverIndex].trips[tripIndex].points;
+      
+      // Меняем местами с предыдущей точкой
+      [points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]];
+      
+      // Пересчитываем порядок точек
+      recalculatePointOrder(points);
+      
+      return updated;
+    });
+  };
+
+  // Перемещение точки вниз
+  const movePointDown = (driverIndex: number, tripIndex: number, pointIndex: number) => {
+    setDriverTrips(prev => {
+      const updated = [...prev];
+      const points = updated[driverIndex].trips[tripIndex].points;
+      
+      if (pointIndex >= points.length - 1) return prev;
+      
+      // Меняем местами со следующей точкой
+      [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
+      
+      // Пересчитываем порядок точек
+      recalculatePointOrder(points);
+      
+      return updated;
+    });
+  };
+
+  // Пересчет порядка точек
+  const recalculatePointOrder = (points: any[]) => {
+    points.forEach((point, index) => {
+      point.point_num = index + 1;
+    });
+  };
 
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
@@ -285,7 +322,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     return true;
   };
 
-  //   Отправка данных
+  // Отправка данных
   const sendQuickTrip = async () => {
     if (!validateForm()) return;
 
@@ -293,7 +330,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     setError(null);
 
     try {
-      // Подготавливаем данные для отправки
       const tripData = driverTrips.flatMap(driverTrip => 
         driverTrip.trips.map(trip => ({
           phone: driverTrip.driver.phone,
@@ -378,11 +414,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
       const pointName = (point.point_name || "").toLowerCase();
       return pointId.includes(search) || pointName.includes(search);
     });
-  };
-
-  const getSelectedDriverName = () => {
-    const driver = drivers.find((d) => d.phone === selectedDriver)
-    return driver ? getDriverDisplayName(driver) : "Выберите водителя"
   };
 
   const getSelectedPointName = (pointId: string) => {
@@ -599,14 +630,17 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                       <TableHeader>
                         <TableRow>
                           <TableHead>Тип</TableHead>
-                          <TableHead>№</TableHead>
                           <TableHead>Точка *</TableHead>
+                          <TableHead>Порядок</TableHead>
                           <TableHead>Действия</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
                         {trip.points.map((point, pointIndex) => {
                           const searchKey = `${driverIndex}-${tripIndex}-${pointIndex}`;
+                          const isFirst = pointIndex === 0;
+                          const isLast = pointIndex === trip.points.length - 1;
+                          
                           return (
                             <TableRow key={pointIndex}>
                               <TableCell>
@@ -632,16 +666,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                                     </SelectItem>
                                   </SelectContent>
                                 </Select>
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  value={point.point_num}
-                                  onChange={(e) =>
-                                    updatePoint(driverIndex, tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))
-                                  }
-                                  className="w-16"
-                                />
                               </TableCell>
                               <TableCell>
                                 <Popover
@@ -691,6 +715,28 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                                     </Command>
                                   </PopoverContent>
                                 </Popover>
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex gap-1">
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => movePointUp(driverIndex, tripIndex, pointIndex)}
+                                    disabled={isFirst}
+                                    title="Переместить вверх"
+                                  >
+                                    <ChevronUp className="h-4 w-4" />
+                                  </Button>
+                                  <Button
+                                    variant="outline"
+                                    size="icon"
+                                    onClick={() => movePointDown(driverIndex, tripIndex, pointIndex)}
+                                    disabled={isLast}
+                                    title="Переместить вниз"
+                                  >
+                                    <ChevronDown className="h-4 w-4" />
+                                  </Button>
+                                </div>
                               </TableCell>
                               <TableCell>
                                 <Button
