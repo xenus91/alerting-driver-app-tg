@@ -187,6 +187,10 @@ export default function DatabaseViewer() {
     setPageIndex(0)
   }, [selectedTable])
 
+  useEffect(() => {
+  console.log("Pending filter conditions updated:", pendingFilterConditions);
+}, [pendingFilterConditions]);
+
   // Обработка сохранения редактирования ячейки
   const handleSaveEdit = async (row: TableData, columnId: string) => {
     if (!selectedTable || editValue === null) return
