@@ -44,13 +44,41 @@ export async function GET(request: NextRequest) {
     const tableData = []
     for (const table of tables) {
       const columns = await sql`
-        SELECT column_name AS name, data_type AS type
+        SELECT 
+          column_name AS name, 
+          data_type AS type,
+          udt_name AS udt_type
         FROM information_schema.columns
         WHERE table_schema = 'public' AND table_name = ${table.table_name}
       `
+
+      // Для enum-колонок получаем возможные значения
+      const enhancedColumns = await Promise.all(
+        columns.map(async (column) => {
+          if (column.udt_type.startsWith('enum_')) {
+            try {
+              const enumValues = await sql`
+                SELECT e.enumlabel AS value
+                FROM pg_enum e
+                JOIN pg_type t ON e.enumtypid = t.oid
+                WHERE t.typname = ${column.udt_type}
+              `
+              return {
+                ...column,
+                enumValues: enumValues.map(row => row.value)
+              }
+            } catch (error) {
+              console.error(`Failed to get enum values for ${column.udt_type}:`, error)
+              return column
+            }
+          }
+          return column
+        })
+      )
+
       tableData.push({
         name: table.table_name,
-        columns,
+        columns: enhancedColumns,
       })
     }
 
