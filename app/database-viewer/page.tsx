@@ -330,7 +330,7 @@ const TableRowRenderer = ({
             console.warn(`Column definition not found for: ${columnId}`);
             return null;
             }
-        const columnType = columnDef?.meta?.type || columnDef?.meta?.dataType || "text";
+        const columnType = columnDef?.meta?.type || "text";
         const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
         const value = isEditing ? editValue : cell.getValue();
 
