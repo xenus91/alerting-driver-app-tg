@@ -70,6 +70,8 @@ const TableCellRenderer = ({
   onSave: () => void;
   onCancel: () => void;
 }) => {
+  console.log(`[TableCellRenderer] Rendering column: ${columnName}, type: ${columnType}, editing: ${isEditing}`);
+
   // Проверяем, является ли тип колонки временной меткой
   const isTimestampType = columnType.includes('timestamp') || 
                          columnType.includes('timestamptz') || 
@@ -83,14 +85,31 @@ const TableCellRenderer = ({
   // Проверяем, является ли тип колонки enum
   const isEnumType = columnType === 'USER-DEFINED' || 
                     columnType.includes('enum') || 
-                    columnType === 'trip_messages_status'; // Ваш кастомный тип
+                    columnType === 'trip_messages_status';
   
+  console.log(`[TableCellRenderer] Type checks: 
+    isTimestampType: ${isTimestampType}, 
+    isBooleanType: ${isBooleanType}, 
+    isEnumType: ${isEnumType}`);
+
   // Получаем значения enum из схемы таблицы
   const enumValues = useMemo(() => {
-    if (!tableSchema) return [];
+    if (!tableSchema) {
+      console.log("[TableCellRenderer] tableSchema is undefined");
+      return [];
+    }
+    
     const column = tableSchema.columns.find(c => c.name === columnName);
-    return column?.enumValues || [];
+    if (!column) {
+      console.log(`[TableCellRenderer] Column ${columnName} not found in tableSchema`);
+      return [];
+    }
+    
+    console.log(`[TableCellRenderer] Found column:`, column);
+    return column.enumValues || [];
   }, [tableSchema, columnName]);
+
+  console.log(`[TableCellRenderer] Enum values:`, enumValues);
 
   // Функция для преобразования даты в формат для datetime-local
   const toDateTimeLocal = (dateString: string) => {
@@ -126,7 +145,8 @@ const TableCellRenderer = ({
     return new Date(localString).toISOString();
   };
 
-  if (isEditing) {
+   if (isEditing) {
+    console.log(`[TableCellRenderer] EDITING MODE for ${columnName}`);
     // Режим редактирования для временных меток
     if (isTimestampType) {
       const localValue = toDateTimeLocal(value);
@@ -176,8 +196,11 @@ const TableCellRenderer = ({
       );
     }
     
-    // Режим редактирования для enum
-    if (isEnumType && enumValues.length > 0) {
+    if (isEnumType) {
+      console.log(`[TableCellRenderer] Rendering enum editor for ${columnName}`);
+      
+      if (enumValues.length > 0) {
+        console.log(`[TableCellRenderer] Showing enum selector with ${enumValues.length} options`);
       return (
         <div className="flex gap-2 items-center">
           <Select
