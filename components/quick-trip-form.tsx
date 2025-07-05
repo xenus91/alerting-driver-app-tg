@@ -57,7 +57,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   const [success, setSuccess] = useState<string | null>(null)
 
   // Состояния для поиска
-  const [driverSearchOpen, setDriverSearchOpen] = useState(false)
+  const [driverSearchOpen, setDriverSearchOpen] = useState<{ [key: string]: boolean }>({});
   const [pointSearchOpen, setPointSearchOpen] = useState<{ [key: string]: boolean }>({})
 
 
