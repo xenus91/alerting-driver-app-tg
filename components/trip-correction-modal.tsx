@@ -95,16 +95,8 @@ export function TripCorrectionModal({
             longitude: item.longitude,
           })
           return acc
-        }, {});
-              // Обновляем порядковые номера в соответствии с позицией
-          const groupedArray = Object.values(grouped);
-          groupedArray.forEach(trip => {
-            trip.points.forEach((point, i) => {
-              point.point_num = i + 1;
-            });
-          });
-          
-          setCorrections(groupedArray);
+        }, {})
+        setCorrections(Object.values(grouped))
       } else {
         setError(data.error || "Failed to load driver details")
       }
@@ -357,55 +349,6 @@ export function TripCorrectionModal({
     }))
   }, [])
 
-  // В родительском компоненте TripCorrectionModal
-const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
-  setCorrections(prev => {
-    const newCorrections = [...prev];
-    const points = [...newCorrections[tripIndex].points];
-    
-    if (pointIndex > 0) {
-      // Меняем местами с предыдущей точкой
-      [points[pointIndex], points[pointIndex - 1]] = [points[pointIndex - 1], points[pointIndex]];
-      
-      // Обновляем порядковые номера
-      points.forEach((p, i) => {
-        p.point_num = i + 1;
-      });
-    }
-    
-    newCorrections[tripIndex] = {
-      ...newCorrections[tripIndex],
-      points
-    };
-    
-    return newCorrections;
-  });
-}, []);
-
-const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
-  setCorrections(prev => {
-    const newCorrections = [...prev];
-    const points = [...newCorrections[tripIndex].points];
-    
-    if (pointIndex < points.length - 1) {
-      // Меняем местами со следующей точкой
-      [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
-      
-      // Обновляем порядковые номера
-      points.forEach((p, i) => {
-        p.point_num = i + 1;
-      });
-    }
-    
-    newCorrections[tripIndex] = {
-      ...newCorrections[tripIndex],
-      points
-    };
-    
-    return newCorrections;
-  });
-}, []);
-
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -463,8 +406,6 @@ const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
                 correctionsLength={corrections.length}
                 formatDateTime={formatDateTime}
                 formatDateTimeForSave={formatDateTimeForSave}
-                movePointUp={movePointUp}      // Передаем новую функцию
-                movePointDown={movePointDown}  // Передаем новую функцию
               />
             ))}
 
