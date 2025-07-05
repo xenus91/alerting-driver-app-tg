@@ -161,6 +161,8 @@ const TableRowRenderer = ({
   handleSaveEdit: (row: TableData, columnId: string) => void;
   setDeleteDialog: (dialog: { open: boolean; row: TableData | null }) => void;
 }) => {
+  console.log("Rendering TableRowRenderer");
+  
   return (
     <TableRow key={row.id}>
       {row.getVisibleCells().map(cell => {
@@ -170,11 +172,14 @@ const TableRowRenderer = ({
         const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
         const value = isEditing ? editValue : cell.getValue();
 
+        console.log(`Cell: ${columnId}, type: ${columnType}, isEditing: ${isEditing}`);
+        
         return (
           <TableCell key={cell.id} className="min-w-[150px]">
             <div
               className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
               onDoubleClick={() => {
+                console.log(`Double click on cell: ${columnId}`);
                 setEditingCell({ rowId: row.id, columnId });
                 setEditValue(value);
               }}
