@@ -5,7 +5,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Plus, Trash2, Check, ChevronsUpDown, X , Search } from "lucide-react"
+import { Plus, Trash2, Check, ChevronsUpDown, X, Search, ChevronUp, ChevronDown } from "lucide-react" // Добавлены иконки
 import { cn } from "@/lib/utils"
 
 interface PointData {
@@ -153,6 +153,8 @@ export const TripRow = memo(
     correctionsLength,
     formatDateTime,
     formatDateTimeForSave,
+    movePointUp,    // Новая функция
+    movePointDown,  // Новая функция
   }: {
     trip: CorrectionData
     tripIndex: number
@@ -167,6 +169,8 @@ export const TripRow = memo(
     correctionsLength: number
     formatDateTime: (dateString: string) => string
     formatDateTimeForSave: (dateString: string) => string
+    movePointUp: (tripIndex: number, pointIndex: number) => void;
+    movePointDown: (tripIndex: number, pointIndex: number) => void;
   }) => {
     const inputRef = useRef<HTMLInputElement>(null)
 
@@ -278,11 +282,11 @@ export const TripRow = memo(
               );
               const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
               return (
-                <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}`}>
+                <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}-${pointIndex}`}>
                   <TableCell>
                     <Select
                       value={point.point_type}
-                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, originalIndex, "point_type", value)}
+                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, pointIndex, "point_type", value)}
                     >
                       <SelectTrigger className="w-20">
                         <SelectValue />
@@ -305,7 +309,7 @@ export const TripRow = memo(
                     <Input
                       type="number"
                       value={point.point_num}
-                      onChange={(e) => updatePoint(tripIndex, originalIndex, "point_num", Number.parseInt(e.target.value))}
+                      onChange={(e) => updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))}
                       className="w-16"
                     />
                   </TableCell>
@@ -313,10 +317,10 @@ export const TripRow = memo(
                     <PointSelector
                       value={point.point_id}
                       onChange={(selectedPoint) => {
-                        updatePoint(tripIndex, originalIndex, "point_id", selectedPoint.point_id)
-                        updatePoint(tripIndex, originalIndex, "point_name", selectedPoint.point_name)
-                        updatePoint(tripIndex, originalIndex, "latitude", selectedPoint.latitude)
-                        updatePoint(tripIndex, originalIndex, "longitude", selectedPoint.longitude)
+                        updatePoint(tripIndex, pointIndex, "point_id", selectedPoint.point_id)
+                        updatePoint(tripIndex, pointIndex, "point_name", selectedPoint.point_name)
+                        updatePoint(tripIndex, pointIndex, "latitude", selectedPoint.latitude)
+                        updatePoint(tripIndex, pointIndex, "longitude", selectedPoint.longitude)
                       }}
                       pointKey={pointKey}
                       availablePoints={availablePoints}
@@ -326,13 +330,39 @@ export const TripRow = memo(
                   </TableCell>
                   <TableCell>
                     <Button
-                      onClick={() => removePoint(tripIndex, originalIndex)}
+                      onClick={() => removePoint(tripIndex, pointIndex)}
                       variant="outline"
                       size="sm"
                       className="text-red-600"
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>
+                  </TableCell>
+                  <TableCell>
+                    {trip.points.length > 1 && (
+                      <div className="flex flex-col gap-1 justify-center items-center">
+                        {pointIndex > 0 && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => movePointUp(tripIndex, pointIndex)}
+                            title="Переместить вверх"
+                          >
+                            <ChevronUp className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {pointIndex < trip.points.length - 1 && (
+                          <Button
+                            variant="outline"
+                            size="icon"
+                            onClick={() => movePointDown(tripIndex, pointIndex)}
+                            title="Переместить вниз"
+                          >
+                            <ChevronDown className="h-4 w-4" />
+                          </Button>
+                        )}
+                      </div>
+                    )}
                   </TableCell>
                 </TableRow>
               )
