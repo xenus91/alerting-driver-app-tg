@@ -1,448 +1,372 @@
-"use client"
-
-import type React from "react"
-import { useState, useEffect, useCallback } from "react"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
-import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Save, Send, Plus, AlertTriangle } from "lucide-react"
-import { TripRow } from "./trip-row"
-
-interface CorrectionData {
-  phone: string
-  trip_identifier: string
-  original_trip_identifier?: string
-  vehicle_number: string
-  planned_loading_time: string
-  driver_comment?: string
-  message_id: number
-  points: PointData[]
-}
+import { memo, useEffect, useRef } from "react";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Plus, Trash2, Check, ChevronsUpDown, X, Search, ChevronUp, ChevronDown } from "lucide-react";
+import { cn } from "@/lib/utils";
 
 interface PointData {
-  point_type: "P" | "D"
-  point_num: number
-  point_id: string
-  point_name?: string
-  latitude?: string
-  longitude?: string
+  point_type: "P" | "D";
+  point_num: number;
+  point_id: string;
+  point_name?: string;
+  latitude?: string;
+  longitude?: string;
 }
 
-/* ИЗМЕНЕНИЕ: Обновлён интерфейс TripCorrectionModalProps, чтобы onCorrectionSent принимал corrections и deletedTrips вместо tripIdentifiers и pointIds */
-interface TripCorrectionModalProps {
-  isOpen: boolean
-  onClose: () => void
-  tripId: number
-  phone: string
-  driverName: string
-  onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
+interface CorrectionData {
+  phone: string;
+  trip_identifier: string;
+  original_trip_identifier?: string;
+  vehicle_number: string;
+  planned_loading_time: string;
+  driver_comment?: string;
+  message_id: number;
+  points: PointData[];
 }
 
+interface PointSelectorProps {
+  value: string;
+  onChange: (point: { point_id: string; point_name: string; latitude?: string; longitude?: string }) => void;
+  pointKey: string;
+  availablePoints: Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>;
+  searchState: { open: boolean; search: string };
+  onSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void;
+}
 
-export function TripCorrectionModal({
-  isOpen,
-  onClose,
-  tripId,
-  phone,
-  driverName,
-  onCorrectionSent,
-}: TripCorrectionModalProps) {
-  const [corrections, setCorrections] = useState<CorrectionData[]>([])
-  const [deletedTrips, setDeletedTrips] = useState<string[]>([])
-  const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>>([])
-  const [pointSearchStates, setPointSearchStates] = useState<Record<string, { open: boolean; search: string }>>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [isSaving, setIsSaving] = useState(false)
-  const [isSending, setIsSending] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [success, setSuccess] = useState<string | null>(null)
+const PointSelector = memo(
+  ({ value, onChange, pointKey, availablePoints, searchState, onSearchStateChange }: PointSelectorProps) => {
+    const filterPoints = (searchTerm: string) => {
+      if (!searchTerm) return availablePoints;
+      const lowerSearch = searchTerm.toLowerCase();
+      return availablePoints.filter(
+        (point) =>
+          point.point_id.toLowerCase().includes(lowerSearch) || 
+          point.point_name?.toLowerCase().includes(lowerSearch)
+      );
+    };
+
+    const filteredPoints = filterPoints(searchState.search);
+    const selectedPoint = availablePoints.find((p) => p.point_id === value);
+
+    const handleOpenChange = (open: boolean) => {
+      if (open) {
+        onSearchStateChange(pointKey, { open: true, search: "" });
+      } else {
+        onSearchStateChange(pointKey, { open: false, search: "" });
+      }
+    };
+
+    const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+      const newSearch = e.target.value;
+      onSearchStateChange(pointKey, { search: newSearch });
+    };
+
+    const handlePointSelect = (point: { 
+      point_id: string; 
+      point_name: string; 
+      latitude?: string; 
+      longitude?: string 
+    }) => {
+      onChange(point);
+      onSearchStateChange(pointKey, { open: false, search: "" });
+    };
+
+    return (
+      <Popover open={searchState.open} onOpenChange={handleOpenChange}>
+        <PopoverTrigger asChild>
+          <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
+            {selectedPoint ? (
+              <div className="flex flex-col items-start">
+                <span className="font-medium">{selectedPoint.point_id}</span>
+                <span className="text-xs text-muted-foreground">{selectedPoint.point_name}</span>
+              </div>
+            ) : (
+              "Выберите точку..."
+            )}
+            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+          </Button>
+        </PopoverTrigger>
+        <PopoverContent className="w-[300px] p-0">
+          <div className="flex items-center border-b px-3">
+            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <input
+              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              placeholder="Поиск по коду или названию..."
+              value={searchState.search}
+              onChange={handleSearchChange}
+              autoFocus
+            />
+          </div>
+          <div className="max-h-[200px] overflow-auto">
+            {filteredPoints.length === 0 ? (
+              <div className="py-6 text-center text-sm">
+                {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
+              </div>
+            ) : (
+              filteredPoints.map((point) => (
+                <div
+                  key={point.point_id}
+                  className={cn(
+                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
+                    value === point.point_id && "bg-accent text-accent-foreground",
+                  )}
+                  onClick={() => handlePointSelect(point)}
+                >
+                  <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
+                  <div className="flex flex-col">
+                    <span className="font-medium">{point.point_id}</span>
+                    <span className="text-sm text-muted-foreground">{point.point_name}</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </PopoverContent>
+      </Popover>
+    );
+  },
+);
+PointSelector.displayName = "PointSelector";
+
+interface TripRowProps {
+  trip: CorrectionData;
+  tripIndex: number;
+  availablePoints: Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>;
+  pointSearchStates: Record<string, { open: boolean; search: string }>;
+  handleSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void;
+  updateTrip: (tripIndex: number, field: keyof CorrectionData, value: any) => void;
+  updatePoint: (tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => void;
+  addNewPoint: (tripIndex: number) => void;
+  removePoint: (tripIndex: number, pointIndex: number) => void;
+  removeTrip: (tripIndex: number) => void;
+  correctionsLength: number;
+  formatDateTime: (dateString: string) => string;
+  formatDateTimeForSave: (dateString: string) => string;
+  movePointUp: (tripIndex: number, pointIndex: number) => void;
+  movePointDown: (tripIndex: number, pointIndex: number) => void;
+}
+
+export const TripRow = memo(({
+  trip,
+  tripIndex,
+  availablePoints,
+  pointSearchStates,
+  handleSearchStateChange,
+  updateTrip,
+  updatePoint,
+  addNewPoint,
+  removePoint,
+  removeTrip,
+  correctionsLength,
+  formatDateTime,
+  formatDateTimeForSave,
+  movePointUp,
+  movePointDown,
+}: TripRowProps) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Функция для сортировки точек
+  const sortPoints = (points: PointData[]): PointData[] => {
+    return [...points].sort((a, b) => {
+      // Сначала сортируем по типу: 'P' перед 'D'
+      if (a.point_type !== b.point_type) {
+        return a.point_type === "P" ? -1 : 1;
+      }
+      // Затем сортируем по point_num по возрастанию
+      return a.point_num - b.point_num;
+    });
+  }; 
+
+  // Создаем отсортированную версию точек для отображения
+  const sortedPoints = sortPoints(trip.points);
 
   useEffect(() => {
-    if (isOpen) {
-      loadDriverDetails()
-      loadAvailablePoints()
+    if (inputRef.current && document.activeElement === inputRef.current) {
+      inputRef.current.focus();
     }
-  }, [isOpen, tripId, phone])
+  }, [trip.trip_identifier]);
 
-  const loadDriverDetails = async () => {
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`)
-      const data = await response.json()
-
-      if (data.success) {
-        const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
-          const key = item.trip_identifier
-          if (!acc[key]) {
-            acc[key] = {
-              phone: item.phone,
-              trip_identifier: item.trip_identifier,
-              original_trip_identifier: item.trip_identifier,
-              vehicle_number: item.vehicle_number,
-              planned_loading_time: item.planned_loading_time,
-              driver_comment: item.driver_comment,
-              message_id: item.message_id,
-              points: [],
-            }
-          }
-          acc[key].points.push({
-            point_type: item.point_type,
-            point_num: item.point_num,
-            point_id: item.point_id,
-            point_name: item.point_name,
-            latitude: item.latitude,
-            longitude: item.longitude,
-          })
-          return acc
-        }, {})
-        setCorrections(Object.values(grouped))
-      } else {
-        setError(data.error || "Failed to load driver details")
-      }
-    } catch (error) {
-      setError("Error loading driver details")
-      console.error("Error loading driver details:", error)
-    } finally {
-      setIsLoading(false)
-      setDeletedTrips([])
-    }
-  }
-
-  const loadAvailablePoints = async () => {
-    try {
-      const response = await fetch("/api/points")
-      const data = await response.json()
-
-      if (data.success) {
-        setAvailablePoints(data.points.map((p: any) => ({
-          point_id: p.point_id,
-          point_name: p.point_name,
-          latitude: p.latitude,
-          longitude: p.longitude,
-        })))
-      }
-    } catch (error) {
-      console.error("Error loading points:", error)
-    }
-  }
-
-  const updateTrip = useCallback((tripIndex: number, field: keyof CorrectionData, value: any) => {
-    setCorrections((prev) => {
-      const updated = [...prev]
-      updated[tripIndex] = { ...updated[tripIndex], [field]: value }
-      return updated
-    })
-  }, [])
-
-  const updatePoint = useCallback((tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
-    setCorrections((prev) => {
-      const updated = [...prev]
-      updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
-      return updated
-    })
-  }, [])
-
-  const addNewPoint = (tripIndex: number) => {
-    const maxPointNum = Math.max(...corrections[tripIndex].points.map((p) => p.point_num || 0), 0)
-    const newPoint: PointData = {
-      point_type: "P",
-      point_num: maxPointNum + 1,
-      point_id: "",
-      point_name: "",
-      latitude: "",
-      longitude: "",
-    }
-    setCorrections((prev) => {
-      const updated = [...prev]
-      updated[tripIndex].points = [...updated[tripIndex].points, newPoint]
-      return updated
-    })
-  }
-
-  const addNewTrip = () => {
-    const newTrip: CorrectionData = {
-      phone,
-      trip_identifier: "",
-      vehicle_number: "",
-      planned_loading_time: new Date().toISOString(),
-      driver_comment: "",
-      message_id: corrections[0]?.message_id || 0,
-      points: [
-        {
-          point_type: "P",
-          point_num: 1,
-          point_id: "",
-          point_name: "",
-          latitude: "",
-          longitude: "",
-        },
-      ],
-    }
-    setCorrections([...corrections, newTrip])
-  }
-
-  const removePoint = (tripIndex: number, pointIndex: number) => {
-    setCorrections((prev) => {
-      const updated = [...prev]
-      updated[tripIndex].points = updated[tripIndex].points.filter((_, i) => i !== pointIndex)
-      return updated
-    })
-  }
-
-  const removeTrip = (tripIndex: number) => {
-    const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
-    setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
-    if (tripIdentifier) {
-      setDeletedTrips((prev) => [...prev, tripIdentifier])
-    }
-  }
-
-  const saveCorrections = async () => {
-    setIsSaving(true)
-    setError(null)
-    setSuccess(null)
-
-    try {
-      const flatCorrections = corrections.flatMap((trip) =>
-        trip.points.map((point) => ({
-          phone: trip.phone,
-          trip_identifier: trip.trip_identifier,
-          original_trip_identifier: trip.original_trip_identifier,
-          vehicle_number: trip.vehicle_number,
-          planned_loading_time: trip.planned_loading_time,
-          driver_comment: trip.driver_comment,
-          message_id: trip.message_id,
-          point_type: point.point_type,
-          point_num: point.point_num,
-          point_id: point.point_id,
-          point_name: point.point_name,
-          latitude: point.latitude,
-          longitude: point.longitude,
-        }))
-      )
-
-      const response = await fetch(`/api/trips/${tripId}/save-corrections`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone,
-          corrections: flatCorrections,
-          deletedTrips,
-        }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setSuccess("Корректировки сохранены успешно!")
-        return true // === ИЗМЕНЕНИЕ: Возвращаем true при успехе ===
-      } else {
-        setError(data.error || "Failed to save corrections")
-        return false
-      }
-    } catch (error) {
-      setError("Error saving corrections")
-      console.error("Error saving corrections:", error)
-      return false
-    } finally {
-      setIsSaving(false)
-    }
-  }
-
-  const sendCorrection = async () => {
-  setIsSending(true)
-  setError(null)
-  setSuccess(null)
-
-  try {
-    console.log("sendCorrection: Starting saveCorrections")
-    const saveSuccess = await saveCorrections()
-    if (!saveSuccess) {
-      throw new Error("Failed to save corrections before sending")
-    }
-
-    const messageIds = [...new Set(corrections.map((c) => c.message_id))]
-    
-
-    /* ИЗМЕНЕНИЕ: Передаём полные corrections и deletedTrips в onCorrectionSent вместо tripIdentifiers и pointIds */
-      console.log("sendCorrection: corrections:", corrections, "deletedTrips:", deletedTrips)
-
-    const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        phone,
-        messageIds,
-        isCorrection: true,
-        deletedTrips,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (data.success) {
-      setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-              /* ИЗМЕНЕНИЕ: Исправлен вызов onCorrectionSent, чтобы передавать corrections и deletedTrips вместо tripIdentifiers, pointIds, points */
-        onCorrectionSent(corrections, deletedTrips)
-      setTimeout(() => {
-        onClose()
-      }, 3000)
-    } else {
-      setError(data.error || "Failed to send correction")
-    }
-  } catch (error) {
-    setError("Error sending correction")
-    console.error("Error sending correction:", error)
-  } finally {
-    setIsSending(false)
-  }
-}
-
-  const formatDateTime = (dateString: string) => {
-    if (!dateString) return ""
-
-    try {
-      if (dateString.includes("T")) {
-        const [datePart, timePart] = dateString.split("T")
-        const timeWithoutSeconds = timePart.split(":").slice(0, 2).join(":")
-        return `${datePart}T${timeWithoutSeconds}`
-      }
-
-      if (dateString.includes("/") || dateString.includes("-")) {
-        const dateMatch = dateString.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
-        const timeMatch = dateString.match(/(\d{1,2}):(\d{2})/)
-
-        if (dateMatch && timeMatch) {
-          const [, day, month, year] = dateMatch
-          const [, hours, minutes] = timeMatch
-
-          return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hours.padStart(2, "0")}:${minutes}`
-        }
-      }
-
-      return ""
-    } catch (error) {
-      console.error("Error formatting date:", error, "Input:", dateString)
-      return ""
-    }
-  }
-
-  const formatDateTimeForSave = (dateString: string) => {
-    if (!dateString) return ""
-    try {
-      return dateString + ":00.000"
-    } catch {
-      return dateString
-    }
-  }
-
-  const handleSearchStateChange = useCallback((key: string, state: { open?: boolean; search?: string }) => {
-    setPointSearchStates((prev) => ({
-      ...prev,
-      [key]: { ...prev[key], ...state },
-    }))
-  }, [])
+  const getPointKey = (tripIdentifier: string, pointType: string, pointNum: number) =>
+    `${trip.original_trip_identifier || `trip-${tripIndex}`}-${pointType}-${pointNum}`;
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>Корректировка рейсов для {driverName}</DialogTitle>
-        </DialogHeader>
+    <div key={trip.original_trip_identifier || `trip-${tripIndex}`} className="border rounded-lg p-4">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-lg font-semibold">Рейс {trip.trip_identifier || `Новый ${tripIndex + 1}`}</h3>
+        <div className="flex gap-2">
+          <Button
+            onClick={() => addNewPoint(tripIndex)}
+            variant="outline"
+            size="sm"
+            className="text-blue-600"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Добавить точку
+          </Button>
+          {correctionsLength > 1 && (
+            <Button
+              onClick={() => removeTrip(tripIndex)}
+              variant="outline"
+              size="sm"
+              className="text-red-600"
+            >
+              <X className="h-4 w-4 mr-2" />
+              Удалить рейс
+            </Button>
+          )}
+        </div>
+      </div>
 
-        <Alert className="border-orange-200 bg-orange-50">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <AlertDescription className="text-orange-800">
-            <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен. Водителю
-            потребуется заново подтвердить скорректированные рейсы.
-          </AlertDescription>
-        </Alert>
+      <div className="grid grid-cols-4 gap-4 mb-4">
+        <div>
+          <label className="text-sm font-medium">Номер рейса</label>
+          <Input
+            ref={inputRef}
+            value={trip.trip_identifier || ""}
+            onChange={(e) => {
+              console.log("Updating trip_identifier:", e.target.value);
+              updateTrip(tripIndex, "trip_identifier", e.target.value);
+            }}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Транспорт</label>
+          <Input
+            value={trip.vehicle_number || ""}
+            onChange={(e) => updateTrip(tripIndex, "vehicle_number", e.target.value)}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Время погрузки</label>
+          <Input
+            type="datetime-local"
+            value={formatDateTime(trip.planned_loading_time || "")}
+            onChange={(e) => updateTrip(tripIndex, "planned_loading_time", formatDateTimeForSave(e.target.value))}
+          />
+        </div>
+        <div>
+          <label className="text-sm font-medium">Комментарий</label>
+          <Input
+            value={trip.driver_comment || ""}
+            onChange={(e) => updateTrip(tripIndex, "driver_comment", e.target.value)}
+          />
+        </div>
+      </div>
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
-
-        {success && (
-          <Alert>
-            <AlertDescription className="text-green-600">{success}</AlertDescription>
-          </Alert>
-        )}
-
-        {isLoading ? (
-          <div className="flex items-center justify-center p-8">
-            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-            Загрузка данных...
-          </div>
-        ) : (
-          <div className="space-y-6">
-            <div className="flex justify-end">
-              <Button onClick={addNewTrip} variant="outline" className="text-green-600">
-                <Plus className="h-4 w-4 mr-2" />
-                Добавить новый рейс
-              </Button>
-            </div>
-
-            {corrections.map((trip, tripIndex) => (
-              <TripRow
-                key={trip.original_trip_identifier || `trip-${tripIndex}`}
-                trip={trip}
-                tripIndex={tripIndex}
-                availablePoints={availablePoints}
-                pointSearchStates={pointSearchStates}
-                handleSearchStateChange={handleSearchStateChange}
-                updateTrip={updateTrip}
-                updatePoint={updatePoint}
-                addNewPoint={addNewPoint}
-                removePoint={removePoint}
-                removeTrip={removeTrip}
-                correctionsLength={corrections.length}
-                formatDateTime={formatDateTime}
-                formatDateTimeForSave={formatDateTimeForSave}
-              />
-            ))}
-
-            <div className="flex gap-4 justify-end">
-              <Button onClick={onClose} variant="outline">
-                Отмена
-              </Button>
-              <Button onClick={saveCorrections} disabled={isSaving} variant="secondary">
-                {isSaving ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Сохранение...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Сохранить
-                  </>
-                )}
-              </Button>
-              <Button onClick={sendCorrection} disabled={isSending || isSaving}>
-                {isSending ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Отправка...
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    Отправить корректировку
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
-}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Тип</TableHead>
+            <TableHead>№</TableHead>
+            <TableHead>Точка</TableHead>
+            <TableHead>Действия</TableHead>
+            <TableHead>Переместить</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {sortedPoints.map((point) => {
+            // Находим индекс точки в оригинальном массиве
+            const originalIndex = trip.points.findIndex(
+              p => p.point_type === point.point_type && 
+                   p.point_num === point.point_num && 
+                   p.point_id === point.point_id
+            );
+            
+            const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num);
+            
+            return (
+              <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}-${originalIndex}`}>
+                <TableCell>
+                  <Select
+                    value={point.point_type}
+                    onValueChange={(value: "P" | "D") => updatePoint(tripIndex, originalIndex, "point_type", value)}
+                  >
+                    <SelectTrigger className="w-20">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="P">
+                        <Badge variant="outline" className="bg-blue-100 text-blue-600">
+                          P
+                        </Badge>
+                      </SelectItem>
+                      <SelectItem value="D">
+                        <Badge variant="outline" className="bg-green-100 text-green-600">
+                          D
+                        </Badge>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
+                </TableCell>
+                <TableCell>
+                  <Input
+                    type="number"
+                    value={point.point_num}
+                    onChange={(e) => updatePoint(tripIndex, originalIndex, "point_num", Number.parseInt(e.target.value))}
+                    className="w-16"
+                  />
+                </TableCell>
+                <TableCell>
+                  <PointSelector
+                    value={point.point_id}
+                    onChange={(selectedPoint) => {
+                      updatePoint(tripIndex, originalIndex, "point_id", selectedPoint.point_id);
+                      updatePoint(tripIndex, originalIndex, "point_name", selectedPoint.point_name);
+                      updatePoint(tripIndex, originalIndex, "latitude", selectedPoint.latitude);
+                      updatePoint(tripIndex, originalIndex, "longitude", selectedPoint.longitude);
+                    }}
+                    pointKey={pointKey}
+                    availablePoints={availablePoints}
+                    searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
+                    onSearchStateChange={handleSearchStateChange}
+                  />
+                </TableCell>
+                <TableCell>
+                  <Button
+                    onClick={() => removePoint(tripIndex, originalIndex)}
+                    variant="outline"
+                    size="sm"
+                    className="text-red-600"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+                <TableCell>
+                  {trip.points.length > 1 && (
+                    <div className="flex flex-col gap-1 justify-center items-center">
+                      {originalIndex > 0 && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => movePointUp(tripIndex, originalIndex)}
+                          title="Переместить вверх"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {originalIndex < trip.points.length - 1 && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => movePointDown(tripIndex, originalIndex)}
+                          title="Переместить вниз"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+});
+TripRow.displayName = "TripRow";
