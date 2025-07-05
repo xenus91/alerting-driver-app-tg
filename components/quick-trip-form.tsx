@@ -61,13 +61,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   const [pointSearchOpen, setPointSearchOpen] = useState<{ [key: string]: boolean }>({})
 
 
-  // Функция для переключения состояния поиска водителя
-  const toggleDriverSearch = (key: string) => {
-    setDriverSearchOpen(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
 
   // Загружаем данные при открытии модального окна
   useEffect(() => {
@@ -390,19 +383,27 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   const getSelectedDriverName = () => {
     const driver = drivers.find((d) => d.phone === selectedDriver)
     return driver ? getDriverDisplayName(driver) : "Выберите водителя"
-  }
+  };
 
   const getSelectedPointName = (pointId: string) => {
     const point = availablePoints.find((p) => p.point_id === pointId)
     return point ? `${point.point_id} - ${point.point_name}` : "Выберите точку"
-  }
+  };
 
   const togglePointSearch = (key: string) => {
     setPointSearchOpen((prev) => ({
       ...prev,
       [key]: !prev[key],
     }))
-  }
+  };
+
+  // Функция для переключения состояния поиска водителя
+  const toggleDriverSearch = (key: string) => {
+    setDriverSearchOpen(prev => ({
+      ...prev,
+      [key]: !prev[key]
+    }));
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
