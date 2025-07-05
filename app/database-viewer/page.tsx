@@ -226,6 +226,9 @@ const TableCellRenderer = ({
           </Button>
         </div>
       );
+    } else {
+        console.warn(`[TableCellRenderer] No enum values found for ${columnName}`);
+      }
     }
 
     // Стандартный режим редактирования
