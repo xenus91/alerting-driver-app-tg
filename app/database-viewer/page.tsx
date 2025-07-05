@@ -275,9 +275,26 @@ export default function DatabaseViewer() {
     });
   }, []);
 
-  const removeFilterCondition = useCallback((index: number) => {
-    setPendingFilterConditions(prev => prev.filter((_, i) => i !== index));
-  }, []);
+const removeFilterCondition = useCallback((index: number) => {
+  setPendingFilterConditions(prev => {
+    const newConditions = [...prev];
+    newConditions.splice(index, 1);
+    
+    // После удаления условия, сбрасываем коннектор для следующего условия
+    if (index < newConditions.length) {
+      // Первое условие после удаления не должно иметь коннектора
+      if (index === 0 && newConditions.length > 0) {
+        newConditions[0].connector = "AND";
+      }
+      // Обновляем коннектор для следующего условия
+      else if (index > 0) {
+        newConditions[index].connector = newConditions[index - 1].connector;
+      }
+    }
+    
+    return newConditions;
+  });
+}, []);
 
   const clearAllFilters = useCallback(() => {
     setPendingFilterConditions([]);
