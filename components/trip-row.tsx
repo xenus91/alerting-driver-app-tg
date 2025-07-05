@@ -268,7 +268,7 @@ export const TripRow = memo(({
           </TableRow>
         </TableHeader>
         <TableBody>
-          {sortedPoints.map((point) => {
+          {sortedPoints.map((point, sortedIndex) => {
             // Находим индекс точки в оригинальном массиве
             const originalIndex = trip.points.findIndex(
               p => p.point_type === point.point_type && 
@@ -338,7 +338,7 @@ export const TripRow = memo(({
                 <TableCell>
                   {trip.points.length > 1 && (
                     <div className="flex flex-col gap-1 justify-center items-center">
-                      {originalIndex > 0 && (
+                      {sortedIndex  > 0 && (
                         <Button
                           variant="outline"
                           size="icon"
@@ -348,7 +348,7 @@ export const TripRow = memo(({
                           <ChevronUp className="h-4 w-4" />
                         </Button>
                       )}
-                      {originalIndex < trip.points.length - 1 && (
+                      {sortedIndex  < sortedPoints.length - 1 && (
                         <Button
                           variant="outline"
                           size="icon"
