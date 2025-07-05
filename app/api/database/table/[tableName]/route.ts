@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { Pool } from "@neondatabase/serverless";
 
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const NULL_PLACEHOLDER = "__NULL__"; // Должен соответствовать фронтенду
 
 export async function GET(
   request: NextRequest,
@@ -70,7 +71,7 @@ export async function GET(
       );
     }
 
-   // Получение схемы таблицы
+    // Получение схемы таблицы
     const schemaRes = await client.query(
       `
       SELECT column_name, data_type
@@ -92,13 +93,32 @@ export async function GET(
 
     // Сбор всех параметров фильтра
     const filters: { [key: string]: any } = {};
+    
+    // Специальная обработка для массивов значений
+    const valueArrays: { [key: string]: string[] } = {};
+    
     searchParams.forEach((value, key) => {
       const match = key.match(/filter\[(\d+)\]\.(\w+)/);
       if (match) {
         const index = match[1];
         const field = match[2];
+        
         if (!filters[index]) filters[index] = {};
-        filters[index][field] = value;
+        
+        // Для value собираем массив
+        if (field === 'value') {
+          if (!valueArrays[index]) valueArrays[index] = [];
+          valueArrays[index].push(value);
+        } else {
+          filters[index][field] = value;
+        }
+      }
+    });
+
+    // Объединяем массивы значений с основными фильтрами
+    Object.keys(filters).forEach(index => {
+      if (valueArrays[index]) {
+        filters[index].value = valueArrays[index];
       }
     });
 
@@ -120,7 +140,7 @@ export async function GET(
       }
       
       // Обработка NULL-значений
-      if (value === "__NULL__") {
+      if (value === NULL_PLACEHOLDER) {
         if (operator === "=") {
           if (conditions.length > 0) {
             conditions.push(connector || 'AND');
@@ -162,18 +182,24 @@ export async function GET(
           
         case "in":
         case "not in":
-          const valueArray = value.split(',');
+          // value должен быть массивом
+          const valueArray = Array.isArray(value) ? value : [value];
           if (valueArray.length === 0) continue;
           
-          const placeholders = valueArray.map((_, i) => `$${paramIndex + i}`).join(",");
+          // Заменяем NULL_PLACEHOLDER на пустые строки
+          const cleanValues = valueArray.map(v => 
+            v === NULL_PLACEHOLDER ? "" : v
+          );
+          
+          const placeholders = cleanValues.map((_, i) => `$${paramIndex + i}`).join(",");
           if (conditions.length > 0) {
             conditions.push(connector || 'AND');
           }
           conditions.push(
             `"${column}" ${operator === "in" ? "IN" : "NOT IN"} (${placeholders})`
           );
-          values.push(...valueArray);
-          paramIndex += valueArray.length;
+          values.push(...cleanValues);
+          paramIndex += cleanValues.length;
           break;
           
         default:
