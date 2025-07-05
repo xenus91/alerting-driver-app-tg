@@ -129,7 +129,7 @@ export default function FilterBlock({
 
   return (
     <div className="z-50 rounded-md border bg-overlay shadow-md p-0 w-full max-w-3xl">
-      <div className="space-y-1 py-2">
+      <div className="space-y-2 py-2">
         {pendingFilterConditions.length === 0 ? (
           <div className="text-center py-4 text-sm text-muted-foreground">
             Нет активных фильтров
@@ -142,26 +142,7 @@ export default function FilterBlock({
               : [];
             
             return (
-              <div key={index} className="space-y-1">
-                {/* Коннектор между условиями */}
-                {index > 0 && (
-                  <div className="flex justify-center">
-                    <Select
-                      value={condition.connector}
-                      onValueChange={value => updateFilterCondition(index, 'connector', value)}
-                      className="w-24"
-                    >
-                      <SelectTrigger className="h-6 text-xs px-2 py-0">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="AND" className="text-xs">И</SelectItem>
-                        <SelectItem value="OR" className="text-xs">ИЛИ</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                )}
-                
+              <div key={index} className="space-y-2">
                 {/* Условие фильтра */}
                 <div className="flex w-full items-center justify-between gap-2 px-3">
                   <Select
@@ -205,7 +186,7 @@ export default function FilterBlock({
                   </Select>
                   
                   <div className="flex-1">
-                    {['in', 'not in'].includes(condition.operator) ? (
+                    {condition.operator === "in" || condition.operator === "not in" ? (
                       <MultiSelect
                         options={columnValues}
                         selected={selectedValues}
@@ -232,6 +213,26 @@ export default function FilterBlock({
                     <X className="h-3.5 w-3.5" />
                   </Button>
                 </div>
+                
+                {/* Коннектор для следующего условия */}
+                {index < pendingFilterConditions.length - 1 && (
+                  <div className="flex justify-center px-3">
+                    <div className="w-24">
+                      <Select
+                        value={pendingFilterConditions[index + 1].connector}
+                        onValueChange={value => updateFilterCondition(index + 1, 'connector', value)}
+                      >
+                        <SelectTrigger className="h-6 text-xs px-2 py-0">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="AND" className="text-xs">И</SelectItem>
+                          <SelectItem value="OR" className="text-xs">ИЛИ</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  </div>
+                )}
               </div>
             );
           })
