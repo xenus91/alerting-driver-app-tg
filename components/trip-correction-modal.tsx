@@ -205,7 +205,7 @@ export function TripCorrectionModal({
 
     try {
       const flatCorrections = corrections.flatMap((trip) =>
-        trip.points.map((point) => ({
+        trip.points.map((point, index) => ({
           phone: trip.phone,
           trip_identifier: trip.trip_identifier,
           original_trip_identifier: trip.original_trip_identifier,
@@ -214,7 +214,7 @@ export function TripCorrectionModal({
           driver_comment: trip.driver_comment,
           message_id: trip.message_id,
           point_type: point.point_type,
-          point_num: point.point_num,
+          point_num: index + 1
           point_id: point.point_id,
           point_name: point.point_name,
           latitude: point.latitude,
@@ -349,6 +349,44 @@ export function TripCorrectionModal({
     }))
   }, [])
 
+  const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
+  setCorrections(prev => {
+    const newCorrections = [...prev];
+    const points = [...newCorrections[tripIndex].points];
+    
+    // Меняем местами с предыдущей точкой
+    if (pointIndex > 0) {
+      [points[pointIndex], points[pointIndex - 1]] = [points[pointIndex - 1], points[pointIndex]];
+    }
+    
+    newCorrections[tripIndex] = {
+      ...newCorrections[tripIndex],
+      points: points
+    };
+    
+    return newCorrections;
+  });
+}, []);
+
+const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
+  setCorrections(prev => {
+    const newCorrections = [...prev];
+    const points = [...newCorrections[tripIndex].points];
+    
+    // Меняем местами со следующей точкой
+    if (pointIndex < points.length - 1) {
+      [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
+    }
+    
+    newCorrections[tripIndex] = {
+      ...newCorrections[tripIndex],
+      points: points
+    };
+    
+    return newCorrections;
+  });
+}, []);
+
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
@@ -406,6 +444,8 @@ export function TripCorrectionModal({
                 correctionsLength={corrections.length}
                 formatDateTime={formatDateTime}
                 formatDateTimeForSave={formatDateTimeForSave}
+                movePointUp={movePointUp}      // Передаем новую функцию
+                movePointDown={movePointDown}  // Передаем новую функцию
               />
             ))}
 
