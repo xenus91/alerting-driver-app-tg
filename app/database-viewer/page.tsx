@@ -33,8 +33,11 @@ import {
   SortingState,
   flexRender,
   VisibilityState,
+  Row,
 } from "@tanstack/react-table"
 import FilterBlock, { FilterCondition } from "@/components/filter-block"
+import { format, parseISO } from "date-fns"
+import { ru } from "date-fns/locale"
 
 interface TableData {
   [key: string]: any
@@ -46,6 +49,161 @@ interface TableSchema {
 }
 
 const NULL_PLACEHOLDER = "__NULL__";
+
+// Компонент для рендера ячейки с поддержкой разных типов данных
+const TableCellRenderer = ({
+  value,
+  columnType,
+  isEditing,
+  onEditChange,
+  onSave,
+  onCancel
+}: {
+  value: any;
+  columnType: string;
+  isEditing: boolean;
+  onEditChange: (value: any) => void;
+  onSave: () => void;
+  onCancel: () => void;
+}) => {
+  // Функция для преобразования даты в формат для datetime-local
+  const toDateTimeLocal = (dateString: string) => {
+    if (!dateString) return "";
+    const date = new Date(dateString);
+    if (isNaN(date.getTime())) return "";
+    
+    return new Date(date.getTime() - date.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 16);
+  };
+
+  // Функция для преобразования обратно в ISO строку
+  const fromDateTimeLocal = (localString: string) => {
+    if (!localString) return null;
+    return new Date(localString).toISOString();
+  };
+
+  if (isEditing) {
+    if (columnType === "timestamp") {
+      return (
+        <div className="flex gap-2 items-center">
+          <Input
+            type="datetime-local"
+            value={toDateTimeLocal(value)}
+            onChange={e => onEditChange(fromDateTimeLocal(e.target.value))}
+            className="w-48 h-8"
+            autoFocus
+          />
+          <Button size="sm" onClick={onSave}>
+            <Save className="h-4 w-4" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={onCancel}>
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      );
+    }
+
+    return (
+      <div className="flex gap-2 items-center">
+        <Input
+          value={value || ""}
+          onChange={e => onEditChange(e.target.value)}
+          className="w-48 h-8"
+          autoFocus
+        />
+        <Button size="sm" onClick={onSave}>
+          <Save className="h-4 w-4" />
+        </Button>
+        <Button size="sm" variant="outline" onClick={onCancel}>
+          <X className="h-4 w-4" />
+        </Button>
+      </div>
+    );
+  }
+
+  // Отображение без редактирования
+  if (value === null || value === undefined) {
+    return <span>—</span>;
+  }
+
+  if (columnType === "timestamp") {
+    try {
+      const dateValue = typeof value === "string" ? parseISO(value) : new Date(value);
+      return <span>{format(dateValue, "dd.MM.yyyy HH:mm", { locale: ru })}</span>;
+    } catch (e) {
+      return <span>Неверный формат</span>;
+    }
+  }
+
+  return <span>{String(value)}</span>;
+};
+
+// Компонент для рендера строки таблицы
+const TableRowRenderer = ({
+  row,
+  columns,
+  tableSchema,
+  editingCell,
+  editValue,
+  setEditingCell,
+  setEditValue,
+  handleSaveEdit,
+  setDeleteDialog
+}: {
+  row: Row<TableData>;
+  columns: any[];
+  tableSchema: TableSchema | undefined;
+  editingCell: { rowId: string; columnId: string } | null;
+  editValue: any;
+  setEditingCell: (cell: { rowId: string; columnId: string } | null) => void;
+  setEditValue: (value: any) => void;
+  handleSaveEdit: (row: TableData, columnId: string) => void;
+  setDeleteDialog: (dialog: { open: boolean; row: TableData | null }) => void;
+}) => {
+  return (
+    <TableRow key={row.id}>
+      {row.getVisibleCells().map(cell => {
+        const columnId = cell.column.id;
+        const columnDef = columns.find((col: any) => col.accessorKey === columnId);
+        const columnType = columnDef?.meta?.type || "text";
+        const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
+        const value = isEditing ? editValue : cell.getValue();
+
+        return (
+          <TableCell key={cell.id} className="min-w-[150px]">
+            <div
+              className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
+              onDoubleClick={() => {
+                setEditingCell({ rowId: row.id, columnId });
+                setEditValue(value);
+              }}
+            >
+              <TableCellRenderer
+                value={value}
+                columnType={columnType}
+                isEditing={isEditing}
+                onEditChange={setEditValue}
+                onSave={() => handleSaveEdit(row.original, columnId)}
+                onCancel={() => setEditingCell(null)}
+              />
+            </div>
+          </TableCell>
+        );
+      })}
+      <TableCell>
+        <Button
+          variant="destructive"
+          size="sm"
+          onClick={() => setDeleteDialog({ open: true, row: row.original })}
+          title="Удалить строку"
+        >
+          <Trash2 className="h-4 w-4" />
+        </Button>
+      </TableCell>
+    </TableRow>
+  );
+};
 
 export default function DatabaseViewer() {
   const [tables, setTables] = useState<TableSchema[]>([])
@@ -65,8 +223,8 @@ export default function DatabaseViewer() {
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
   const [pendingFilterConditions, setPendingFilterConditions] = useState<FilterCondition[]>([
-  { column: '', operator: '', value: '', connector: 'AND' }
-]);
+    { column: '', operator: '', value: '', connector: 'AND' }
+  ]);
 
   // Проверка авторизации
   useEffect(() => {
@@ -184,14 +342,14 @@ export default function DatabaseViewer() {
 
   // Сброс фильтров при смене таблицы
   useEffect(() => {
-  setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
-  setFilterConditions([]);
-  setPageIndex(0);
-}, [selectedTable]);
+    setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
+    setFilterConditions([]);
+    setPageIndex(0);
+  }, [selectedTable]);
 
   useEffect(() => {
-  console.log("Pending filter conditions updated:", pendingFilterConditions);
-}, [pendingFilterConditions]);
+    console.log("Pending filter conditions updated:", pendingFilterConditions);
+  }, [pendingFilterConditions]);
 
   // Обработка сохранения редактирования ячейки
   const handleSaveEdit = async (row: TableData, columnId: string) => {
@@ -281,34 +439,34 @@ export default function DatabaseViewer() {
     });
   }, []);
 
-const removeFilterCondition = useCallback((index: number) => {
-  setPendingFilterConditions(prev => {
-    if (prev.length === 1) {
-      // Если удаляем последний элемент - возвращаем пустой блок
-      return [{ column: '', operator: '', value: '', connector: 'AND' }];
-    }
-    
-    const newConditions = [...prev];
-    newConditions.splice(index, 1);
-    
-    // Обновляем коннекторы для оставшихся условий
-    if (index < newConditions.length) {
-      if (index === 0 && newConditions.length > 0) {
-        newConditions[0].connector = "AND";
-      } else if (index > 0) {
-        newConditions[index].connector = newConditions[index - 1].connector;
+  const removeFilterCondition = useCallback((index: number) => {
+    setPendingFilterConditions(prev => {
+      if (prev.length === 1) {
+        // Если удаляем последний элемент - возвращаем пустой блок
+        return [{ column: '', operator: '', value: '', connector: 'AND' }];
       }
-    }
-    
-    return newConditions;
-  });
-}, []);
+      
+      const newConditions = [...prev];
+      newConditions.splice(index, 1);
+      
+      // Обновляем коннекторы для оставшихся условий
+      if (index < newConditions.length) {
+        if (index === 0 && newConditions.length > 0) {
+          newConditions[0].connector = "AND";
+        } else if (index > 0) {
+          newConditions[index].connector = newConditions[index - 1].connector;
+        }
+      }
+      
+      return newConditions;
+    });
+  }, []);
 
-const clearAllFilters = useCallback(() => {
-  setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
-  setFilterConditions([]);
-  setPageIndex(0);
-}, []);
+  const clearAllFilters = useCallback(() => {
+    setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
+    setFilterConditions([]);
+    setPageIndex(0);
+  }, []);
 
   const applyFilters = useCallback(() => {
     setFilterConditions(pendingFilterConditions);
@@ -317,47 +475,21 @@ const clearAllFilters = useCallback(() => {
 
   // Создание колонок для таблицы
   const columns = useMemo<ColumnDef<TableData>[]>(() => {
-    if (!selectedTable || tables.length === 0) return []
+    if (!selectedTable || tables.length === 0) return [];
 
-    const tableSchema = tables.find(t => t.name === selectedTable)
-    if (!tableSchema) return []
+    const tableSchema = tables.find(t => t.name === selectedTable);
+    if (!tableSchema) return [];
 
     return tableSchema.columns.map(col => ({
       accessorKey: col.name,
       header: col.name,
+      meta: { type: col.type }, // Добавляем тип колонки в метаданные
       cell: ({ row, column }) => {
-        const value = row.getValue(column.id)
-        const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === column.id
-
-        return isEditing ? (
-          <div className="flex gap-2 items-center">
-            <Input
-              value={editValue ?? value}
-              onChange={e => setEditValue(e.target.value)}
-              className="w-48 h-8"
-              autoFocus
-            />
-            <Button size="sm" onClick={() => handleSaveEdit(row.original, column.id)}>
-              <Save className="h-4 w-4" />
-            </Button>
-            <Button size="sm" variant="outline" onClick={() => setEditingCell(null)}>
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        ) : (
-          <div
-            onDoubleClick={() => {
-              setEditingCell({ rowId: row.id, columnId: column.id })
-              setEditValue(value)
-            }}
-            className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
-          >
-            {value !== null && value !== undefined ? String(value) : "—"}
-          </div>
-        )
+        // Этот рендер теперь будет обрабатываться в TableRowRenderer
+        return null;
       }
-    }))
-  }, [selectedTable, tables, editingCell, editValue, handleSaveEdit])
+    }));
+  }, [selectedTable, tables]);
 
   const table = useReactTable({
     data,
@@ -486,25 +618,24 @@ const clearAllFilters = useCallback(() => {
               </TableHeader>
               <TableBody>
                 {table.getRowModel().rows.length > 0 ? (
-                  table.getRowModel().rows.map(row => (
-                    <TableRow key={row.id}>
-                      {row.getVisibleCells().map(cell => (
-                        <TableCell key={cell.id} className="min-w-[150px]">
-                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                        </TableCell>
-                      ))}
-                      <TableCell>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => setDeleteDialog({ open: true, row: row.original })}
-                          title="Удалить строку"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  ))
+                  table.getRowModel().rows.map(row => {
+                    const tableSchema = tables.find(t => t.name === selectedTable);
+                    
+                    return (
+                      <TableRowRenderer
+                        key={row.id}
+                        row={row}
+                        columns={columns}
+                        tableSchema={tableSchema}
+                        editingCell={editingCell}
+                        editValue={editValue}
+                        setEditingCell={setEditingCell}
+                        setEditValue={setEditValue}
+                        handleSaveEdit={handleSaveEdit}
+                        setDeleteDialog={setDeleteDialog}
+                      />
+                    );
+                  })
                 ) : (
                   <TableRow>
                     <TableCell colSpan={table.getAllColumns().length + 1} className="h-24 text-center">
