@@ -630,23 +630,27 @@ export default function DatabaseViewer() {
         </Alert>
       )}
 
-      <div className="flex items-center gap-4">
-        <Select value={selectedTable ?? ""} onValueChange={setSelectedTable} disabled={isLoading}>
-          <SelectTrigger className="w-[300px]">
-            <SelectValue placeholder="Выберите таблицу" />
-          </SelectTrigger>
-          <SelectContent>
-            {tables.map(table => (
-              <SelectItem key={table.name} value={table.name}>
-                {table.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+      <div className="flex flex-wrap items-center gap-4">
+        {/* Выбор таблицы */}
+        <div className="flex-1 min-w-[200px]">
+          <Select value={selectedTable ?? ""} onValueChange={setSelectedTable} disabled={isLoading}>
+            <SelectTrigger className="w-full">
+              <SelectValue placeholder="Выберите таблицу" />
+            </SelectTrigger>
+            <SelectContent>
+              {tables.map(table => (
+                <SelectItem key={table.name} value={table.name}>
+                  {table.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
 
+        {/* Управление колонками */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="outline">
+            <Button variant="outline" className="whitespace-nowrap">
               <Columns className="mr-2 h-4 w-4" />
               Колонки
             </Button>
@@ -670,36 +674,44 @@ export default function DatabaseViewer() {
             </div>
           </PopoverContent>
         </Popover>
-      </div>
 
-      {/* Блок фильтрации */}
-      {selectedTable && (
-        <FilterBlock
-          tables={tables}
-          selectedTable={selectedTable}
-          pendingFilterConditions={pendingFilterConditions}
-          distinctValues={getDistinctValues}
-          addFilterCondition={addFilterCondition}
-          updateFilterCondition={updateFilterCondition}
-          removeFilterCondition={removeFilterCondition}
-          clearAllFilters={clearAllFilters}
-          applyFilters={applyFilters}
-        />
-      )}
+        {/* Фильтры */}
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="outline" className="whitespace-nowrap">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clipRule="evenodd" />
+              </svg>
+              Фильтры
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent className="w-[500px] max-w-[90vw]">
+            <FilterBlock
+              tables={tables}
+              selectedTable={selectedTable}
+              pendingFilterConditions={pendingFilterConditions}
+              distinctValues={getDistinctValues}
+              addFilterCondition={addFilterCondition}
+              updateFilterCondition={updateFilterCondition}
+              removeFilterCondition={removeFilterCondition}
+              clearAllFilters={clearAllFilters}
+              applyFilters={applyFilters}
+            />
+          </PopoverContent>
+        </Popover>
 
-      {/* Кнопка удаления выбранных */}
-      {Object.keys(selectedRows).length > 0 && (
-        <div className="flex justify-end">
+        {/* Кнопка удаления выбранных */}
+        {Object.keys(selectedRows).length > 0 && (
           <Button 
             variant="destructive" 
             onClick={handleDeleteSelected}
-            className="flex items-center gap-2"
+            className="whitespace-nowrap"
           >
-            <Trash2 className="h-4 w-4" />
-            Удалить выбранные ({Object.keys(selectedRows).length})
+            <Trash2 className="mr-2 h-4 w-4" />
+            Удалить ({Object.keys(selectedRows).length})
           </Button>
-        </div>
-      )}
+        )}
+      </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
