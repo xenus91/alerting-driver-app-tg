@@ -184,10 +184,10 @@ export default function DatabaseViewer() {
 
   // Сброс фильтров при смене таблицы
   useEffect(() => {
-    setPendingFilterConditions([])
-    setFilterConditions([])
-    setPageIndex(0)
-  }, [selectedTable])
+  setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
+  setFilterConditions([]);
+  setPageIndex(0);
+}, [selectedTable]);
 
   useEffect(() => {
   console.log("Pending filter conditions updated:", pendingFilterConditions);
