@@ -64,7 +64,9 @@ export default function DatabaseViewer() {
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
-  const [pendingFilterConditions, setPendingFilterConditions] = useState<FilterCondition[]>([])
+  const [pendingFilterConditions, setPendingFilterConditions] = useState<FilterCondition[]>([
+  { column: '', operator: '', value: '', connector: 'AND' }
+]);
 
   // Проверка авторизации
   useEffect(() => {
