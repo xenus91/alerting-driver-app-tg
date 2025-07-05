@@ -22,7 +22,8 @@ import {
   X, 
   AlertTriangle, 
   Columns, 
-  Plus
+  Plus,
+  Check
 } from "lucide-react"
 import {
   useReactTable,
@@ -70,8 +71,6 @@ const TableCellRenderer = ({
   onSave: () => void;
   onCancel: () => void;
 }) => {
-  console.log(`[TableCellRenderer] Rendering column: ${columnName}, type: ${columnType}, editing: ${isEditing}`);
-
   // Проверяем, является ли тип колонки временной меткой
   const isTimestampType = columnType.includes('timestamp') || 
                          columnType.includes('timestamptz') || 
@@ -86,30 +85,14 @@ const TableCellRenderer = ({
   const isEnumType = columnType === 'USER-DEFINED' || 
                     columnType.includes('enum') || 
                     columnType === 'trip_messages_status';
-  
-  console.log(`[TableCellRenderer] Type checks: 
-    isTimestampType: ${isTimestampType}, 
-    isBooleanType: ${isBooleanType}, 
-    isEnumType: ${isEnumType}`);
 
   // Получаем значения enum из схемы таблицы
   const enumValues = useMemo(() => {
-    if (!tableSchema) {
-      console.log("[TableCellRenderer] tableSchema is undefined");
-      return [];
-    }
+    if (!tableSchema) return [];
     
     const column = tableSchema.columns.find(c => c.name === columnName);
-    if (!column) {
-      console.log(`[TableCellRenderer] Column ${columnName} not found in tableSchema`);
-      return [];
-    }
-    
-    console.log(`[TableCellRenderer] Found column:`, column);
-    return column.enumValues || [];
+    return column?.enumValues || [];
   }, [tableSchema, columnName]);
-
-  console.log(`[TableCellRenderer] Enum values:`, enumValues);
 
   // Функция для преобразования даты в формат для datetime-local
   const toDateTimeLocal = (dateString: string) => {
@@ -130,7 +113,6 @@ const TableCellRenderer = ({
     }
     
     if (isNaN(date.getTime())) {
-      console.error(`Invalid date format: ${dateString}`);
       return "";
     }
     
@@ -146,7 +128,6 @@ const TableCellRenderer = ({
   };
 
    if (isEditing) {
-    console.log(`[TableCellRenderer] EDITING MODE for ${columnName}`);
     // Режим редактирования для временных меток
     if (isTimestampType) {
       const localValue = toDateTimeLocal(value);
@@ -198,10 +179,7 @@ const TableCellRenderer = ({
     
     // Режим редактирования для enum
     if (isEnumType) {
-      console.log(`[TableCellRenderer] Rendering enum editor for ${columnName}`);
-      
       if (enumValues.length > 0) {
-        console.log(`[TableCellRenderer] Showing enum selector with ${enumValues.length} options`);
         return (
           <div className="flex gap-2 items-center">
             <Select
@@ -227,8 +205,6 @@ const TableCellRenderer = ({
             </Button>
           </div>
         );
-      } else {
-        console.warn(`[TableCellRenderer] No enum values found for ${columnName}`);
       }
     }
 
@@ -281,7 +257,6 @@ const TableCellRenderer = ({
       
       return <span>{format(dateValue, "dd.MM.yyyy HH:mm", { locale: ru })}</span>;
     } catch (e) {
-      console.error("Error formatting date:", e, "Value:", value);
       return <span>{String(value)}</span>;
     }
   }
@@ -293,85 +268,6 @@ const TableCellRenderer = ({
 
   // Стандартное отображение
   return <span>{String(value)}</span>;
-};
-
-// Компонент для рендера строки таблицы
-const TableRowRenderer = ({
-  row,
-  columns,
-  editingCell,
-  editValue,
-  setEditingCell,
-  setEditValue,
-  handleSaveEdit,
-  setDeleteDialog,
-  selectedTable,
-  tables
-}: {
-  row: Row<TableData>;
-  columns: any[];
-  editingCell: { rowId: string; columnId: string } | null;
-  editValue: any;
-  setEditingCell: (cell: { rowId: string; columnId: string } | null) => void;
-  setEditValue: (value: any) => void;
-  handleSaveEdit: (row: TableData, columnId: string) => void;
-  setDeleteDialog: (dialog: { open: boolean; row: TableData | null }) => void;
-  selectedTable: string | null;
-  tables: TableSchema[];
-}) => {
-  const tableSchema = useMemo(() => {
-    return tables.find(t => t.name === selectedTable);
-  }, [tables, selectedTable]);
-
-  if (!tableSchema) {
-    console.error("Table schema not loaded for:", selectedTable);
-    return null;
-  }
-
-  return (
-    <TableRow key={row.id}>
-      {row.getVisibleCells().map(cell => {
-        const columnId = cell.column.id;
-        const columnDef = columns.find(col => col.accessorKey === columnId);
-        const columnType = columnDef?.meta?.type || "text";
-        const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
-        const value = isEditing ? editValue : cell.getValue();
-
-        return (
-          <TableCell key={cell.id} className="min-w-[150px]">
-            <div
-              className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
-              onDoubleClick={() => {
-                setEditingCell({ rowId: row.id, columnId });
-                setEditValue(value);
-              }}
-            >
-              <TableCellRenderer
-                value={value}
-                columnType={columnType}
-                columnName={columnId}
-                tableSchema={tableSchema}
-                isEditing={isEditing}
-                onEditChange={setEditValue}
-                onSave={() => handleSaveEdit(row.original, columnId)}
-                onCancel={() => setEditingCell(null)}
-              />
-            </div>
-          </TableCell>
-        );
-      })}
-      <TableCell>
-        <Button
-          variant="destructive"
-          size="sm"
-          onClick={() => setDeleteDialog({ open: true, row: row.original })}
-          title="Удалить строку"
-        >
-          <Trash2 className="h-4 w-4" />
-        </Button>
-      </TableCell>
-    </TableRow>
-  );
 };
 
 export default function DatabaseViewer() {
@@ -386,8 +282,12 @@ export default function DatabaseViewer() {
   const [pageIndex, setPageIndex] = useState(0)
   const [pageSize, setPageSize] = useState(10)
   const [totalRows, setTotalRows] = useState(0)
-  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; row: TableData | null }>({ open: false, row: null })
   const [columnVisibility, setColumnVisibility] = useState<VisibilityState>({})
+  const [selectedRows, setSelectedRows] = useState<Record<string, boolean>>({})
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; rowIds: string[] }>({ 
+    open: false, 
+    rowIds: [] 
+  })
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
@@ -482,6 +382,8 @@ export default function DatabaseViewer() {
           
           setData(transformedData)
           setTotalRows(result.total || result.data.length)
+          // Сбрасываем выделение при загрузке новых данных
+          setSelectedRows({});
         } else {
           setError(result.error || `Failed to load data for table ${selectedTable}`)
         }
@@ -514,11 +416,8 @@ export default function DatabaseViewer() {
     setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
     setFilterConditions([]);
     setPageIndex(0);
+    setSelectedRows({});
   }, [selectedTable]);
-
-  useEffect(() => {
-    console.log("Pending filter conditions updated:", pendingFilterConditions);
-  }, [pendingFilterConditions]);
 
   // Обработка сохранения редактирования ячейки
   const handleSaveEdit = async (row: TableData, columnId: string) => {
@@ -545,36 +444,6 @@ export default function DatabaseViewer() {
     } catch (error) {
       setData(prev => prev.map(r => r.id === row.id ? { ...r, [columnId]: originalValue } : r))
       setError(`Ошибка обновления строки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Обработка удаления строки
-  const handleDeleteRow = async () => {
-    if (!selectedTable || !deleteDialog.row) return
-
-    const rowId = deleteDialog.row.id
-    setData(prev => prev.filter(r => r.id !== rowId))
-    setDeleteDialog({ open: false, row: null })
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const response = await fetch(`/api/database/table/${selectedTable}/delete`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id: rowId }),
-      })
-
-      const result = await response.json()
-      if (!result.success) {
-        setData(prev => [...prev, deleteDialog.row!])
-        setError(result.error || "Не удалось удалить строку")
-      }
-    } catch (error) {
-      setData(prev => [...prev, deleteDialog.row!])
-      setError(`Ошибка удаления строки: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`)
     } finally {
       setIsLoading(false)
     }
@@ -635,32 +504,95 @@ export default function DatabaseViewer() {
     setPendingFilterConditions([{ column: '', operator: '', value: '', connector: 'AND' }]);
     setFilterConditions([]);
     setPageIndex(0);
+    setSelectedRows({});
   }, []);
 
   const applyFilters = useCallback(() => {
     setFilterConditions(pendingFilterConditions);
     setPageIndex(0);
+    setSelectedRows({});
   }, [pendingFilterConditions]);
 
+  // Выделение/снятие выделения со всех строк
+  const toggleSelectAll = () => {
+    if (Object.keys(selectedRows).length === data.length) {
+      setSelectedRows({});
+    } else {
+      const newSelection: Record<string, boolean> = {};
+      data.forEach(row => {
+        newSelection[row.id] = true;
+      });
+      setSelectedRows(newSelection);
+    }
+  };
+
+  // Выделение/снятие выделения одной строки
+  const toggleRowSelection = (rowId: string) => {
+    setSelectedRows(prev => {
+      const newSelection = { ...prev };
+      if (newSelection[rowId]) {
+        delete newSelection[rowId];
+      } else {
+        newSelection[rowId] = true;
+      }
+      return newSelection;
+    });
+  };
+
+  // Обработка удаления выбранных строк
+  const handleDeleteSelected = async () => {
+    if (!selectedTable || Object.keys(selectedRows).length === 0) return;
+
+    const rowIds = Object.keys(selectedRows);
+    setDeleteDialog({ open: true, rowIds });
+  };
+
+  // Подтверждение удаления выбранных строк
+  const confirmDeleteSelected = async () => {
+    if (!selectedTable || deleteDialog.rowIds.length === 0) return;
+
+    setIsLoading(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/database/table/${selectedTable}/delete-multiple`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ids: deleteDialog.rowIds }),
+      });
+
+      const result = await response.json();
+      if (result.success) {
+        // Удаляем строки из данных
+        setData(prev => prev.filter(row => !deleteDialog.rowIds.includes(row.id)));
+        setTotalRows(prev => prev - deleteDialog.rowIds.length);
+        setSelectedRows({});
+      } else {
+        setError(result.error || "Не удалось удалить строки");
+      }
+    } catch (error) {
+      setError(`Ошибка удаления: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
+    } finally {
+      setIsLoading(false);
+      setDeleteDialog({ open: false, rowIds: [] });
+    }
+  };
+
   // Создание колонок для таблицы
-    const columns = useMemo<ColumnDef<TableData>[]>(() => {
+  const columns = useMemo<ColumnDef<TableData>[]>(() => {
     if (!selectedTable || tables.length === 0) return [];
 
-    // В TableRowRenderer перед return
-        const tableSchema = tables.find(t => t.name === selectedTable);
-        if (!tableSchema) {
-        console.error("Table schema not found for:", selectedTable);
-        return null;
-        }
+    const tableSchema = tables.find(t => t.name === selectedTable);
+    if (!tableSchema) return [];
 
     return tableSchema.columns.map(col => ({
-        id: col.name, // Явно задаём id
-        accessorKey: col.name,
-        header: col.name,
-        meta: { type: col.type },
-        cell: () => null
+      id: col.name,
+      accessorKey: col.name,
+      header: col.name,
+      meta: { type: col.type },
+      cell: () => null
     }));
-    }, [selectedTable, tables]);
+  }, [selectedTable, tables]);
 
   const table = useReactTable({
     data,
@@ -755,6 +687,20 @@ export default function DatabaseViewer() {
         />
       )}
 
+      {/* Кнопка удаления выбранных */}
+      {Object.keys(selectedRows).length > 0 && (
+        <div className="flex justify-end">
+          <Button 
+            variant="destructive" 
+            onClick={handleDeleteSelected}
+            className="flex items-center gap-2"
+          >
+            <Trash2 className="h-4 w-4" />
+            Удалить выбранные ({Object.keys(selectedRows).length})
+          </Button>
+        </div>
+      )}
+
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <Loader2 className="h-6 w-6 animate-spin mr-2" />
@@ -767,6 +713,19 @@ export default function DatabaseViewer() {
               <TableHeader>
                 {table.getHeaderGroups().map(headerGroup => (
                   <TableRow key={headerGroup.id}>
+                    {/* Колонка с чекбоксом для выделения всех */}
+                    <TableHead className="w-12">
+                      <button 
+                        onClick={toggleSelectAll}
+                        className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
+                        title="Выделить все"
+                      >
+                        {Object.keys(selectedRows).length === data.length && data.length > 0 && (
+                          <Check className="h-4 w-4 text-blue-600" />
+                        )}
+                      </button>
+                    </TableHead>
+                    
                     {headerGroup.headers.map(header => (
                       <TableHead key={header.id} className="min-w-[150px]">
                         <div className="flex items-center gap-1">
@@ -783,7 +742,6 @@ export default function DatabaseViewer() {
                         </div>
                       </TableHead>
                     ))}
-                    <TableHead className="w-[100px]">Действия</TableHead>
                   </TableRow>
                 ))}
               </TableHeader>
@@ -791,25 +749,53 @@ export default function DatabaseViewer() {
                 {table.getRowModel().rows.length > 0 ? (
                   table.getRowModel().rows.map(row => {
                     const tableSchema = tables.find(t => t.name === selectedTable);
-                        if (!tableSchema) {
-                        console.error("Table schema not loaded for:", selectedTable);
-                        return null;
-                        }
+                    if (!tableSchema) return null;
                     
                     return (
-                     <TableRowRenderer
-                        key={row.id}
-                        row={row}
-                        columns={columns}
-                        editingCell={editingCell}
-                        editValue={editValue}
-                        setEditingCell={setEditingCell}
-                        setEditValue={setEditValue}
-                        handleSaveEdit={handleSaveEdit}
-                        setDeleteDialog={setDeleteDialog}
-                        selectedTable={selectedTable}
-                        tables={tables}
-                        />
+                      <TableRow key={row.id}>
+                        {/* Чекбокс для выделения строки */}
+                        <TableCell>
+                          <button 
+                            onClick={() => toggleRowSelection(row.original.id)}
+                            className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
+                          >
+                            {selectedRows[row.original.id] && (
+                              <Check className="h-4 w-4 text-blue-600" />
+                            )}
+                          </button>
+                        </TableCell>
+                        
+                        {row.getVisibleCells().map(cell => {
+                          const columnId = cell.column.id;
+                          const columnDef = columns.find(col => col.accessorKey === columnId);
+                          const columnType = columnDef?.meta?.type || "text";
+                          const isEditing = editingCell?.rowId === row.id && editingCell?.columnId === columnId;
+                          const value = isEditing ? editValue : cell.getValue();
+
+                          return (
+                            <TableCell key={cell.id} className="min-w-[150px]">
+                              <div
+                                className="cursor-pointer hover:bg-gray-100 p-2 rounded min-w-[100px]"
+                                onDoubleClick={() => {
+                                  setEditingCell({ rowId: row.id, columnId });
+                                  setEditValue(value);
+                                }}
+                              >
+                                <TableCellRenderer
+                                  value={value}
+                                  columnType={columnType}
+                                  columnName={columnId}
+                                  tableSchema={tableSchema}
+                                  isEditing={isEditing}
+                                  onEditChange={setEditValue}
+                                  onSave={() => handleSaveEdit(row.original, columnId)}
+                                  onCancel={() => setEditingCell(null)}
+                                />
+                              </div>
+                            </TableCell>
+                          );
+                        })}
+                      </TableRow>
                     );
                   })
                 ) : (
@@ -867,17 +853,22 @@ export default function DatabaseViewer() {
         </>
       ) : null}
 
-      <Dialog open={deleteDialog.open} onOpenChange={open => setDeleteDialog({ open, row: open ? deleteDialog.row : null })}>
+      {/* Диалог подтверждения удаления выбранных строк */}
+      <Dialog open={deleteDialog.open} onOpenChange={open => setDeleteDialog({ open, rowIds: open ? deleteDialog.rowIds : [] })}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Подтверждение удаления</DialogTitle>
-            <DialogDescription>Вы уверены, что хотите удалить эту строку? Это действие нельзя отменить.</DialogDescription>
+            <DialogDescription>
+              Вы уверены, что хотите удалить выбранные строки? Это действие нельзя отменить.
+              <br />
+              <span className="font-medium">Количество: {deleteDialog.rowIds.length}</span>
+            </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, row: null })}>
+            <Button variant="outline" onClick={() => setDeleteDialog({ open: false, rowIds: [] })}>
               Отмена
             </Button>
-            <Button variant="destructive" onClick={handleDeleteRow}>
+            <Button variant="destructive" onClick={confirmDeleteSelected}>
               Удалить
             </Button>
           </DialogFooter>
