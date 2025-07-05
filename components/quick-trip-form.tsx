@@ -547,7 +547,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                         )}
                       </div>
                     </div>
-{*//dasdsadasd}
+
                 <div className="grid grid-cols-4 gap-4 mb-4">
                   <div>
                     <label className="text-sm font-medium">Номер рейса *</label>
