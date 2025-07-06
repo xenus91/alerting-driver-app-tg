@@ -689,7 +689,10 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                                       <CommandInput placeholder="Поиск по коду или названию..." />
                                       <CommandList>
                                         <CommandEmpty>Точки не найдены.</CommandEmpty>
-                                        <CommandGroup>
+                                        <CommandGroup                                        
+                                              className="max-h-[200px] overflow-auto"
+                                              onWheel={(e) => e.stopPropagation()}
+                                        >
                                           {filterPoints("").map((availablePoint) => (
                                             <CommandItem
                                               key={availablePoint.point_id}
