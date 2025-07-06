@@ -282,7 +282,7 @@ export const TripRow = memo(
                   <TableCell>
                     <Select
                       value={point.point_type}
-                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, pointIndex, "point_type", value)}
+                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, originalIndex, "point_type", value)}
                     >
                       <SelectTrigger className="w-20">
                         <SelectValue />
@@ -305,7 +305,7 @@ export const TripRow = memo(
                     <Input
                       type="number"
                       value={point.point_num}
-                      onChange={(e) => updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))}
+                      onChange={(e) => updatePoint(tripIndex, originalIndex, "point_num", Number.parseInt(e.target.value))}
                       className="w-16"
                     />
                   </TableCell>
@@ -313,10 +313,10 @@ export const TripRow = memo(
                     <PointSelector
                       value={point.point_id}
                       onChange={(selectedPoint) => {
-                        updatePoint(tripIndex, pointIndex, "point_id", selectedPoint.point_id)
-                        updatePoint(tripIndex, pointIndex, "point_name", selectedPoint.point_name)
-                        updatePoint(tripIndex, pointIndex, "latitude", selectedPoint.latitude)
-                        updatePoint(tripIndex, pointIndex, "longitude", selectedPoint.longitude)
+                        updatePoint(tripIndex, originalIndex, "point_id", selectedPoint.point_id)
+                        updatePoint(tripIndex, originalIndex, "point_name", selectedPoint.point_name)
+                        updatePoint(tripIndex, originalIndex, "latitude", selectedPoint.latitude)
+                        updatePoint(tripIndex, originalIndex, "longitude", selectedPoint.longitude)
                       }}
                       pointKey={pointKey}
                       availablePoints={availablePoints}
@@ -326,7 +326,7 @@ export const TripRow = memo(
                   </TableCell>
                   <TableCell>
                     <Button
-                      onClick={() => removePoint(tripIndex, pointIndex)}
+                      onClick={() => removePoint(tripIndex, originalIndex)}
                       variant="outline"
                       size="sm"
                       className="text-red-600"
