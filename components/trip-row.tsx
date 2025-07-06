@@ -107,10 +107,7 @@ const PointSelector = memo(
               autoFocus
             />
           </div>
-              <div 
-                className="max-h-[200px] overflow-auto"
-                onWheel={(e) => e.stopPropagation()}
-              >
+          <div className="max-h-[200px] overflow-auto">
             {filteredPoints.length === 0 ? (
               <div className="py-6 text-center text-sm">
                 {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
@@ -272,7 +269,7 @@ export const TripRow = memo(
           </TableHeader>
           <TableBody>
             {/* Используем отсортированный массив для отображения */}
-            {sortedPoints.map((point) => {
+            {sortedPoints.map((point, sortedIndex) => {
               // Находим индекс точки в оригинальном массиве
               const originalIndex = trip.points.findIndex(
                 p => p.point_type === point.point_type && 
