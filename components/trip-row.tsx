@@ -170,21 +170,6 @@ export const TripRow = memo(
   }) => {
     const inputRef = useRef<HTMLInputElement>(null)
 
-    // Функция для сортировки точек
-    const sortPoints = (points: PointData[]): PointData[] => {
-      return [...points].sort((a, b) => {
-        // Сначала сортируем по типу: 'P' перед 'D'
-        if (a.point_type !== b.point_type) {
-          return a.point_type === "P" ? -1 : 1;
-        }
-        // Затем сортируем по point_num по возрастанию
-        return a.point_num - b.point_num;
-      });
-    }; 
-
-        // Создаем отсортированную версию точек для отображения
-    const sortedPoints = sortPoints(trip.points);
-
     useEffect(() => {
       if (inputRef.current && document.activeElement === inputRef.current) {
         inputRef.current.focus()
@@ -268,14 +253,7 @@ export const TripRow = memo(
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* Используем отсортированный массив для отображения */}
-            {sortedPoints.map((point, sortedIndex) => {
-              // Находим индекс точки в оригинальном массиве
-              const originalIndex = trip.points.findIndex(
-                p => p.point_type === point.point_type && 
-                     p.point_num === point.point_num && 
-                     p.point_id === point.point_id
-              );
+            {trip.points.map((point, pointIndex) => {
               const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
               return (
                 <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}`}>
