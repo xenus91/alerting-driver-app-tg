@@ -269,7 +269,7 @@ export const TripRow = memo(
           </TableHeader>
           <TableBody>
             {/* Используем отсортированный массив для отображения */}
-            {sortedPoints.map((point, sortedIndex) => {
+            {sortedPoints.map((point) => {
               // Находим индекс точки в оригинальном массиве
               const originalIndex = trip.points.findIndex(
                 p => p.point_type === point.point_type && 
