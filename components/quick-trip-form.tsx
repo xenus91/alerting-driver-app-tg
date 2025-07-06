@@ -531,7 +531,10 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
                         <CommandInput placeholder="Поиск по имени или телефону..." />
                         <CommandList>
                           <CommandEmpty>Водители не найдены.</CommandEmpty>
-                          <CommandGroup>
+                                    <CommandGroup 
+                                        className="max-h-[200px] overflow-auto"
+                                        onWheel={(e) => e.stopPropagation()}
+                                      >
                             {filterDrivers("").map(driver => (
                               <CommandItem
                                 key={driver.phone}
