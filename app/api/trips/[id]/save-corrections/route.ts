@@ -140,8 +140,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
           if (pointResult.length > 0) {
             await sql`
-              INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
-              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier})
+              INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier, driver_phone )
+              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier}, ${phone} )
             `
 
             console.log(`Added point ${point.point_id} to trip ${tripData.new_trip_identifier}`)
