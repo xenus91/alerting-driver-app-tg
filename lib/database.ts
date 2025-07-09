@@ -315,10 +315,11 @@ export async function createTripPoint(
   pointType: "P" | "D",
   pointNum: number,
   tripIdentifier?: string,
+  driverPhone?: string // Добавляем новый параметр
 ) {
   try {
     console.log(
-      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}`,
+      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}, driverPhone: ${driverPhone}`
     )
 
     const pointResult = await sql`
