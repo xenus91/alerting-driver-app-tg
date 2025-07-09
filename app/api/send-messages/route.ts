@@ -288,6 +288,7 @@ async function sendExistingMessages(tripId: number, sql: any) {
             tp.*, 
             p.point_name, 
             p.point_id as point_short_id, 
+            p.adress,
             p.door_open_1, 
             p.door_open_2, 
             p.door_open_3,
