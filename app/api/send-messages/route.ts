@@ -466,6 +466,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             loadingPointsData.push({
               point_id: point.point_id,
               point_name: point.point_name,
+              point_adress: point.adress,
               point_num: loadingPoint.point_num,
               door_open_1: point.door_open_1,
               door_open_2: point.door_open_2,
@@ -482,6 +483,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             unloadingPointsData.push({
               point_id: point.point_id,
               point_name: point.point_name,
+              point_adress: point.adress,
               point_num: unloadingPoint.point_num,
               door_open_1: point.door_open_1,
               door_open_2: point.door_open_2,
