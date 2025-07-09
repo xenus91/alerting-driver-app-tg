@@ -342,12 +342,14 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
             .map(p => ({
               point_id: p.point_id,
               point_num: p.point_num,
+              driver_phone: driverTrip.driver.phone // Добавляем номер водителя
             })),
           unloading_points: trip.points
             .filter(p => p.point_type === "D")
             .map(p => ({
               point_id: p.point_id,
               point_num: p.point_num,
+              driver_phone: driverTrip.driver.phone // Добавляем номер водителя
             })),
         }))
       );
