@@ -230,6 +230,7 @@ export function TripCorrectionModal({
         },
         body: JSON.stringify({
           phone,
+          driver_phone: phone, // Добавлено
           corrections: flatCorrections,
           deletedTrips,
         }),
