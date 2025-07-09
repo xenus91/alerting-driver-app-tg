@@ -42,6 +42,7 @@ export interface Point {
   adress?: string // Поле адреса (с одной 'd' как в БД)
   created_at: string
   updated_at: string
+  
 }
 
 export interface TripPoint {
@@ -59,6 +60,7 @@ export interface TripPoint {
   door_open_3?: string
   latitude?: number
   longitude?: number
+  driver_phone?: string // Добавляем новое поле
 }
 
 export interface TripMessage {
@@ -428,13 +430,13 @@ export async function deletePoint(id: number) {
   }
 }
 
-export async function getTripPoints(tripId: number) {
+export async function getTripPoints(tripId: number, driverPhone?: string) {
   try {
     const result = await sql`
       SELECT tp.*, p.point_name, p.point_id as point_short_id, p.door_open_1, p.door_open_2, p.door_open_3, p.latitude, p.longitude
       FROM trip_points tp
       JOIN points p ON tp.point_id = p.id
-      WHERE tp.trip_id = ${tripId}
+      WHERE tp.trip_id = ${tripId} AND tp.driver_phone = ${driverPhone}
       ORDER BY tp.point_type, tp.point_num
     `
     return result as TripPoint[]
