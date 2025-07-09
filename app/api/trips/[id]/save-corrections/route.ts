@@ -37,7 +37,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         // Удаляем из trip_points
         await sql`
           DELETE FROM trip_points 
-          WHERE trip_id = ${tripId} 
+          WHERE trip_id = ${tripId}
+            AND driver_phone = ${phone} // Добавлено 
             AND trip_identifier = ${tripIdentifier}
         `
 
