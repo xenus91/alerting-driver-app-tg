@@ -274,6 +274,12 @@ export async function sendMultipleTripMessageWithButtons(
         message += `📦 <b>Погрузка:</b>\n`
         trip.loading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
+          // === НАЧАЛО ИЗМЕНЕНИЙ ===
+          // Добавляем адрес с возможной ссылкой на карты
+          message += formatAddress(point);
+          // === КОНЕЦ ИЗМЕНЕНИЙ ===
+        
+        
         });
         message += `\n`;
       }
@@ -283,6 +289,10 @@ export async function sendMultipleTripMessageWithButtons(
         message += `📤 <b>Разгрузка:</b>\n`;
         trip.unloading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
+                    // === НАЧАЛО ИЗМЕНЕНИЙ ===
+          // Добавляем адрес с возможной ссылкой на карты
+          message += formatAddress(point);
+          // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
           // Окна приемки для пункта разгрузки
           const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim());
