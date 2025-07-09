@@ -254,7 +254,7 @@ export default function TripDetailPage() {
         vehicle_number: message.vehicle_number || "",
         planned_loading_time: message.planned_loading_time || "",
         driver_comment: message.driver_comment || "",
-        route: buildRouteForTrip(message.trip_identifier || ""),
+        route: buildRouteForTrip(message.trip_identifier || "", driver.phone), // Передаем номер водителя
         status: message.status,
         response_status: message.response_status,
         response_comment: message.response_comment,
