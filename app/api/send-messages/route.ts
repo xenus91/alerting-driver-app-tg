@@ -87,17 +87,6 @@ function generateMessageText(trips: any[], firstName: string): string {
   let message = `🌅 <b>Доброго времени суток!</b>\n\n`
   message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
 
-
-  // Функция для создания ссылки на Яндекс.Карты
-  const createYandexMapsLink = (point: any) => {
-    if (point.latitude && point.longitude) {
-      const lat = typeof point.latitude === 'string' ? parseFloat(point.latitude) : point.latitude;
-      const lng = typeof point.longitude === 'string' ? parseFloat(point.longitude) : point.longitude;
-      return `https://yandex.ru/maps/?pt=${lng},${lat}&z=16`;
-    }
-    return null;
-  };
-
   const isMultiple = trips.length > 1
   message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
 
@@ -155,15 +144,6 @@ function generateMessageText(trips: any[], firstName: string): string {
       message += `📦 <b>Погрузка:</b>\n`
       trip.loading_points.forEach((point: any, index: number) => {
         message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-      // Добавляем адрес с гиперссылкой если есть координаты
-        if (point.address) {
-          const yandexLink = createYandexMapsLink(point);
-          if (yandexLink) {
-            message += `   <a href="${yandexLink}">${point.address}</a>\n`
-          } else {
-            message += `   ${point.address}\n`
-          }
-        }
       })
       message += `\n`
     }
@@ -172,15 +152,6 @@ function generateMessageText(trips: any[], firstName: string): string {
       message += `📤 <b>Разгрузка:</b>\n`
       trip.unloading_points.forEach((point: any, index: number) => {
         message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-        // Добавляем адрес с гиперссылкой если есть координаты
-        if (point.address) {
-          const yandexLink = createYandexMapsLink(point);
-          if (yandexLink) {
-            message += `   <a href="${yandexLink}">${point.address}</a>\n`
-          } else {
-            message += `   ${point.address}\n`
-          }
-        }
 
         const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
         if (windows.length > 0) {
@@ -553,6 +524,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             "P",
             loadingPoint.point_num,
             tripDataItem.trip_identifier,
+            phone // Номер водителя
           )
           console.log(`Created loading point: ${loadingPoint.point_id}`)
         }
@@ -570,6 +542,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             "D",
             unloadingPoint.point_num,
             tripDataItem.trip_identifier,
+            phone // Номер водителя
           )
           console.log(`Created unloading point: ${unloadingPoint.point_id}`)
         }
