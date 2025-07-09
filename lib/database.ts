@@ -337,7 +337,7 @@ export async function createTripPoint(
 
     const result = await sql`
       INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
-      VALUES (${tripId}, ${pointResult[0].id}, ${pointType}, ${pointNum}, ${tripIdentifier || null})
+      VALUES (${tripId}, ${pointResult[0].id}, ${pointType}, ${pointNum}, ${tripIdentifier || null},  ${driverPhone})
       RETURNING *
     `
 
