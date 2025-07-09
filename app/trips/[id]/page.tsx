@@ -207,7 +207,7 @@ export default function TripDetailPage() {
   const buildRouteForTrip = (tripIdentifier: string, driverPhone: string): string => {
     const points = tripPoints.filter((point) => point.trip_identifier === tripIdentifier && 
       // Используем существующее поле phone вместо добавления нового
-      point.phone === driverPhone)
+      point.driver_phone  === driverPhone)
 
     if (points.length === 0) {
       return "Нет данных"
