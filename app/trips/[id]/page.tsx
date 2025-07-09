@@ -203,8 +203,10 @@ export default function TripDetailPage() {
   }, [tripId])
 
   // Построение маршрута для конкретного рейса
-  const buildRouteForTrip = (tripIdentifier: string): string => {
-    const points = tripPoints.filter((point) => point.trip_identifier === tripIdentifier)
+  const buildRouteForTrip = (tripIdentifier: string, driverPhone: string): string => {
+    const points = tripPoints.filter((point) => point.trip_identifier === tripIdentifier && 
+      // Используем существующее поле phone вместо добавления нового
+      point.phone === driverPhone)
 
     if (points.length === 0) {
       return "Нет данных"
