@@ -172,6 +172,31 @@ export async function sendMultipleTripMessageWithButtons(
     console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}`);
     console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || 'None'}`);
 
+        // === НАЧАЛО ИЗМЕНЕНИЙ ===
+    // Функция для форматирования адреса с ссылкой на карты
+    const formatAddress = (point: {
+      address?: string;
+      latitude?: number | string;
+      longitude?: number | string;
+    }): string => {
+      if (!point.address) return "";
+      
+      // Если есть координаты - создаем ссылку на Яндекс.Карты
+      if (point.latitude && point.longitude) {
+        // Приводим координаты к строке и удаляем возможные пробелы
+        const lat = point.latitude.toString().trim();
+        const lng = point.longitude.toString().trim();
+        
+        // Формируем URL для Яндекс.Карт
+        const yandexMapsUrl = `https://yandex.ru/maps/?text=${lat},${lng}`;
+        return `\n   🏠 <a href="${yandexMapsUrl}">${point.address}</a>`;
+      }
+      
+      // Если координат нет - просто выводим адрес
+      return `\n   🏠 ${point.address}`;
+    };
+    // === КОНЕЦ ИЗМЕНЕНИЙ ===
+
     // Генерируем красивое сообщение для нового сообщения
     let message = "";
 
