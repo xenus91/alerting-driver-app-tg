@@ -140,22 +140,22 @@ export async function sendMultipleTripMessageWithButtons(
     loading_points: Array<{
       point_id: string;
       point_name: string;
-      address?: string; // ДОБАВЛЯЕМ ПОЛЕ АДРЕСА
       door_open_1?: string;
       door_open_2?: string;
       door_open_3?: string;
       latitude?: number | string;
       longitude?: number | string;
+      address?: string; // Добавляем адрес
     }>;
     unloading_points: Array<{
       point_id: string;
       point_name: string;
-      address?: string; // ДОБАВЛЯЕМ ПОЛЕ АДРЕСА
       door_open_1?: string;
       door_open_2?: string;
       door_open_3?: string;
       latitude?: number | string;
       longitude?: number | string;
+      address?: string; // Добавляем адрес
     }>;
   }>,
   firstName: string,
@@ -171,31 +171,16 @@ export async function sendMultipleTripMessageWithButtons(
     console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`);
     console.log(`Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}`);
     console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || 'None'}`);
-
-        // === НАЧАЛО ИЗМЕНЕНИЙ ===
-    // Функция для форматирования адреса с ссылкой на карты
-    const formatAddress = (point: {
-      address?: string;
-      latitude?: number | string;
-      longitude?: number | string;
-    }): string => {
-      if (!point.address) return "";
-      
-      // Если есть координаты - создаем ссылку на Яндекс.Карты
-      if (point.latitude && point.longitude) {
-        // Приводим координаты к строке и удаляем возможные пробелы
-        const lat = point.latitude.toString().trim();
-        const lng = point.longitude.toString().trim();
-        
-        // Формируем URL для Яндекс.Карт
-        const yandexMapsUrl = `https://yandex.ru/maps/?text=${lat},${lng}`;
-        return `\n   🏠 <a href="${yandexMapsUrl}">${point.address}</a>`;
-      }
-      
-      // Если координат нет - просто выводим адрес
-      return `\n   🏠 ${point.address}`;
-    };
-    // === КОНЕЦ ИЗМЕНЕНИЙ ===
+    
+     // Функция для создания ссылки на Яндекс.Карты
+  const createYandexMapsLink = (point: any) => {
+    if (point.latitude && point.longitude) {
+      const lat = typeof point.latitude === 'string' ? parseFloat(point.latitude) : point.latitude;
+      const lng = typeof point.longitude === 'string' ? parseFloat(point.longitude) : point.longitude;
+      return `https://yandex.ru/maps/?pt=${lng},${lat}&z=16`;
+    }
+    return null;
+  };
 
     // Генерируем красивое сообщение для нового сообщения
     let message = "";
@@ -274,26 +259,33 @@ export async function sendMultipleTripMessageWithButtons(
         message += `📦 <b>Погрузка:</b>\n`
         trip.loading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
-          // === НАЧАЛО ИЗМЕНЕНИЙ ===
-          // Добавляем адрес с возможной ссылкой на карты
-          message += formatAddress(point);
-          // === КОНЕЦ ИЗМЕНЕНИЙ ===
-        
-        
-        });
-        message += `\n`;
-      }
+         // Добавляем адрес с гиперссылкой
+        if (point.address) {
+          const yandexLink = createYandexMapsLink(point);
+          if (yandexLink) {
+            message += `   <a href="${yandexLink}">${point.address}</a>\n`
+          } else {
+            message += `   ${point.address}\n`
+          }
+        }
+      });
+      message += `\n`
+    }
 
       // Пункты разгрузки
       if (trip.unloading_points.length > 0) {
         message += `📤 <b>Разгрузка:</b>\n`;
         trip.unloading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
-                    // === НАЧАЛО ИЗМЕНЕНИЙ ===
-          // Добавляем адрес с возможной ссылкой на карты
-          message += formatAddress(point);
-          // === КОНЕЦ ИЗМЕНЕНИЙ ===
-
+           // Добавляем адрес с гиперссылкой
+        if (point.address) {
+          const yandexLink = createYandexMapsLink(point);
+          if (yandexLink) {
+            message += `   <a href="${yandexLink}">${point.address}</a>\n`
+          } else {
+            message += `   ${point.address}\n`
+          }
+        }
           // Окна приемки для пункта разгрузки
           const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim());
           if (windows.length > 0) {

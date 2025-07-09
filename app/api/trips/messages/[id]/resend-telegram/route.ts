@@ -54,7 +54,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         tp.*, 
         p.point_name, 
         p.point_id as point_short_id, 
-        p.adress,
         p.door_open_1, 
         p.door_open_2, 
         p.door_open_3,
@@ -71,7 +70,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       pointsResult.map((p) => ({
         id: p.point_short_id,
         name: p.point_name,
-
         lat: p.latitude,
         lng: p.longitude,
         type: p.point_type,
@@ -85,7 +83,6 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const pointInfo = {
         point_id: point.point_short_id,
         point_name: point.point_name,
-        point_adress: point.adress,
         door_open_1: point.door_open_1,
         door_open_2: point.door_open_2,
         door_open_3: point.door_open_3,
