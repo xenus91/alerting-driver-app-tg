@@ -430,13 +430,13 @@ export async function deletePoint(id: number) {
   }
 }
 
-export async function getTripPoints(tripId: number, driverPhone?: string) {
+export async function getTripPoints(tripId: number) {
   try {
     const result = await sql`
       SELECT tp.*, p.point_name, p.point_id as point_short_id, p.door_open_1, p.door_open_2, p.door_open_3, p.latitude, p.longitude
       FROM trip_points tp
       JOIN points p ON tp.point_id = p.id
-      WHERE tp.trip_id = ${tripId} AND tp.driver_phone = ${driverPhone}
+      WHERE tp.trip_id = ${tripId}
       ORDER BY tp.point_type, tp.point_num
     `
     return result as TripPoint[]
