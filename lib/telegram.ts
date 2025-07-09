@@ -140,6 +140,7 @@ export async function sendMultipleTripMessageWithButtons(
     loading_points: Array<{
       point_id: string;
       point_name: string;
+      address?: string; // ДОБАВЛЯЕМ ПОЛЕ АДРЕСА
       door_open_1?: string;
       door_open_2?: string;
       door_open_3?: string;
@@ -149,6 +150,7 @@ export async function sendMultipleTripMessageWithButtons(
     unloading_points: Array<{
       point_id: string;
       point_name: string;
+      address?: string; // ДОБАВЛЯЕМ ПОЛЕ АДРЕСА
       door_open_1?: string;
       door_open_2?: string;
       door_open_3?: string;
