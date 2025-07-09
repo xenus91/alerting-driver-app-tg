@@ -53,6 +53,7 @@ interface TripPoint {
   point_name: string
   trip_identifier: string
   phone?: string
+  driver_phone?: string 
   point_short_id?: string
   door_open_1?: boolean
   door_open_2?: boolean
