@@ -112,6 +112,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const pointInfo = {
           point_id: point.point_id,
           point_name: point.point_name,
+          point_adress: point.adress,
           door_open_1: point.door_open_1,
           door_open_2: point.door_open_2,
           door_open_3: point.door_open_3,
