@@ -207,6 +207,7 @@ export function TripCorrectionModal({
       const flatCorrections = corrections.flatMap((trip) =>
         trip.points.map((point) => ({
           phone: trip.phone,
+          driver_phone: phone, // Добавлено новое поле
           trip_identifier: trip.trip_identifier,
           original_trip_identifier: trip.original_trip_identifier,
           vehicle_number: trip.vehicle_number,
