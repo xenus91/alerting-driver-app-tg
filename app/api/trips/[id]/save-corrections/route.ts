@@ -168,6 +168,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           p.point_name,
           tp.point_type,
           tp.point_num,
+          p.adress,
           p.latitude,
           p.longitude,
           p.door_open_1,
