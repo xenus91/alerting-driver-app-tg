@@ -83,7 +83,7 @@ export async function POST(request: NextRequest) {
  * Это устраняет ошибку NOT NULL для столбца message в таблице trip_messages.
  * Логика формирования текста перенесена из sendFromUploadedData для идентичности с предыдущей реализацией.
  */
-function generateMessageText(trips: any[], firstName: string): string {
+async function generateMessageText(trips: any[], firstName: string): string {
   let message = `🌅 <b>Доброго времени суток!</b>\n\n`
   message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
 
