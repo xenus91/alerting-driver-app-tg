@@ -29,7 +29,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         p.point_name,
         tm.id as message_id
       FROM trip_messages tm
-      LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
+      LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier AND tp.driver_phone = tm.phone
       LEFT JOIN points p ON tp.point_id = p.id
       WHERE tm.trip_id = ${tripId} AND tm.phone = ${phone}
       ORDER BY tm.trip_identifier, tp.point_type DESC, tp.point_num
