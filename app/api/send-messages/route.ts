@@ -503,7 +503,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
               door_open_3: point.door_open_3,
               latitude: point.latitude,
               longitude: point.longitude,
-              address: point.address
+              address: point.adress
             })
           }
         }
@@ -520,7 +520,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
               door_open_3: point.door_open_3,
               latitude: point.latitude,
               longitude: point.longitude,
-              address: point.address
+              address: point.adress
             })
           }
         }
