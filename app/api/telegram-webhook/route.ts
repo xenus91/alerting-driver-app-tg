@@ -770,7 +770,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // НОВЫЙ БЛОК: Обработка подтверждения рейса с реплаем
+// НОВЫЙ БЛОК: Обработка подтверждения рейса с реплаем
       if (data?.startsWith("confirm_")) {
         const messageId = Number.parseInt(data.split("_")[1])
         console.log(`Processing confirmation for message ${messageId}`)
@@ -902,7 +902,6 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ ok: true, status: "rejection_error" })
         }
       }
-    }
 
       console.log("❓ Unknown callback query data:", data)
       // Игнорируем неизвестные callback query без ошибок
