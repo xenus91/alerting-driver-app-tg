@@ -178,7 +178,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   FROM trip_messages tm
   LEFT JOIN (
     SELECT * FROM trip_points 
-    WHERE driver_phone = ${phone}  // Явная фильтрация по водителю
+    WHERE driver_phone = ${phone}  
   ) tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
   LEFT JOIN points p ON tp.point_id = p.id
   LEFT JOIN users u ON tm.telegram_id = u.telegram_id
