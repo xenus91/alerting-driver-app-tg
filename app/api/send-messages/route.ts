@@ -160,12 +160,12 @@ function generateMessageText(trips: any[], firstName: string): string {
         message += `${index + 1}) <b>${pointInfo.point_id} ${pointInfo.point_name}</b>\n`
         
         // Добавляем адрес с гиперссылкой
-        if (pointInfo.address) {
+        if (pointInfo.adress) {
           if (pointInfo.latitude && pointInfo.longitude) {
             const mapUrl = `https://yandex.ru/maps/?pt=${pointInfo.longitude},${pointInfo.latitude}&z=16&l=map`
-            message += `   📍 <a href="${mapUrl}">${pointInfo.address}</a>\n`
+            message += `   📍 <a href="${mapUrl}">${pointInfo.adress}</a>\n`
           } else {
-            message += `   📍 ${pointInfo.address}\n`
+            message += `   📍 ${pointInfo.adress}\n`
           }
         }
       }
@@ -184,12 +184,12 @@ function generateMessageText(trips: any[], firstName: string): string {
         message += `${index + 1}) <b>${pointInfo.point_id} ${pointInfo.point_name}</b>\n`
         
         // Добавляем адрес с гиперссылкой
-        if (pointInfo.address) {
+        if (pointInfo.adress) {
           if (pointInfo.latitude && pointInfo.longitude) {
             const mapUrl = `https://yandex.ru/maps/?pt=${pointInfo.longitude},${pointInfo.latitude}&z=16&l=map`
-            message += `   📍 <a href="${mapUrl}">${pointInfo.address}</a>\n`
+            message += `   📍 <a href="${mapUrl}">${pointInfo.adress}</a>\n`
           } else {
-            message += `   📍 ${pointInfo.address}\n`
+            message += `   📍 ${pointInfo.adress}\n`
           }
         }
 
