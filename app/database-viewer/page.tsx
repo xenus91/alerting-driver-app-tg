@@ -529,18 +529,18 @@ export default function DatabaseViewer() {
     setShowFilters(false);
   }, [pendingFilterConditions]);
 
-  // Выделение/снятие выделения со всех строк
-  const toggleSelectAll = () => {
-    if (Object.keys(selectedRows).length === data.length) {
-      setSelectedRows({});
-    } else {
-      const newSelection: Record<string, boolean> = {};
-      data.forEach(row => {
-        newSelection[row.id] = true;
-      });
-      setSelectedRows(newSelection);
-    }
-  };
+ // Выделение всех строк
+const toggleSelectAll = () => {
+  if (Object.keys(selectedRows).length === data.length) {
+    setSelectedRows({});
+  } else {
+    const newSelection: Record<string, boolean> = {};
+    data.forEach(row => {
+      newSelection[String(row.id)] = true; // Используем строковые ключи
+    });
+    setSelectedRows(newSelection);
+  }
+};
 
   // Выделение/снятие выделения одной строки
 const toggleRowSelection = (rowId: number) => { // Изменено на number
