@@ -98,7 +98,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     p.longitude
   FROM (
     SELECT * FROM trip_points 
-    WHERE driver_phone = ${phone}  // Явная фильтрация по водителю
+    WHERE driver_phone = ${phone}  -- Явная фильтрация по водителю
   ) tp
   JOIN points p ON tp.point_id = p.id
   WHERE tp.trip_id = ${tripId} 
