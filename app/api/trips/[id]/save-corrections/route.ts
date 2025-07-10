@@ -176,7 +176,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           p.door_open_2,
           p.door_open_3
         FROM trip_messages tm
-        LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
+        LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier AND tp.driver_phone = tm.phone 
         LEFT JOIN points p ON tp.point_id = p.id
         LEFT JOIN users u ON tm.telegram_id = u.telegram_id
         WHERE tm.trip_id = ${tripId}
