@@ -564,35 +564,44 @@ export default function DatabaseViewer() {
   };
 
   // Подтверждение удаления выбранных строк
-  const confirmDeleteSelected = async () => {
-    if (!selectedTable || deleteDialog.rowIds.length === 0) return;
+const confirmDeleteSelected = async () => {
+  if (!selectedTable || deleteDialog.rowIds.length === 0) return;
 
-    setIsLoading(true);
-    setError(null);
+  // Сохраняем копию текущих данных на случай отката
+  const prevData = [...data];
+  
+  // Сразу обновляем данные - удаляем строки локально
+  setData(prev => prev.filter(row => !deleteDialog.rowIds.includes(row.id)));
+  setTotalRows(prev => prev - deleteDialog.rowIds.length);
+  setSelectedRows({});
+  
+  setIsLoading(true);
+  setError(null);
 
-    try {
-      const response = await fetch(`/api/database/table/${selectedTable}/delete-multiple`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: deleteDialog.rowIds }),
-      });
+  try {
+    const response = await fetch(`/api/database/table/${selectedTable}/delete-multiple`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids: deleteDialog.rowIds }),
+    });
 
-      const result = await response.json();
-      if (result.success) {
-        // Удаляем строки из данных
-        setData(prev => prev.filter(row => !deleteDialog.rowIds.includes(row.id)));
-        setTotalRows(prev => prev - deleteDialog.rowIds.length);
-        setSelectedRows({});
-      } else {
-        setError(result.error || "Не удалось удалить строки");
-      }
-    } catch (error) {
-      setError(`Ошибка удаления: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
-    } finally {
-      setIsLoading(false);
-      setDeleteDialog({ open: false, rowIds: [] });
+    const result = await response.json();
+    if (!result.success) {
+      // Если удаление на сервере не удалось - возвращаем старые данные
+      setData(prevData);
+      setTotalRows(prev => prev + deleteDialog.rowIds.length);
+      setError(result.error || "Не удалось удалить строки");
     }
-  };
+  } catch (error) {
+    // В случае ошибки также возвращаем старые данные
+    setData(prevData);
+    setTotalRows(prev => prev + deleteDialog.rowIds.length);
+    setError(`Ошибка удаления: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
+  } finally {
+    setIsLoading(false);
+    setDeleteDialog({ open: false, rowIds: [] });
+  }
+};
 
   // Создание колонок для таблицы
   const columns = useMemo<ColumnDef<TableData>[]>(() => {
