@@ -979,8 +979,8 @@ export async function POST(request: NextRequest) {
         }
       }
 
-    // Обработка команды /toroute - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
-    if (messageText === "/toroute") {
+      // Обработка команды /toroute - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
+      if (messageText === "/toroute") {
       console.log("=== PROCESSING /TOROUTE COMMAND ===")
 
       try {
@@ -1069,14 +1069,14 @@ export async function POST(request: NextRequest) {
           status: "toroute_error",
           error: error instanceof Error ? error.message : "Unknown error",
           timestamp: timestamp,
-      })
+        })
       }
-    }}
+    
   
     
 
-    // Обработка команды /status
-    if (messageText === "/status") {
+      // Обработка команды /status
+      if (messageText === "/status") {
       console.log("=== PROCESSING /STATUS COMMAND ===")
 
       try {
@@ -1121,10 +1121,10 @@ export async function POST(request: NextRequest) {
           timestamp: timestamp,
         })
       }
-    }
+    
 
-    // Обработка команды /help
-    if (messageText === "/help") {
+      // Обработка команды /help
+      if (messageText === "/help") {
       console.log("=== PROCESSING /HELP COMMAND ===")
 
       try {
@@ -1169,10 +1169,10 @@ export async function POST(request: NextRequest) {
           timestamp: timestamp,
         })
       }
-    }
+    
 
-    // Обработка команды /start - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
-    if (messageText === "/start") {
+      // Обработка команды /start - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
+      if (messageText === "/start") {
       console.log("=== PROCESSING /START COMMAND ===")
 
       try {
