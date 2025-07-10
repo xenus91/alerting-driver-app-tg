@@ -95,7 +95,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     p.door_open_2,
     p.door_open_3,
     p.latitude,
-    p.longitude
+    p.longitude,
+    p.adress
   FROM (
     SELECT * FROM trip_points 
     WHERE driver_phone = ${phone}  
