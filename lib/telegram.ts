@@ -145,6 +145,7 @@ export async function sendMultipleTripMessageWithButtons(
       door_open_3?: string;
       latitude?: number | string;
       longitude?: number | string;
+      adress?: string;
     }>;
     unloading_points: Array<{
       point_id: string;
@@ -154,6 +155,7 @@ export async function sendMultipleTripMessageWithButtons(
       door_open_3?: string;
       latitude?: number | string;
       longitude?: number | string;
+      adress?: string; // Добавлено поле адреса
     }>;
   }>,
   firstName: string,
@@ -164,7 +166,6 @@ export async function sendMultipleTripMessageWithButtons(
   isResend = false,
   // === КОНЕЦ ИЗМЕНЕНИЙ ===
   previousTelegramMessageId?: number,
-  messageText?: string // Добавляем новый параметр
 ): Promise<{ message_id: number; messageText: string }> {
   try {
     console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`);
@@ -243,11 +244,23 @@ export async function sendMultipleTripMessageWithButtons(
 
       message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`;
 
-      // Пункты погрузки
+       // Погрузка с адресом и ссылкой
       if (trip.loading_points.length > 0) {
-        message += `📦 <b>Погрузка:</b>\n`
+        message += `📦 <b>Погрузка:</b>\n`;
         trip.loading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
+          
+          // Добавляем адрес с гиперссылкой
+          if (point.adress) {
+            if (point.latitude && point.longitude) {
+              const lat = typeof point.latitude === 'string' ? point.latitude : String(point.latitude);
+              const lng = typeof point.longitude === 'string' ? point.longitude : String(point.longitude);
+              const mapUrl = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`;
+              message += `   📍 <a href="${mapUrl}">${point.adress}</a>\n`;
+            } else {
+              message += `   📍 ${point.adress}\n`;
+            }
+          }
         });
         message += `\n`;
       }
