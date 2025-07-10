@@ -325,7 +325,7 @@ async function sendExistingMessages(tripId: number, sql: any) {
             p.door_open_3,
             p.latitude,
             p.longitude,
-            p.address
+            p.adress
           FROM trip_points tp
           JOIN points p ON tp.point_id = p.id
           WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${trip.trip_identifier}
