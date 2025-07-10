@@ -121,6 +121,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           door_open_3: point.door_open_3,
           latitude: point.latitude,
           longitude: point.longitude,
+          adress: point.adress // Добавляем адрес
         };
 
         if (point.point_type === "P") {
