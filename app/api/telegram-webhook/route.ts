@@ -770,158 +770,96 @@ export async function POST(request: NextRequest) {
         }
       }
 
-      // Обработка подтверждения рейса
+      // НОВЫЙ БЛОК: Обработка подтверждения рейса с реплаем
       if (data?.startsWith("confirm_")) {
-    const messageId = Number.parseInt(data.split("_")[1])
-    console.log(`Processing confirmation for message ${messageId}`)
+        const messageId = Number.parseInt(data.split("_")[1])
+        console.log(`Processing confirmation for message ${messageId}`)
 
-    try {
-        // Получаем информацию о сообщении
-        const messageResult = await sql`
+        try {
+          // Получаем информацию о сообщении
+          const messageResult = await sql`
             SELECT 
-                trip_id,
-                phone,
-                message,
-                trip_identifier,
-                vehicle_number,
-                planned_loading_time
+              trip_id,
+              phone,
+              telegram_message_id
             FROM trip_messages 
             WHERE id = ${messageId}
             LIMIT 1
-        `
+          `
 
-        let phone, trip_id, tripDetails
-        if (messageResult.length === 0) {
+          let phone, trip_id, telegramMessageId
+          if (messageResult.length === 0) {
             console.log(`Message ${messageId} not found, trying to find by user telegram_id`)
 
             // Альтернативный поиск
             const userMessageResult = await sql`
-                SELECT 
-                    trip_id,
-                    phone,
-                    message,
-                    trip_identifier,
-                    vehicle_number,
-                    planned_loading_time
-                FROM trip_messages
-                WHERE telegram_id = ${userId} AND response_status = 'pending'
-                LIMIT 1
+              SELECT 
+                trip_id,
+                phone,
+                telegram_message_id
+              FROM trip_messages
+              WHERE telegram_id = ${userId} AND response_status = 'pending'
+              LIMIT 1
             `
 
             if (userMessageResult.length === 0) {
-                throw new Error(`No pending messages found for user ${userId}`)
+              throw new Error(`No pending messages found for user ${userId}`)
             }
 
-            console.log(`Found alternative message for user ${userId}:`, userMessageResult[0])
             phone = userMessageResult[0].phone
             trip_id = userMessageResult[0].trip_id
-            tripDetails = userMessageResult[0]
-        } else {
+            telegramMessageId = userMessageResult[0].telegram_message_id
+          } else {
             phone = messageResult[0].phone
             trip_id = messageResult[0].trip_id
-            tripDetails = messageResult[0]
-        }
+            telegramMessageId = messageResult[0].telegram_message_id
+          }
 
-        console.log(`Confirming for phone: ${phone}, trip_id: ${trip_id}`)
-
-        // Обновляем ВСЕ сообщения этого водителя в этой рассылке
-        const updateResult = await sql`
+          // Обновляем ВСЕ сообщения этого водителя
+          const updateResult = await sql`
             UPDATE trip_messages 
             SET response_status = 'confirmed', 
                 response_comment = NULL,
                 response_at = ${new Date().toISOString()}
             WHERE phone = ${phone} AND trip_id = ${trip_id}
             RETURNING id
-        `
+          `
 
-        console.log(`Updated ${updateResult.length} messages for phone ${phone}`)
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, "Спасибо! Рейс подтвержден!")
 
-        // Отвечаем на callback query
-        await answerCallbackQuery(callbackQuery.id, "Спасибо! Рейс подтвержден!")
-
-        // Скрываем кнопки после подтверждения
-        if (callbackQuery.message?.message_id) {
+          // Скрываем кнопки
+          if (callbackQuery.message?.message_id) {
             await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] })
+          }
+
+          // Отправляем реплай на исходное сообщение
+          await sendReplyToMessage(
+            chatId, 
+            telegramMessageId, 
+            "✅ Рейс(ы) подтвержден(ы)\n\nСпасибо за ваш ответ!"
+          );
+
+          return NextResponse.json({ ok: true, status: "confirmed_processed" })
+        } catch (error) {
+          console.error("Error processing confirmation:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при обработке подтверждения.")
+          return NextResponse.json({ ok: true, status: "confirmation_error" })
         }
+      }
 
-        // Форматируем сообщение о подтверждении
-        let confirmationMessage = `✅ <b>Спасибо! Рейс(ы) подтвержден(ы)</b>\n\n`
-        confirmationMessage += `📋 <b>Детали рейса:</b>\n\n`
-        
-        // Извлекаем и модифицируем основное сообщение
-        if (tripDetails.message) {
-            // Находим позицию начала описания рейса
-            const startIndex = tripDetails.message.indexOf("🚛 На Вас запланирован");
-            
-            if (startIndex !== -1) {
-                // Вырезаем часть сообщения начиная с описания рейса
-                let tripDescription = tripDetails.message.substring(startIndex);
-                
-                // Заменяем текст о планировании на подтверждение
-                tripDescription = tripDescription.replace(
-                    "🚛 На Вас запланирован", 
-                    "🚛 Вы подтвердили"
-                );
-                
-                // Удаляем кнопки подтверждения в конце сообщения
-                const endIndex = tripDescription.lastIndexOf("🙏 <b>Просьба подтвердить рейс</b>");
-                if (endIndex !== -1) {
-                    tripDescription = tripDescription.substring(0, endIndex);
-                }
-                
-                confirmationMessage += tripDescription;
-            } else {
-                // Если не нашли стандартное начало, используем всё сообщение
-                confirmationMessage += tripDetails.message
-                    .replace(/🙏 <b>Просьба подтвердить рейс<\/b>/g, "")
-                    .trim();
-            }
-        } else {
-            confirmationMessage += `Информация о рейсе недоступна`;
-        }
-
-        // Добавляем основную информацию
-        confirmationMessage += `\n\n🆔 Номер рейса: <b>${tripDetails.trip_identifier || 'не указан'}</b>`;
-        confirmationMessage += `\n🚗 Транспорт: <b>${tripDetails.vehicle_number || 'не указан'}</b>`;
-        confirmationMessage += `\n⏰ Время погрузки: <b>${tripDetails.planned_loading_time ? new Date(tripDetails.planned_loading_time).toLocaleString('ru-RU') : 'не указано'}</b>`;
-
-        await sendMessage(chatId, confirmationMessage);
-
-        console.log("=== CONFIRMATION PROCESSED ===")
-
-        return NextResponse.json({
-            ok: true,
-            status: "confirmed_processed",
-            message_id: messageId,
-            updated_messages: updateResult.length,
-            timestamp: timestamp,
-        })
-    } catch (error) {
-        console.error("Error processing confirmation:", error)
-        await sendMessage(chatId, "❌ Произошла ошибка при обработке подтверждения.")
-
-        return NextResponse.json({
-            ok: true,
-            status: "confirmation_error",
-            error: error instanceof Error ? error.message : "Unknown error",
-            timestamp: timestamp,
-        })
-    }
-}
-
-      // Обработка отклонения рейса - сразу запрашиваем комментарий
+      // НОВЫЙ БЛОК: Обработка отклонения рейса с запросом причины
       if (data?.startsWith("reject_")) {
         const messageId = Number.parseInt(data.split("_")[1])
         console.log(`Processing rejection for message ${messageId}`)
 
         try {
-          // Получаем пользователя
           const user = await getUserByTelegramId(userId)
           if (!user) {
             throw new Error("User not found")
           }
 
-          // Проверяем, что у пользователя есть pending сообщения
+          // Проверяем pending сообщения
           const pendingCheck = await sql`
             SELECT COUNT(*) as count
             FROM trip_messages 
@@ -933,42 +871,38 @@ export async function POST(request: NextRequest) {
           }
 
           // Устанавливаем pending action для ожидания причины
-          // Используем messageId для связи
-          await setUserPendingAction(user.id, "awaiting_rejection_reason", messageId)
+          await setUserPendingAction(
+            user.id, 
+            "awaiting_rejection_reason", 
+            messageId, // сохраняем ID сообщения для связи
+            { 
+              chatId, 
+              originalMessageId: callbackQuery.message?.message_id 
+            }
+          )
 
-          // Отвечаем на callback query (игнорируем ошибки старых запросов)
+          // Отвечаем на callback query
           await answerCallbackQuery(callbackQuery.id, "Внесите комментарий")
 
-          // Скрываем кнопки исходного сообщения после отклонения
+          // Скрываем кнопки исходного сообщения
           if (callbackQuery.message?.message_id) {
             await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] })
           }
 
+          // Отправляем запрос причины
           await sendMessage(
             chatId,
-            `📝 Пожалуйста, укажите причину отклонения рейса:\n\n(Напишите сообщение с причиной отклонения)`,
+            `📝 Пожалуйста, укажите причину отклонения рейса в ответ на это сообщение:`
           )
 
-          console.log("=== AWAITING REJECTION REASON ===")
-
-          return NextResponse.json({
-            ok: true,
-            status: "awaiting_rejection_reason",
-            message_id: messageId,
-            timestamp: timestamp,
-          })
+          return NextResponse.json({ ok: true, status: "awaiting_rejection_reason" })
         } catch (error) {
           console.error("Error processing rejection:", error)
           await sendMessage(chatId, "❌ Произошла ошибка при обработке отклонения.")
-
-          return NextResponse.json({
-            ok: true, // Возвращаем ok: true чтобы не блокировать webhook
-            status: "rejection_error",
-            error: error instanceof Error ? error.message : "Unknown error",
-            timestamp: timestamp,
-          })
+          return NextResponse.json({ ok: true, status: "rejection_error" })
         }
       }
+    }
 
       console.log("❓ Unknown callback query data:", data)
       // Игнорируем неизвестные callback query без ошибок
