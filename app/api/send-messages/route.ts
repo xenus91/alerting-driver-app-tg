@@ -161,7 +161,15 @@ function generateMessageText(trips: any[], firstName: string): string {
       message += `📤 <b>Разгрузка:</b>\n`
       trip.unloading_points.forEach((point: any, index: number) => {
         message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-
+         // Добавьте адрес с гиперссылкой
+    if (point.address) {
+      if (point.latitude && point.longitude) {
+        const mapUrl = `https://yandex.ru/maps/?pt=${point.longitude},${point.latitude}&z=16&l=map`
+        message += `   📍 <a href="${mapUrl}">${point.address}</a>\n`
+      } else {
+        message += `   📍 ${point.address}\n`
+      }
+    }
         const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
         if (windows.length > 0) {
           message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
