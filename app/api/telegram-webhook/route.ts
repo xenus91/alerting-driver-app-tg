@@ -909,23 +909,75 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, status: "callback_ignored" })
     }
 
-    if (!update.message) {
-      console.log("No message in update, returning OK")
-      return NextResponse.json({ ok: true, status: "no_message" })
-    }
+    // Обработка обычных сообщений (текст, контакты и т.д.)
+    if (update.message) {
+      const message = update.message
+      const chatId = message.chat.id
+      const userId = message.from.id
+      const messageText = message.text
 
-    const message = update.message
-    const chatId = message.chat.id
-    const userId = message.from.id
-    const messageText = message.text
+      console.log(`=== PROCESSING MESSAGE ===`)
+      console.log(`User: ${userId} (${message.from.first_name})`)
+      console.log(`Chat: ${chatId}`)
+      console.log(`Text: "${messageText}"`)
 
-    console.log(`=== PROCESSING MESSAGE ===`)
-    console.log(`User: ${userId} (${message.from.first_name})`)
-    console.log(`Chat: ${chatId}`)
-    console.log(`Text: "${messageText}"`)
+      // Получаем информацию о пользователе
+      const existingUser = await getUserByTelegramId(userId)
 
-    // Получаем информацию о пользователе
-    const existingUser = await getUserByTelegramId(userId)
+      // НОВЫЙ БЛОК: Обработка причины отклонения рейса
+      if (existingUser && messageText) {
+        const pendingAction = await getUserPendingAction(existingUser.id)
+        
+        if (pendingAction && pendingAction.action_type === "awaiting_rejection_reason") {
+          console.log(`Processing rejection reason: "${messageText}"`)
+          
+          try {
+            // Получаем данные из pending action
+            const actionData = JSON.parse(pendingAction.action_data || "{}")
+            const tripMessageId = pendingAction.related_message_id
+            const originalMessageId = actionData.originalMessageId
+            
+            if (!tripMessageId) {
+              throw new Error("No trip message ID in pending action")
+            }
+
+            // Обновляем запись в базе данных
+            const updateResult = await sql`
+              UPDATE trip_messages 
+              SET response_status = 'rejected', 
+                  response_comment = ${messageText},
+                  response_at = ${new Date().toISOString()}
+              WHERE id = ${tripMessageId}
+              RETURNING id
+            `
+
+            console.log(`Updated ${updateResult.length} messages`)
+
+            // Удаляем pending action
+            await deleteUserPendingAction(existingUser.id)
+
+            // Отправляем подтверждение с реплаем
+            if (originalMessageId) {
+              await sendReplyToMessage(
+                chatId,
+                originalMessageId,
+                `❌ Рейс отклонен.\n\nПричина: ${messageText}\n\nСпасибо за ответ.`
+              )
+            } else {
+              await sendMessage(
+                chatId,
+                `❌ Рейс отклонен.\n\nПричина: ${messageText}\n\nСпасибо за ответ.`
+              )
+            }
+
+            return NextResponse.json({ ok: true, status: "rejection_reason_processed" })
+          } catch (error) {
+            console.error("Error processing rejection reason:", error)
+            await sendMessage(chatId, "❌ Произошла ошибка при сохранении причины отклонения.")
+            return NextResponse.json({ ok: true, status: "rejection_reason_error" })
+          }
+        }
+      }
 
     // Обработка команды /toroute - ПРИОРИТЕТ ПЕРЕД PENDING ACTIONS
     if (messageText === "/toroute") {
