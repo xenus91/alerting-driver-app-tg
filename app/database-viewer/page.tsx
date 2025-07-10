@@ -563,16 +563,19 @@ export default function DatabaseViewer() {
     setDeleteDialog({ open: true, rowIds });
   };
 
-  // Подтверждение удаления выбранных строк
+ // Подтверждение удаления выбранных строк
 const confirmDeleteSelected = async () => {
   if (!selectedTable || deleteDialog.rowIds.length === 0) return;
 
-  // Сохраняем копию текущих данных на случай отката
+  // Сохраняем копию текущих данных
   const prevData = [...data];
   
-  // Сразу обновляем данные - удаляем строки локально
-  setData(prev => prev.filter(row => !deleteDialog.rowIds.includes(row.id)));
-  setTotalRows(prev => prev - deleteDialog.rowIds.length);
+  // Преобразуем ID строк в числа для корректного сравнения
+  const numericIds = deleteDialog.rowIds.map(id => parseInt(id, 10));
+  
+  // Оптимистичное обновление - удаляем строки локально
+  setData(prev => prev.filter(row => !numericIds.includes(row.id)));
+  setTotalRows(prev => prev - numericIds.length);
   setSelectedRows({});
   
   setIsLoading(true);
@@ -582,20 +585,21 @@ const confirmDeleteSelected = async () => {
     const response = await fetch(`/api/database/table/${selectedTable}/delete-multiple`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ids: deleteDialog.rowIds }),
+      // Отправляем числа, а не строки
+      body: JSON.stringify({ ids: numericIds }),
     });
 
     const result = await response.json();
     if (!result.success) {
-      // Если удаление на сервере не удалось - возвращаем старые данные
+      // Если ошибка - восстанавливаем данные
       setData(prevData);
-      setTotalRows(prev => prev + deleteDialog.rowIds.length);
+      setTotalRows(prev => prev + numericIds.length);
       setError(result.error || "Не удалось удалить строки");
     }
   } catch (error) {
-    // В случае ошибки также возвращаем старые данные
+    // Восстанавливаем данные при ошибке
     setData(prevData);
-    setTotalRows(prev => prev + deleteDialog.rowIds.length);
+    setTotalRows(prev => prev + numericIds.length);
     setError(`Ошибка удаления: ${error instanceof Error ? error.message : "Неизвестная ошибка"}`);
   } finally {
     setIsLoading(false);
