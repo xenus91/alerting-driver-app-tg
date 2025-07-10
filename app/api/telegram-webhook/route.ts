@@ -41,6 +41,42 @@ interface TelegramUpdate {
   callback_query?: TelegramCallbackQuery
 }
 
+// НОВАЯ ФУНКЦИЯ: Отправка реплая на сообщение
+async function sendReplyToMessage(chatId: number, replyToMessageId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      text: text,
+      parse_mode: "HTML",
+      reply_to_message_id: replyToMessageId
+    }
+
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send reply message")
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error sending reply message:", error)
+    // Если не получилось отправить реплай, отправляем обычное сообщение
+    await sendMessage(chatId, text)
+    throw error
+  }
+}
+
 async function sendMessage(chatId: number, text: string) {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
   const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
