@@ -737,22 +737,29 @@ const confirmDeleteSelected = async () => {
             </PopoverContent>
           </Popover>
 
-          {/* Кнопка удаления выбранных - появляется только при выборе */}
+         {/* Кнопка удаления выбранных */}
           {Object.keys(selectedRows).length > 0 && (
             <Button 
               variant="destructive" 
               onClick={handleDeleteSelected}
               className="whitespace-nowrap transition-all duration-300"
               size="sm"
+              disabled={isLoading} // Блокируем во время загрузки
               style={{
                 maxWidth: Object.keys(selectedRows).length > 0 ? '200px' : '0',
                 opacity: Object.keys(selectedRows).length > 0 ? 1 : 0
               }}
             >
-              <Trash2 className="mr-1 h-4 w-4" />
-              Удалить ({Object.keys(selectedRows).length})
-            </Button>
-          )}
+              {isLoading ? (
+                <Loader2 className="mr-1 h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Trash2 className="mr-1 h-4 w-4" />
+                  Удалить ({Object.keys(selectedRows).length})
+                </>
+              )}
+  </Button>
+)}
         </div>
       </div>
 
