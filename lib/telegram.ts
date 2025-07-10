@@ -265,13 +265,25 @@ export async function sendMultipleTripMessageWithButtons(
         message += `\n`;
       }
 
-      // Пункты разгрузки
+      // Разгрузка с адресом и ссылкой
       if (trip.unloading_points.length > 0) {
         message += `📤 <b>Разгрузка:</b>\n`;
         trip.unloading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
+          
+          // Добавляем адрес с гиперссылкой
+          if (point.adress) {
+            if (point.latitude && point.longitude) {
+              const lat = typeof point.latitude === 'string' ? point.latitude : String(point.latitude);
+              const lng = typeof point.longitude === 'string' ? point.longitude : String(point.longitude);
+              const mapUrl = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`;
+              message += `   📍 <a href="${mapUrl}">${point.adress}</a>\n`;
+            } else {
+              message += `   📍 ${point.adress}\n`;
+            }
+          }
 
-          // Окна приемки для пункта разгрузки
+          // Окна приемки
           const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim());
           if (windows.length > 0) {
             message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`;
