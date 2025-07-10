@@ -770,7 +770,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-// НОВЫЙ БЛОК: Обработка подтверждения рейса с реплаем
+      // НОВЫЙ БЛОК: Обработка подтверждения рейса с реплаем
       if (data?.startsWith("confirm_")) {
         const messageId = Number.parseInt(data.split("_")[1])
         console.log(`Processing confirmation for message ${messageId}`)
