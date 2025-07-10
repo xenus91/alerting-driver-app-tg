@@ -172,9 +172,10 @@ async function generateMessageText(trips: any[], firstName: string): string {
       message += `\n`
     }
 
+// Разгрузка с адресом и ссылкой
     if (trip.unloading_points.length > 0) {
       message += `📤 <b>Разгрузка:</b>\n`
-            for (const [index, pointData] of trip.unloading_points.entries()) {
+      for (const [index, pointData] of trip.unloading_points.entries()) {
         const pointInfo = pointsMap.get(pointData.point_id);
         if (!pointInfo) {
           message += `${index + 1}) <b>${pointData.point_id} (точка не найдена)</b>\n`
@@ -192,6 +193,19 @@ async function generateMessageText(trips: any[], firstName: string): string {
             message += `   📍 ${pointInfo.adress}\n`
           }
         }
+
+        const windows = [
+          pointInfo.door_open_1, 
+          pointInfo.door_open_2, 
+          pointInfo.door_open_3
+        ].filter(w => w && w.trim());
+        
+        if (windows.length > 0) {
+          message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
+        }
+      }
+      message += `\n`
+    }
 
     if (trip.driver_comment && trip.driver_comment.trim()) {
       message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
