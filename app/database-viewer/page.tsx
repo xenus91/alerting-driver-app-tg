@@ -824,7 +824,6 @@ const confirmDeleteSelected = async () => {
                       <TableRow key={row.id}>
                         {/* Чекбокс для выделения строки */}
                         <TableCell>
-                         // В рендере строк таблицы:
                             <button 
                               onClick={() => toggleRowSelection(row.original.id)} // ID теперь число
                               className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
