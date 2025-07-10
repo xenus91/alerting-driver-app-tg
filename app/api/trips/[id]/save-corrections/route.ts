@@ -168,6 +168,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     tm.telegram_message_id,
     tp.point_id,
     p.point_name,
+    p.adress,
     tp.point_type,
     tp.point_num,
     p.latitude,
