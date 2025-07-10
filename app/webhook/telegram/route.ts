@@ -41,6 +41,52 @@ interface TelegramUpdate {
   callback_query?: TelegramCallbackQuery
 }
 
+
+// НОВАЯ ФУНКЦИЯ: Отправка реплая на сообщение
+async function sendReplyToMessage(chatId: number, replyToMessageId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  console.log("=== SENDING REPLY MESSAGE ===")
+  console.log("Chat ID:", chatId)
+  console.log("Reply to Message ID:", replyToMessageId)
+  console.log("Text:", text)
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      text: text,
+      parse_mode: "HTML",
+      reply_to_message_id: replyToMessageId
+    }
+
+    console.log("Reply payload:", JSON.stringify(payload, null, 2))
+
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+    console.log("Reply API response:", JSON.stringify(data, null, 2))
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send reply message")
+    }
+
+    console.log("=== REPLY MESSAGE SENT SUCCESSFULLY ===")
+    return data.result
+  } catch (error) {
+    console.error("Error sending reply message:", error)
+    // Если не получилось отправить реплай, отправляем обычное сообщение
+    await sendMessage(chatId, text)
+    throw error
+  }
+}
+
 async function sendMessage(chatId: number, text: string) {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
   const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
