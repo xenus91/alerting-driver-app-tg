@@ -163,7 +163,8 @@ export async function sendMultipleTripMessageWithButtons(
   // Добавлен параметр isResend для различения первичной и повторной отправки
   isResend = false,
   // === КОНЕЦ ИЗМЕНЕНИЙ ===
-  previousTelegramMessageId?: number
+  previousTelegramMessageId?: number,
+  messageText?: string // Добавляем новый параметр
 ): Promise<{ message_id: number; messageText: string }> {
   try {
     console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`);
