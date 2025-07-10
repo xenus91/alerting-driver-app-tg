@@ -1069,8 +1069,9 @@ export async function POST(request: NextRequest) {
           status: "toroute_error",
           error: error instanceof Error ? error.message : "Unknown error",
           timestamp: timestamp,
-        })
-      }
+      })
+    }}
+  
     
 
     // Обработка команды /status
