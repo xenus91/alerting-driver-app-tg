@@ -538,7 +538,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
       const firstName = user.first_name || user.full_name || "Водитель"
 
       // Формируем текст сообщения до создания записей в базе
-      const messageText = generateMessageText(tripsForSending, firstName)
+      const messageText = await generateMessageText(tripsForSending, firstName)
       console.log(`Generated message text length: ${messageText.length}`)
       console.log(`Message preview: ${messageText.substring(0, 200)}...`)
 
