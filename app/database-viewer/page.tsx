@@ -824,14 +824,15 @@ const confirmDeleteSelected = async () => {
                       <TableRow key={row.id}>
                         {/* Чекбокс для выделения строки */}
                         <TableCell>
-                          <button 
-                            onClick={() => toggleRowSelection(row.original.id)}
-                            className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
-                          >
-                            {selectedRows[row.original.id] && (
-                              <Check className="h-4 w-4 text-blue-600" />
-                            )}
-                          </button>
+                         // В рендере строк таблицы:
+                            <button 
+                              onClick={() => toggleRowSelection(row.original.id)} // ID теперь число
+                              className="flex items-center justify-center w-6 h-6 rounded-full border border-gray-300 hover:bg-gray-100"
+                            >
+                              {selectedRows[String(row.original.id)] && ( // Преобразуем в строку
+                                <Check className="h-4 w-4 text-blue-600" />
+                              )}
+                            </button>
                         </TableCell>
                         
                         {row.getVisibleCells().map(cell => {
