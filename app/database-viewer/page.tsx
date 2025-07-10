@@ -543,17 +543,19 @@ export default function DatabaseViewer() {
   };
 
   // Выделение/снятие выделения одной строки
-  const toggleRowSelection = (rowId: string) => {
-    setSelectedRows(prev => {
-      const newSelection = { ...prev };
-      if (newSelection[rowId]) {
-        delete newSelection[rowId];
-      } else {
-        newSelection[rowId] = true;
-      }
-      return newSelection;
-    });
-  };
+const toggleRowSelection = (rowId: number) => { // Изменено на number
+  setSelectedRows(prev => {
+    const newSelection = { ...prev };
+    const idStr = String(rowId);
+    
+    if (newSelection[idStr]) {
+      delete newSelection[idStr];
+    } else {
+      newSelection[idStr] = true;
+    }
+    return newSelection;
+  });
+};
 
   // Обработка удаления выбранных строк
   const handleDeleteSelected = async () => {
