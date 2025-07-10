@@ -90,6 +90,14 @@ function generateMessageText(trips: any[], firstName: string): string {
   const isMultiple = trips.length > 1
   message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
 
+  // Получаем все точки из базы данных
+  const allPoints = await getAllPoints();
+  const pointsMap = new Map<string, Point>();
+  for (const point of allPoints) {
+    pointsMap.set(point.point_id, point);
+  }
+
+
   const sortedTrips = [...trips].sort((a, b) => {
     const timeA = new Date(a.planned_loading_time || "").getTime()
     const timeB = new Date(b.planned_loading_time || "").getTime()
@@ -142,18 +150,25 @@ function generateMessageText(trips: any[], firstName: string): string {
 
     if (trip.loading_points.length > 0) {
       message += `📦 <b>Погрузка:</b>\n`
-      trip.loading_points.forEach((point: any, index: number) => {
-        message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-      // Добавьте адрес с гиперссылкой
-    if (point.address) {
-      if (point.latitude && point.longitude) {
-        const mapUrl = `https://yandex.ru/maps/?pt=${point.longitude},${point.latitude}&z=16&l=map`
-        message += `   📍 <a href="${mapUrl}">${point.address}</a>\n`
-      } else {
-        message += `   📍 ${point.address}\n`
+      for (const [index, pointData] of trip.loading_points.entries()) {
+        const pointInfo = pointsMap.get(pointData.point_id);
+        if (!pointInfo) {
+          message += `${index + 1}) <b>${pointData.point_id} (точка не найдена)</b>\n`
+          continue;
+        }
+
+        message += `${index + 1}) <b>${pointInfo.point_id} ${pointInfo.point_name}</b>\n`
+        
+        // Добавляем адрес с гиперссылкой
+        if (pointInfo.address) {
+          if (pointInfo.latitude && pointInfo.longitude) {
+            const mapUrl = `https://yandex.ru/maps/?pt=${pointInfo.longitude},${pointInfo.latitude}&z=16&l=map`
+            message += `   📍 <a href="${mapUrl}">${pointInfo.address}</a>\n`
+          } else {
+            message += `   📍 ${pointInfo.address}\n`
+          }
+        }
       }
-    }
-  })
       message += `\n`
     }
 
