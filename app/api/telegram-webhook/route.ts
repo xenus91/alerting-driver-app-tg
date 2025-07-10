@@ -1020,7 +1020,7 @@ export async function POST(request: NextRequest) {
           timestamp: timestamp,
         })
       }
-    }
+    
 
     // Обработка команды /status
     if (messageText === "/status") {
