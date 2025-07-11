@@ -1007,7 +1007,10 @@ export default function TripDetailPage() {
           </CardHeader>
           <CardContent>
             <Table>
-              <TableHeader className="sticky top-0 bg-white z-10">
+            <div className="w-full h-[calc(100vh-200px)] flex flex-col">
+              <div className="table-header sticky top-0 bg-white z-10">
+                {/* Ваш TableHead */}
+              <TableHeader>
                 <TableRow>
                   <TableHead>
                     <div className="space-y-2">
@@ -1119,6 +1122,9 @@ export default function TripDetailPage() {
                   <TableHead>Действия</TableHead>
                 </TableRow>
               </TableHeader>
+                </div>
+              </div>
+              <div className="flex-1 overflow-auto">
               <TableBody style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
                 {filteredDrivers.map((driver) => (
                   <TableRow key={driver.phone}>
@@ -1291,6 +1297,7 @@ export default function TripDetailPage() {
                   </TableRow>
                 ))}
               </TableBody>
+             </div> 
             </Table>
           </CardContent>
         </Card>
