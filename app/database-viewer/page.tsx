@@ -306,6 +306,51 @@ export default function DatabaseViewer() {
     { column: '', operator: '', value: '', connector: 'AND' }
   ]);
 
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    // Проверяем, что клик левой кнопкой и не на элементе управления
+    if (e.button !== 0) return;
+    const target = e.target as HTMLElement;
+    if (
+      target.tagName === 'INPUT' || 
+      target.tagName === 'BUTTON' || 
+      target.tagName === 'SELECT' || 
+      target.tagName === 'TEXTAREA' ||
+      target.closest('button') ||
+      target.closest('input') ||
+      target.closest('select')
+    ) {
+      return;
+    }
+
+    setIsDragging(true);
+    const container = tableContainerRef.current;
+    if (container) {
+      const rect = container.getBoundingClientRect();
+      setStartX(e.pageX - rect.left);
+      setScrollLeft(container.scrollLeft);
+    }
+    e.stopPropagation();
+  };
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    if (!isDragging || !tableContainerRef.current) return;
+    e.preventDefault();
+    const container = tableContainerRef.current;
+    const rect = container.getBoundingClientRect();
+    const x = e.pageX - rect.left;
+    const walk = (x - startX) * 2; // Чувствительность прокрутки
+    container.scrollLeft = scrollLeft - walk;
+  };
+
+  const handleMouseUp = () => {
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    setIsDragging(false);
+  };
+
   // Проверка авторизации
   useEffect(() => {
     const checkAuth = async () => {
@@ -784,7 +829,15 @@ const confirmDeleteSelected = async () => {
         </div>
       ) : selectedTable ? (
         <>
-          <div className="rounded-md border overflow-x-auto">
+           <div 
+            ref={tableContainerRef}
+            className="rounded-md border overflow-x-auto relative"
+            style={{ cursor: isDragging ? 'grabbing' : 'grab' }}
+            onMouseDown={handleMouseDown}
+            onMouseMove={handleMouseMove}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseLeave}
+          >
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map(headerGroup => (
