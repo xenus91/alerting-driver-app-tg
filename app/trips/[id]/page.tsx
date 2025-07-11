@@ -980,13 +980,14 @@ export default function TripDetailPage() {
           </CardContent>
         </Card>
       )}
-
+       {/* Прокручиваемая область с таблицей */}
+      <div className="flex-1 overflow-auto p-4">
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <RefreshCw className="h-6 w-6 animate-spin mr-2" />
           Загрузка сообщений...
         </div>
-      ) : filteredDrivers.length === 0 ? (
+        ) : filteredDrivers.length === 0 ? (
         <Alert>
           <AlertDescription>
             {activeFilter || hasActiveFilters
@@ -1006,7 +1007,7 @@ export default function TripDetailPage() {
           </CardHeader>
           <CardContent>
             <Table>
-              <TableHeader>
+              <TableHeader className="sticky top-0 bg-white z-10">
                 <TableRow>
                   <TableHead>
                     <div className="space-y-2">
@@ -1118,7 +1119,7 @@ export default function TripDetailPage() {
                   <TableHead>Действия</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody>
+              <TableBody className="overflow-y-auto>
                 {filteredDrivers.map((driver) => (
                   <TableRow key={driver.phone}>
                     <TableCell>
@@ -1294,6 +1295,7 @@ export default function TripDetailPage() {
           </CardContent>
         </Card>
       )}
+      </div>
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
