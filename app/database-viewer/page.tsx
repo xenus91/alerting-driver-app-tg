@@ -874,6 +874,10 @@ const confirmDeleteSelected = async () => {
                   </TableRow>
                 ))}
               </TableHeader>
+
+               {/* Контейнер для тела таблицы с вертикальной прокруткой */}
+              {/* ================================================== */}
+              <div className="block max-h-[500px] overflow-y-auto">
               <TableBody>
                 {table.getRowModel().rows.length > 0 ? (
                   table.getRowModel().rows.map(row => {
@@ -935,6 +939,7 @@ const confirmDeleteSelected = async () => {
                   </TableRow>
                 )}
               </TableBody>
+              </div>
             </Table>
           </div>
           
