@@ -10,7 +10,8 @@ import { CheckCircle, XCircle, Loader2 } from "lucide-react"
 interface DispatcherConfirmationModalProps {
   isOpen: boolean
   onClose: () => void
-  onConfirm: (action: "confirm" | "reject", comment: string) => Promise<void>
+  onConfirm: (comment: string) => Promise<void>
+  onReject: (comment: string) => Promise<void>
   driverName: string
   phone: string
 }
@@ -19,6 +20,7 @@ export function DispatcherConfirmationModal({
   isOpen,
   onClose,
   onConfirm,
+  onReject,
   driverName,
   phone,
 }: DispatcherConfirmationModalProps) {
@@ -30,11 +32,15 @@ export function DispatcherConfirmationModal({
     setIsLoading(true)
     setActionType(action)
     try {
-      await onConfirm(action, comment)
+      if (action === "confirm") {
+        await onConfirm(comment)
+      } else {
+        await onReject(comment)
+      }
       setComment("")
       onClose()
     } catch (error) {
-      console.error("Error confirming trip:", error)
+      console.error(`Error ${action === "confirm" ? "confirming" : "rejecting"} trip:`, error)
     } finally {
       setIsLoading(false)
     }
