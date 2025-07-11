@@ -147,10 +147,12 @@ export default function TripDetailPage() {
     driverName: string
   } | null>(null)
 
-  const [confirmationModal, setConfirmationModal] = useState<{
+// В начале компонента, рядом с другими состояниями
+const [confirmationModal, setConfirmationModal] = useState<{
   isOpen: boolean
   phone: string
   driverName: string
+  initialAction?: "confirm" | "reject"
 } | null>(null)
 
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
