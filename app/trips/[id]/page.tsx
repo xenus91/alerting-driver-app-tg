@@ -903,40 +903,38 @@ export default function TripDetailPage() {
   }
 
   return (
-  <div className="flex flex-col h-screen">
-    {/* Фиксированная верхняя часть */}
-    <div className="space-y-6 p-4 bg-white border-b">
-    <div className="flex items-center gap-4">
-      <Button variant="outline" onClick={() => router.back()}>
-        <ArrowLeft className="h-4 w-4 mr-2" />
-        Назад
-      </Button>
-      <div>
-        <h1 className="text-2xl font-bold">Детали рассылки #{tripId}</h1>
-        <p className="text-muted-foreground">Подробная информация о сообщениях и ответах</p>
-      </div>
-      <Button onClick={fetchMessages} disabled={isLoading} variant="outline" className="ml-auto">
-        <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-        Обновить
-      </Button>
-      {canDeleteTrip() && (
-        <Button
-          onClick={() => setShowDeleteConfirm(true)}
-          disabled={isDeleting}
-          variant="destructive"
-          className="ml-2"
-        >
-          {isDeleting ? (
-            <>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Удаление...
-            </>
-          ) : (
-            "Удалить рассылку"
-          )}
+    <div className="space-y-6">
+      <div className="flex items-center gap-4">
+        <Button variant="outline" onClick={() => router.back()}>
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Назад
         </Button>
-      )}
-    </div>
+        <div>
+          <h1 className="text-2xl font-bold">Детали рассылки #{tripId}</h1>
+          <p className="text-muted-foreground">Подробная информация о сообщениях и ответах</p>
+        </div>
+        <Button onClick={fetchMessages} disabled={isLoading} variant="outline" className="ml-auto">
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+          Обновить
+        </Button>
+        {canDeleteTrip() && (
+          <Button
+            onClick={() => setShowDeleteConfirm(true)}
+            disabled={isDeleting}
+            variant="destructive"
+            className="ml-2"
+          >
+            {isDeleting ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                Удаление...
+              </>
+            ) : (
+              "Удалить рассылку"
+            )}
+          </Button>
+        )}
+      </div>
 
       {/* Основной фильтр */}
       {activeFilter && (
@@ -980,14 +978,13 @@ export default function TripDetailPage() {
           </CardContent>
         </Card>
       )}
-       {/* Прокручиваемая область с таблицей */}
-      <div className="flex-1 overflow-auto p-4">
+
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <RefreshCw className="h-6 w-6 animate-spin mr-2" />
           Загрузка сообщений...
         </div>
-        ) : filteredDrivers.length === 0 ? (
+      ) : filteredDrivers.length === 0 ? (
         <Alert>
           <AlertDescription>
             {activeFilter || hasActiveFilters
@@ -1007,9 +1004,6 @@ export default function TripDetailPage() {
           </CardHeader>
           <CardContent>
             <Table>
-            <div className="w-full h-[calc(100vh-200px)] flex flex-col border rounded-md overflow-hidden">
-              <div className="table-header sticky top-0 bg-white z-10">
-                {/* Ваш TableHead */}
               <TableHeader>
                 <TableRow>
                   <TableHead>
@@ -1122,10 +1116,7 @@ export default function TripDetailPage() {
                   <TableHead>Действия</TableHead>
                 </TableRow>
               </TableHeader>
-                </div>
-              </div>
-              <div className="flex-1 overflow-auto">
-              <TableBody style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
+              <TableBody>
                 {filteredDrivers.map((driver) => (
                   <TableRow key={driver.phone}>
                     <TableCell>
@@ -1297,12 +1288,10 @@ export default function TripDetailPage() {
                   </TableRow>
                 ))}
               </TableBody>
-             </div> 
             </Table>
           </CardContent>
         </Card>
       )}
-      </div>
       {showDeleteConfirm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white p-6 rounded-lg max-w-md w-full mx-4">
@@ -1336,6 +1325,5 @@ export default function TripDetailPage() {
         />
       )}
     </div>
-  </div>
   )
 }
