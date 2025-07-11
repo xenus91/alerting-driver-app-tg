@@ -780,7 +780,7 @@ const confirmDeleteSelected = async () => {
           <div className="rounded-md border overflow-x-auto">
               <div
                 ref={tableContainerRef}
-                className="max-h-[400px] overflow-x-hidden overflow-y-auto"
+                className="max-h-screen-80 overflow-x-hidden overflow-y-auto"
                 onMouseDown={handleMouseDown}
                 onMouseMove={handleMouseMove}
                 onMouseUp={handleMouseUp}
