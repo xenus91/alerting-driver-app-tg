@@ -21,6 +21,7 @@ import {
   ArrowUp,
   ArrowDown,
   Edit,
+  CheckCircle,
 } from "lucide-react"
 import { TripCorrectionModal } from "@/components/trip-correction-modal"
 
