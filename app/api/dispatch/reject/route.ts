@@ -54,7 +54,7 @@ export async function POST(request: Request) {
 
     // Отправляем уведомление водителю в Telegram
     if (messageResult.length > 0) {
-      const { telegram_id, telegram_message_id, chat_id } = messageResult[0]
+      const { telegram_id, telegram_message_id } = messageResult[0]
       
       try {
         // Удаляем кнопки у исходного сообщения
