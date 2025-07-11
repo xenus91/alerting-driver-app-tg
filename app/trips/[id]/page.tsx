@@ -1119,7 +1119,7 @@ export default function TripDetailPage() {
                   <TableHead>Действия</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="overflow-y-auto>
+              <TableBody className="overflow-y-auto">
                 {filteredDrivers.map((driver) => (
                   <TableRow key={driver.phone}>
                     <TableCell>
