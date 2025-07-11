@@ -680,32 +680,7 @@ export async function answerCallbackQuery(callbackQueryId: string, text?: string
   }
 }
 
-export async function editMessageReplyMarkup(chatId: number, messageId: number, replyMarkup?: any) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/editMessageReplyMarkup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: replyMarkup,
-      }),
-    })
 
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to edit message reply markup")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error editing message reply markup:", error)
-    throw error
-  }
-}
 
 export async function sendTelegramMessage(chatId: number, text: string, messageId?: number) {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
