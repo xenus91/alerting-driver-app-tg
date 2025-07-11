@@ -24,6 +24,7 @@ import {
   CheckCircle,
 } from "lucide-react"
 import { TripCorrectionModal } from "@/components/trip-correction-modal"
+import { DispatcherConfirmationModal } from "@/components/dispatcher-confirmation-modal"
 
 interface TripMessage {
   id: number
