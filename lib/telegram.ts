@@ -39,6 +39,72 @@ export interface TelegramUpdate {
   callback_query?: TelegramCallbackQuery
 }
 
+export async function sendReplyToMessage(chatId: number, replyToMessageId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      text: text,
+      parse_mode: "HTML",
+      reply_to_message_id: replyToMessageId
+    }
+
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send reply message")
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error sending reply message:", error)
+    await sendMessage(chatId, text)
+    throw error
+  }
+}
+
+export async function sendMessage(chatId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: "HTML",
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send message")
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error sending Telegram message:", error)
+    throw error
+  }
+}
+
+
+
 // Функция для построения URL маршрута в Яндекс.Картах
 function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: number | string }>) {
   const validPoints = points.filter((p) => {
@@ -65,32 +131,7 @@ function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: n
   return url
 }
 
-export async function sendMessage(chatId: number, text: string) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        parse_mode: "HTML",
-      }),
-    })
 
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send message")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error sending Telegram message:", error)
-    throw error
-  }
-}
 
 export async function sendContactRequest(chatId: number) {
   try {
