@@ -1429,6 +1429,22 @@ const handleDispatcherReject = async (comment: string) => {
                             )}
                           </Button>
                         )}
+                          {/* Новая кнопка Отменить */}
+                              <Button
+                                onClick={() => setCancellationModal({
+                                  isOpen: true,
+                                  phone: driver.phone,
+                                  driverName: driver.full_name || driver.first_name || "Неизвестный",
+                                })}
+                                variant="destructive"
+                                size="sm"
+                                className="w-full"
+                              >
+                                <span className="flex items-center justify-center">
+                                  <span className="mr-2">🚫</span>
+                                  Отменить
+                                </span>
+                              </Button>
                       </div>
                     </TableCell>
                   </TableRow>
