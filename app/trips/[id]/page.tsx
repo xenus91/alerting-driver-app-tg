@@ -903,9 +903,9 @@ export default function TripDetailPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
-  {/* Фиксированная верхняя часть */}
-  <div className="space-y-6 p-4 bg-white border-b">
+  <div className="flex flex-col h-screen">
+    {/* Фиксированная верхняя часть */}
+    <div className="space-y-6 p-4 bg-white border-b">
     <div className="flex items-center gap-4">
       <Button variant="outline" onClick={() => router.back()}>
         <ArrowLeft className="h-4 w-4 mr-2" />
@@ -1329,5 +1329,6 @@ export default function TripDetailPage() {
         />
       )}
     </div>
+  </div>
   )
 }
