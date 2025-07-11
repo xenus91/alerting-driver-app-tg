@@ -54,13 +54,13 @@ export async function POST(request: Request) {
 
     // Отправляем уведомление водителю в Telegram
     if (messageResult.length > 0) {
-      const { telegram_id, telegram_message_id, chat_id } = messageResult[0]
+      const { telegram_id, telegram_message_id } = messageResult[0]
       
       try {
         // Удаляем кнопки у исходного сообщения
-        if (telegram_message_id && chat_id) {
+        if (telegram_message_id && telegram_id) {
           await editMessageReplyMarkup(
-            chat_id,
+            telegram_id,
             telegram_message_id,
             { inline_keyboard: [] } // Пустой массив удаляет все кнопки
           )
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
         if (telegram_message_id) {
           await sendReplyToMessage(
-            chat_id, 
+            telegram_id, 
             telegram_message_id, 
             messageText
           )
