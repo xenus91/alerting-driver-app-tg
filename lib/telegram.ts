@@ -103,6 +103,46 @@ export async function sendMessage(chatId: number, text: string) {
   }
 }
 
+export async function editMessageReplyMarkup(chatId: number, messageId: number, replyMarkup?: any) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  console.log("=== EDITING MESSAGE REPLY MARKUP ===")
+  console.log("Chat ID:", chatId)
+  console.log("Message ID:", messageId)
+  console.log("New reply markup:", JSON.stringify(replyMarkup, null, 2))
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: replyMarkup,
+    }
+
+    const response = await fetch(`${TELEGRAM_API_URL}/editMessageReplyMarkup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+    console.log("editMessageReplyMarkup response:", JSON.stringify(data, null, 2))
+
+    if (!data.ok) {
+      console.error("Failed to edit message reply markup:", data.description)
+      return null
+    }
+
+    console.log("=== MESSAGE REPLY MARKUP EDITED SUCCESSFULLY ===")
+    return data.result
+  } catch (error) {
+    console.error("Error editing message reply markup:", error)
+    return null
+  }
+}
+
 
 
 // Функция для построения URL маршрута в Яндекс.Картах
