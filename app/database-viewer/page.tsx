@@ -468,6 +468,29 @@ export default function DatabaseViewer() {
     }
   }
 
+  const handleMouseDown = (e: React.MouseEvent) => {
+  const container = tableContainerRef.current;
+  if (!container) return;
+
+  setIsDragging(true);
+  setStartX(e.pageX - container.offsetLeft);
+  setScrollLeft(container.scrollLeft);
+};
+
+const handleMouseMove = (e: React.MouseEvent) => {
+  if (!isDragging) return;
+  const container = tableContainerRef.current;
+  if (!container) return;
+
+  const x = e.pageX - container.offsetLeft;
+  const walk = (x - startX) * 2; // Коэффициент скорости прокрутки
+  container.scrollLeft = scrollLeft - walk;
+};
+
+const handleMouseUp = () => {
+  setIsDragging(false);
+};
+
   // Функции для управления фильтрами
   const addFilterCondition = useCallback(() => {
     setPendingFilterConditions(prev => [
