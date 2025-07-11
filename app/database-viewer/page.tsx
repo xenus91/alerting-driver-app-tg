@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useMemo, useCallback, useRef } from "react"
+import { useState, useEffect, useMemo, useCallback } from "react"
 import {
   Table,
   TableBody,
@@ -292,10 +292,6 @@ export default function DatabaseViewer() {
   const [showFilters, setShowFilters] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filtersWidth, setFiltersWidth] = useState(0);
-  const tableContainerRef = useRef<HTMLDivElement>(null);
-  const [isDragging, setIsDragging] = useState(false);
-  const [startX, setStartX] = useState(0);
-  const [scrollLeft, setScrollLeft] = useState(0);
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
@@ -467,8 +463,6 @@ export default function DatabaseViewer() {
       setIsLoading(false)
     }
   }
-
-  
 
   // Функции для управления фильтрами
   const addFilterCondition = useCallback(() => {
@@ -653,29 +647,6 @@ const confirmDeleteSelected = async () => {
     pageCount: Math.ceil(totalRows / pageSize),
   })
 
-  const handleMouseDown = (e: React.MouseEvent) => {
-  const container = tableContainerRef.current;
-  if (!container) return;
-
-  setIsDragging(true);
-  setStartX(e.pageX - container.offsetLeft);
-  setScrollLeft(container.scrollLeft);
-};
-
-const handleMouseMove = (e: React.MouseEvent) => {
-  if (!isDragging) return;
-  const container = tableContainerRef.current;
-  if (!container) return;
-
-  const x = e.pageX - container.offsetLeft;
-  const walk = (x - startX) * 2; // Коэффициент скорости прокрутки
-  container.scrollLeft = scrollLeft - walk;
-};
-
-const handleMouseUp = () => {
-  setIsDragging(false);
-};
-
   return (
     <div className="space-y-4 p-4">
       <div>
@@ -807,14 +778,6 @@ const handleMouseUp = () => {
       ) : selectedTable ? (
         <>
           <div className="rounded-md border overflow-x-auto">
-              <div
-                ref={tableContainerRef}
-                className="max-h-screen-80 overflow-x-hidden overflow-y-auto"
-                onMouseDown={handleMouseDown}
-                onMouseMove={handleMouseMove}
-                onMouseUp={handleMouseUp}
-                onMouseLeave={handleMouseUp}
-              > 
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map(headerGroup => (
@@ -913,7 +876,6 @@ const handleMouseUp = () => {
                 )}
               </TableBody>
             </Table>
-            </div>
           </div>
           
           {/* Пагинация без изменений */}
