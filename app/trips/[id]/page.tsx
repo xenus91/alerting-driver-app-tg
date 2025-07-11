@@ -1417,6 +1417,15 @@ const handleDispatcherAction = async (action: "confirm" | "reject", comment: str
           }}
         />
       )}
+      {confirmationModal && (
+  <DispatcherConfirmationModal
+    isOpen={confirmationModal.isOpen}
+    onClose={() => setConfirmationModal(null)}
+    onConfirm={handleDispatcherAction}
+    driverName={confirmationModal.driverName}
+    phone={confirmationModal.phone}
+  />
+)}
     </div>
   )
 }
