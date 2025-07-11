@@ -369,23 +369,26 @@ export default function TripsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
-          <p className="text-muted-foreground">Управление рассылками и отслеживание ответов водителей</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowQuickTripForm(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Zap className="h-4 w-4 mr-2" />
-            Быстрая рассылка
-          </Button>
-          <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Обновить
-          </Button>
-        </div>
+<div className="flex flex-col h-screen">
+  {/* Фиксированная верхняя часть */}
+  <div className="space-y-6 p-4 bg-white border-b">
+    <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
+        <p className="text-muted-foreground">Управление рассылками и отслеживание ответов водителей</p>
       </div>
+      <div className="flex gap-2">
+        <Button onClick={() => setShowQuickTripForm(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Zap className="h-4 w-4 mr-2" />
+          Быстрая рассылка
+        </Button>
+        <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+          Обновить
+        </Button>
+      </div>
+    </div>
+  </div>
 
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
