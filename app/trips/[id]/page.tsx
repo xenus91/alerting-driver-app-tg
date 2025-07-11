@@ -1285,6 +1285,22 @@ export default function TripDetailPage() {
                           <Edit className="h-3 w-3 mr-2" />
                           Корректировка
                         </Button>
+                         {driver.overall_response_status === 'pending' && (
+                                <Button
+                                  onClick={() => handleManualConfirmation(driver.phone)}
+                                  disabled={confirmingPhone === driver.phone}
+                                  variant="outline"
+                                  size="sm"
+                                  className="mb-1 w-full bg-green-100 hover:bg-green-200 text-green-800 border-green-200"
+                                >
+                                  {confirmingPhone === driver.phone ? (
+                                    <RefreshCw className="h-3 w-3 mr-2 animate-spin" />
+                                  ) : (
+                                    <CheckCircle className="h-3 w-3 mr-2" />
+                                  )}
+                                  Подтвердить вручную
+                                </Button>
+                              )}
                         {driver.overall_response_status === "confirmed" ? (
                           <Button
                             disabled
