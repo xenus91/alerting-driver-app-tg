@@ -389,7 +389,7 @@ export default function TripsPage() {
       </div>
     </div>
   </div>
-  <div className="flex-1 overflow-auto p-4">
+  <div className="flex-1 overflow-auto">
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <RefreshCw className="h-6 w-6 animate-spin mr-2" />
