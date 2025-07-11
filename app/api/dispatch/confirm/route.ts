@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-import { sendReplyToMessage, sendMessage } from "@/path-to-your-telegram-functions" // Укажите правильный путь
+import { sendReplyToMessage, sendMessage } from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
 
