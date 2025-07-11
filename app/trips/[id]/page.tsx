@@ -175,7 +175,7 @@ const handleDispatcherConfirm = async (comment: string) => {
       body: JSON.stringify({
         trip_id: tripId,
         phone: confirmationModal.phone,
-        dispatcher_comment: comment,
+        dispatcher_comment: comment
       }),
     })
 
