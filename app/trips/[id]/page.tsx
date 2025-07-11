@@ -1502,7 +1502,7 @@ const handleDispatcherReject = async (comment: string) => {
         />
 )}
  {/* Добавляем модалку для отмены */}
-      {cancellationModal && (
+     {cancellationModal && (
         <DispatcherCancellationModal
           isOpen={cancellationModal.isOpen}
           onClose={() => setCancellationModal(null)}
