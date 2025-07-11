@@ -144,6 +144,12 @@ export default function TripDetailPage() {
     driverName: string
   } | null>(null)
 
+  const [confirmationModal, setConfirmationModal] = useState<{
+  isOpen: boolean
+  phone: string
+  driverName: string
+} | null>(null)
+
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
 
   const handleManualConfirmation = async (phone: string) => {
