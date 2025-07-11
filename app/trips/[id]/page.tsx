@@ -169,7 +169,7 @@ const [confirmationModal, setConfirmationModal] = useState<{
    // Функция для обработки отмены
   const handleCancelForDriver = async (comment: string, phone: string) => {
     try {
-      const response = await fetch(`/api/trips/${tripId}/cancel`, {
+      const response = await fetch(`/api/dispatch/decline`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
