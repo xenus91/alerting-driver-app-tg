@@ -58,7 +58,7 @@ export async function POST(request: Request) {
       
       try {
         // Удаляем кнопки у исходного сообщения
-        if (telegram_message_id && chat_id) {
+        if (telegram_message_id && telegram_id) {
           await editMessageReplyMarkup(
             telegram_id,
             telegram_message_id,
