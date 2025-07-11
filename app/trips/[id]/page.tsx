@@ -1497,6 +1497,19 @@ const handleDispatcherReject = async (comment: string) => {
           initialAction={confirmationModal.initialAction}
         />
 )}
+ {/* Добавляем модалку для отмены */}
+      {cancellationModal && (
+        <DispatcherCancellationModal
+          isOpen={cancellationModal.isOpen}
+          onClose={() => setCancellationModal(null)}
+          onCancel={async (comment) => {
+            await handleCancelForDriver(comment, cancellationModal.phone)
+            setCancellationModal(null)
+          }}
+          driverName={cancellationModal.driverName}
+          phone={cancellationModal.phone}
+        />
+      )}
     </div>
   )
 }
