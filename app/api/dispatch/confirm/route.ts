@@ -4,19 +4,19 @@ import { sendReplyToMessage, sendMessage } from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
 
+// app/api/dispatch/confirm/route.ts
 export async function POST(request: Request) {
   try {
-    const { trip_id, phone } = await request.json()
+    const { trip_id, phone, action, dispatcher_comment } = await request.json()
 
-    // Валидация входных данных
-    if (!trip_id || !phone) {
+    if (!trip_id || !phone || !action) {
       return NextResponse.json(
-        { error: "Missing required fields (trip_id, phone)" },
+        { error: "Missing required fields (trip_id, phone, action)" },
         { status: 400 }
       )
     }
 
-    console.log(`Dispatching confirmation for trip ${trip_id}, phone ${phone}`)
+    console.log(`Dispatching ${action} for trip ${trip_id}, phone ${phone}`)
 
     // Получаем информацию о сообщении для reply
     const messageResult = await sql`
@@ -35,8 +35,9 @@ export async function POST(request: Request) {
     const updateResult = await sql`
       UPDATE trip_messages 
       SET 
-        response_status = 'confirmed',
-        response_comment = 'Подтверждено диспетчером',
+        response_status = ${action === "confirm" ? "confirmed" : "rejected"},
+        dispatcher_comment = ${dispatcher_comment || null},
+        response_comment = ${dispatcher_comment || null},
         response_at = NOW()
       WHERE 
         trip_id = ${trip_id} AND 
@@ -46,7 +47,7 @@ export async function POST(request: Request) {
 
     if (updateResult.length === 0) {
       return NextResponse.json(
-        { error: "No matching trip found or already confirmed" },
+        { error: "No matching trip found or already processed" },
         { status: 404 }
       )
     }
@@ -56,18 +57,24 @@ export async function POST(request: Request) {
       const { telegram_id, telegram_message_id } = messageResult[0]
       
       try {
-        // Отправляем реплай на исходное сообщение
-        await sendReplyToMessage(
-          telegram_id, 
-          telegram_message_id, 
-          "✅ Рейс(ы) подтвержден(ы) диспетчером!"
-        )
-        
-        // Или обычное сообщение, если не получилось reply
-        await sendMessage(
-          telegram_id,
-          "✅ Рейс(ы) подтвержден(ы) диспетчером!"
-        )
+        const messageText = action === "confirm" 
+          ? `✅ Рейс(ы) подтвержден(ы) диспетчером!\n\nКомментарий диспетчера: ${dispatcher_comment || "без комментария"}`
+          : `❌ Рейс(ы) отклонен(ы) диспетчером!\n\nПричина: ${dispatcher_comment || "не указана"}`
+
+        // Пытаемся отправить reply
+        if (telegram_message_id) {
+          await sendReplyToMessage(
+            telegram_id, 
+            telegram_message_id, 
+            messageText
+          )
+        } else {
+          // Или обычное сообщение
+          await sendMessage(
+            telegram_id,
+            messageText
+          )
+        }
       } catch (telegramError) {
         console.error("Error sending Telegram notification:", telegramError)
       }
@@ -78,6 +85,7 @@ export async function POST(request: Request) {
       updated_records: updateResult.length,
       trip_id,
       phone,
+      action,
       telegram_notification_sent: messageResult.length > 0,
       timestamp: new Date().toISOString()
     })
