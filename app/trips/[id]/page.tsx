@@ -1119,7 +1119,7 @@ export default function TripDetailPage() {
                   <TableHead>Действия</TableHead>
                 </TableRow>
               </TableHeader>
-              <TableBody className="overflow-y-auto">
+              <TableBody style={{ maxHeight: 'calc(100vh - 300px)', overflowY: 'auto' }}>
                 {filteredDrivers.map((driver) => (
                   <TableRow key={driver.phone}>
                     <TableCell>
