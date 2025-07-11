@@ -778,6 +778,14 @@ const confirmDeleteSelected = async () => {
       ) : selectedTable ? (
         <>
           <div className="rounded-md border overflow-x-auto">
+              <div
+                ref={tableContainerRef}
+                className="max-h-[400px] overflow-x-hidden overflow-y-auto"
+                onMouseDown={handleMouseDown}
+                onMouseMove={handleMouseMove}
+                onMouseUp={handleMouseUp}
+                onMouseLeave={handleMouseUp}
+              > 
             <Table>
               <TableHeader>
                 {table.getHeaderGroups().map(headerGroup => (
@@ -876,6 +884,7 @@ const confirmDeleteSelected = async () => {
                 )}
               </TableBody>
             </Table>
+            </div>
           </div>
           
           {/* Пагинация без изменений */}
