@@ -152,6 +152,48 @@ export default function TripDetailPage() {
 
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
 
+  const handleOpenConfirmationModal = (phone: string, driverName: string) => {
+  setConfirmationModal({
+    isOpen: true,
+    phone,
+    driverName,
+  })
+}
+
+const handleDispatcherAction = async (action: "confirm" | "reject", comment: string) => {
+  if (!confirmationModal) return
+
+  try {
+    // Отправляем запрос на API подтверждения/отклонения
+    const response = await fetch('/api/dispatch/confirm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        trip_id: tripId,
+        phone: confirmationModal.phone,
+        action,
+        dispatcher_comment: comment,
+      }),
+    })
+
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.error || 'Ошибка подтверждения')
+    }
+
+    // Обновляем данные после успешного подтверждения/отклонения
+    await fetchMessages()
+    
+    // Показываем уведомление
+    alert(`Рейс успешно ${action === "confirm" ? "подтвержден" : "отклонен"} диспетчером!`)
+  } catch (error) {
+    console.error('Ошибка при подтверждении рейса:', error)
+    throw error // Пробрасываем ошибку для обработки в модальном окне
+  }
+}
+
   const handleManualConfirmation = async (phone: string) => {
   setConfirmingPhone(phone)
   try {
