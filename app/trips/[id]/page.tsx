@@ -167,27 +167,31 @@ const [confirmationModal, setConfirmationModal] = useState<{
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
 
    // Функция для обработки отмены
-  const handleCancelForDriver = async (comment: string, phone: string) => {
-    try {
-      const response = await fetch(`/api/dispatch/decline`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ phone, comment }),
-      })
+ const handleCancelForDriver = async (comment: string, phone: string) => {
+  try {
+    const response = await fetch(`/api/dispatch/decline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        trip_id: tripId, // Добавляем trip_id
+        phone, 
+        dispatcher_comment: comment 
+      }),
+    })
 
-      const data = await response.json()
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to cancel')
-      }
-
-      await fetchMessages()
-    } catch (error) {
-      console.error('Error canceling driver trips:', error)
-      throw error
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to cancel')
     }
+
+    await fetchMessages()
+  } catch (error) {
+    console.error('Error canceling driver trips:', error)
+    throw error
   }
+}
 
   const handleOpenConfirmationModal = (phone: string, driverName: string) => {
   setConfirmationModal({
