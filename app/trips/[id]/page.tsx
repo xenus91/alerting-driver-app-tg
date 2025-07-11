@@ -903,38 +903,40 @@ export default function TripDetailPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center gap-4">
-        <Button variant="outline" onClick={() => router.back()}>
-          <ArrowLeft className="h-4 w-4 mr-2" />
-          Назад
-        </Button>
-        <div>
-          <h1 className="text-2xl font-bold">Детали рассылки #{tripId}</h1>
-          <p className="text-muted-foreground">Подробная информация о сообщениях и ответах</p>
-        </div>
-        <Button onClick={fetchMessages} disabled={isLoading} variant="outline" className="ml-auto">
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Обновить
-        </Button>
-        {canDeleteTrip() && (
-          <Button
-            onClick={() => setShowDeleteConfirm(true)}
-            disabled={isDeleting}
-            variant="destructive"
-            className="ml-2"
-          >
-            {isDeleting ? (
-              <>
-                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                Удаление...
-              </>
-            ) : (
-              "Удалить рассылку"
-            )}
-          </Button>
-        )}
+    <div className="flex flex-col h-screen">
+  {/* Фиксированная верхняя часть */}
+  <div className="space-y-6 p-4 bg-white border-b">
+    <div className="flex items-center gap-4">
+      <Button variant="outline" onClick={() => router.back()}>
+        <ArrowLeft className="h-4 w-4 mr-2" />
+        Назад
+      </Button>
+      <div>
+        <h1 className="text-2xl font-bold">Детали рассылки #{tripId}</h1>
+        <p className="text-muted-foreground">Подробная информация о сообщениях и ответах</p>
       </div>
+      <Button onClick={fetchMessages} disabled={isLoading} variant="outline" className="ml-auto">
+        <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+        Обновить
+      </Button>
+      {canDeleteTrip() && (
+        <Button
+          onClick={() => setShowDeleteConfirm(true)}
+          disabled={isDeleting}
+          variant="destructive"
+          className="ml-2"
+        >
+          {isDeleting ? (
+            <>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Удаление...
+            </>
+          ) : (
+            "Удалить рассылку"
+          )}
+        </Button>
+      )}
+    </div>
 
       {/* Основной фильтр */}
       {activeFilter && (
