@@ -1007,7 +1007,7 @@ export default function TripDetailPage() {
           </CardHeader>
           <CardContent>
             <Table>
-            <div className="w-full h-[calc(100vh-200px)] flex flex-col">
+            <div className="w-full h-[calc(100vh-200px)] flex flex-col border rounded-md overflow-hidden">
               <div className="table-header sticky top-0 bg-white z-10">
                 {/* Ваш TableHead */}
               <TableHeader>
