@@ -14,6 +14,7 @@ interface DispatcherConfirmationModalProps {
   onReject: (comment: string) => Promise<void>
   driverName: string
   phone: string
+  initialAction?: "confirm" | "reject" // Добавляем параметр для начального действия
 }
 
 export function DispatcherConfirmationModal({
@@ -23,14 +24,13 @@ export function DispatcherConfirmationModal({
   onReject,
   driverName,
   phone,
+  initialAction = "confirm", // Значение по умолчанию
 }: DispatcherConfirmationModalProps) {
   const [comment, setComment] = useState("")
   const [isLoading, setIsLoading] = useState(false)
-  const [actionType, setActionType] = useState<"confirm" | "reject" | null>(null)
+  const [actionType, setActionType] = useState<"confirm" | "reject">(initialAction)
 
   const handleSubmit = async () => {
-    if (!actionType) return
-
     setIsLoading(true)
     try {
       if (actionType === "confirm") {
@@ -39,13 +39,16 @@ export function DispatcherConfirmationModal({
         await onReject(comment)
       }
       setComment("")
-      setActionType(null)
       onClose()
     } catch (error) {
-      console.error(`Error ${actionType} trip:`, error)
+      console.error(`Error ${actionType === "confirm" ? "confirming" : "rejecting"} trip:`, error)
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const switchActionType = () => {
+    setActionType(actionType === "confirm" ? "reject" : "confirm")
   }
 
   return (
@@ -53,14 +56,10 @@ export function DispatcherConfirmationModal({
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="text-center">
-            {actionType === "confirm"
-              ? "Подтверждение рейса"
-              : actionType === "reject"
-              ? "Отклонение рейса"
-              : "Выберите действие"}
+            {actionType === "confirm" ? "Подтверждение рейса" : "Отклонение рейса"}
           </DialogTitle>
         </DialogHeader>
-
+        
         <div className="space-y-4">
           <div className="space-y-2">
             <p className="text-sm text-muted-foreground">
@@ -71,76 +70,78 @@ export function DispatcherConfirmationModal({
             </p>
           </div>
 
-          {!actionType && (
-            <div className="flex flex-col gap-3 pt-4">
+          <div className="space-y-2">
+            <label htmlFor="comment" className="block text-sm font-medium">
+              {actionType === "confirm" 
+                ? "Комментарий диспетчера (необязательно)" 
+                : "Причина отклонения (обязательно)"}
+            </label>
+            <Textarea
+              id="comment"
+              value={comment}
+              onChange={(e) => setComment(e.target.value)}
+              placeholder={
+                actionType === "confirm" 
+                  ? "Введите комментарий (необязательно)" 
+                  : "Укажите причину отклонения (обязательно)"
+              }
+              className="min-h-[100px]"
+            />
+          </div>
+
+          <div className="flex flex-col gap-2 pt-4">
+            <Button
+              variant="outline"
+              onClick={switchActionType}
+              disabled={isLoading}
+              className="w-full"
+            >
+              {actionType === "confirm" 
+                ? "Перейти к отклонению рейса" 
+                : "Перейти к подтверждению рейса"}
+            </Button>
+
+            <div className="flex gap-2">
               <Button
-                variant="default"
-                onClick={() => setActionType("confirm")}
-                className="bg-green-600 hover:bg-green-700"
+                variant="outline"
+                onClick={onClose}
+                disabled={isLoading}
+                className="flex-1"
               >
-                <CheckCircle className="h-4 w-4 mr-2" />
-                Подтвердить
+                Отмена
               </Button>
-
-              <Button
-                variant="destructive"
-                onClick={() => setActionType("reject")}
-                className="bg-red-600 hover:bg-red-700"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Отклонить
-              </Button>
-            </div>
-          )}
-
-          {actionType && (
-            <div className="space-y-4">
-              <div className="space-y-2">
-                <label htmlFor="comment" className="block text-sm font-medium">
-                  Комментарий диспетчера
-                </label>
-                <Textarea
-                  id="comment"
-                  value={comment}
-                  onChange={(e) => setComment(e.target.value)}
-                  placeholder="Введите комментарий (обязательно)"
-                  className="min-h-[100px]"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button variant="outline" onClick={() => setActionType(null)} disabled={isLoading}>
-                  Назад
-                </Button>
+              
+              {actionType === "confirm" ? (
                 <Button
-                  variant={actionType === "confirm" ? "default" : "destructive"}
+                  variant="default"
                   onClick={handleSubmit}
-                  disabled={isLoading || !comment.trim()}
-                  className={
-                    actionType === "confirm"
-                      ? "bg-green-600 hover:bg-green-700"
-                      : "bg-red-600 hover:bg-red-700"
-                  }
+                  disabled={isLoading || (actionType === "reject" && !comment.trim())}
+                  className="flex-1 bg-green-600 hover:bg-green-700"
                 >
                   {isLoading ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      {actionType === "confirm" ? "Подтверждение..." : "Отклонение..."}
-                    </>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   ) : (
-                    <>
-                      {actionType === "confirm" ? (
-                        <CheckCircle className="h-4 w-4 mr-2" />
-                      ) : (
-                        <XCircle className="h-4 w-4 mr-2" />
-                      )}
-                      {actionType === "confirm" ? "Подтвердить" : "Отклонить"}
-                    </>
+                    <CheckCircle className="h-4 w-4 mr-2" />
                   )}
+                  Подтвердить
                 </Button>
-              </div>
+              ) : (
+                <Button
+                  variant="destructive"
+                  onClick={handleSubmit}
+                  disabled={isLoading || !comment.trim()}
+                  className="flex-1 bg-red-600 hover:bg-red-700"
+                >
+                  {isLoading ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <XCircle className="h-4 w-4 mr-2" />
+                  )}
+                  Отклонить
+                </Button>
+              )}
             </div>
-          )}
+          </div>
         </div>
       </DialogContent>
     </Dialog>
