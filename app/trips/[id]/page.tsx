@@ -25,7 +25,9 @@ import {
   XCircle ,
 } from "lucide-react"
 import { TripCorrectionModal } from "@/components/trip-correction-modal"
-import { DispatcherConfirmationModal } from "@/components/dispatcher-confirmation-modal"
+import { DispatcherConfirmationModal  } from "@/components/dispatcher-confirmation-modal"
+import { DispatcherCancellationModal } from "@/components/dispatcher-cancellation-modal"
+
 
 interface TripMessage {
   id: number
@@ -154,6 +156,13 @@ const [confirmationModal, setConfirmationModal] = useState<{
   driverName: string
   initialAction?: "confirm" | "reject"
 } | null>(null)
+
+  // Добавляем состояние для модалки отмены
+  const [cancellationModal, setCancellationModal] = useState<{
+    isOpen: boolean
+    phone: string
+    driverName: string
+  } | null>(null)
 
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
 
