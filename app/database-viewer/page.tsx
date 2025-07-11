@@ -292,6 +292,10 @@ export default function DatabaseViewer() {
   const [showFilters, setShowFilters] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [filtersWidth, setFiltersWidth] = useState(0);
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [startX, setStartX] = useState(0);
+  const [scrollLeft, setScrollLeft] = useState(0);
   
   // Состояния для фильтрации
   const [filterConditions, setFilterConditions] = useState<FilterCondition[]>([])
