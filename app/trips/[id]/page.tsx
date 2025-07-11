@@ -162,11 +162,10 @@ export default function TripDetailPage() {
   })
 }
 
-const handleDispatcherAction = async (action: "confirm" | "reject", comment: string) => {
+const handleDispatcherConfirm = async (comment: string) => {
   if (!confirmationModal) return
 
   try {
-    // Отправляем запрос на API подтверждения/отклонения
     const response = await fetch('/api/dispatch/confirm', {
       method: 'POST',
       headers: {
@@ -175,7 +174,6 @@ const handleDispatcherAction = async (action: "confirm" | "reject", comment: str
       body: JSON.stringify({
         trip_id: tripId,
         phone: confirmationModal.phone,
-        action,
         dispatcher_comment: comment,
       }),
     })
@@ -185,16 +183,43 @@ const handleDispatcherAction = async (action: "confirm" | "reject", comment: str
       throw new Error(data.error || 'Ошибка подтверждения')
     }
 
-    // Обновляем данные после успешного подтверждения/отклонения
     await fetchMessages()
-    
-    // Показываем уведомление
-    alert(`Рейс успешно ${action === "confirm" ? "подтвержден" : "отклонен"} диспетчером!`)
+    alert('Рейс успешно подтвержден диспетчером!')
   } catch (error) {
     console.error('Ошибка при подтверждении рейса:', error)
-    throw error // Пробрасываем ошибку для обработки в модальном окне
+    throw error
   }
 }
+
+const handleDispatcherReject = async (comment: string) => {
+  if (!confirmationModal) return
+
+  try {
+    const response = await fetch('/api/dispatch/reject', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        trip_id: tripId,
+        phone: confirmationModal.phone,
+        dispatcher_comment: comment,
+      }),
+    })
+
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.error || 'Ошибка отклонения')
+    }
+
+    await fetchMessages()
+    alert('Рейс успешно отклонен диспетчером!')
+  } catch (error) {
+    console.error('Ошибка при отклонении рейса:', error)
+    throw error
+  }
+}
+
 
   const handleManualConfirmation = async (phone: string) => {
   setConfirmingPhone(phone)
