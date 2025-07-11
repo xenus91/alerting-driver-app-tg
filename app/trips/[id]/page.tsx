@@ -44,6 +44,7 @@ interface TripMessage {
   planned_loading_time?: string
   driver_comment?: string
   trip_id?: number
+  dispatcher_comment?: string
 }
 
 /* ИЗМЕНЕНИЕ: Обновлён интерфейс TripPoint для поддержки phone и других необязательных полей */
