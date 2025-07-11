@@ -36,7 +36,7 @@ export async function POST(request: Request) {
       UPDATE trip_messages 
       SET 
         response_status = 'declined',
-        dispatcher_comment = ${dispatcher_comment || null},
+        dispatcher_comment = 'Отменен(ы) диспетчером',
         response_comment = ${dispatcher_comment || null},
         response_at = NOW()
       WHERE 
