@@ -187,7 +187,7 @@ const handleDispatcherConfirm = async (comment: string) => {
     }
 
     await fetchMessages()
-    alert('Рейс успешно подтвержден диспетчером!')
+    //alert('Рейс успешно подтвержден диспетчером!')
   } catch (error) {
     console.error('Ошибка при подтверждении рейса:', error)
     throw error
@@ -216,7 +216,7 @@ const handleDispatcherReject = async (comment: string) => {
     }
 
     await fetchMessages()
-    alert('Рейс успешно отклонен диспетчером!')
+    //alert('Рейс успешно отклонен диспетчером!')
   } catch (error) {
     console.error('Ошибка при отклонении рейса:', error)
     throw error
@@ -224,36 +224,6 @@ const handleDispatcherReject = async (comment: string) => {
 }
 
 
-  const handleManualConfirmation = async (phone: string) => {
-  setConfirmingPhone(phone)
-  try {
-    // Отправляем запрос на API подтверждения
-    const response = await fetch('/api/dispatch/confirm', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        trip_id: tripId,
-        phone: phone,
-      }),
-    })
-
-    const data = await response.json()
-    if (!data.success) {
-      throw new Error(data.error || 'Ошибка подтверждения')
-    }
-
-    // Обновляем данные после успешного подтверждения
-    await fetchMessages()
-    alert('Рейс успешно подтвержден диспетчером!')
-  } catch (error) {
-    console.error('Ошибка при подтверждении рейса:', error)
-    alert('Не удалось подтвердить рейс: ' + (error instanceof Error ? error.message : 'Unknown error'))
-  } finally {
-    setConfirmingPhone(null)
-  }
-}
 
   // Проверяем можно ли удалить рассылку (все подтверждены или завершены)
   const canDeleteTrip = () => {
