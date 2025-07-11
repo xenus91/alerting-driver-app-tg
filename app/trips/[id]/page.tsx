@@ -1445,13 +1445,13 @@ const handleDispatcherReject = async (comment: string) => {
         />
       )}
       {confirmationModal && (
-  <DispatcherConfirmationModal
-    isOpen={confirmationModal.isOpen}
-    onClose={() => setConfirmationModal(null)}
-    onConfirm={handleDispatcherAction}
-    driverName={confirmationModal.driverName}
-    phone={confirmationModal.phone}
-  />
+        <DispatcherConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          onClose={() => setConfirmationModal(null)}
+          onConfirm={handleDispatcherAction}
+          driverName={confirmationModal.driverName}
+          phone={confirmationModal.phone}
+        />
 )}
     </div>
   )
