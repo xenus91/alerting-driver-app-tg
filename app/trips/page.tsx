@@ -371,7 +371,7 @@ export default function TripsPage() {
   return (
 <div className="flex flex-col h-screen">
   {/* Фиксированная верхняя часть */}
-  <div className="space-y-6 p-4 bg-white border-b">
+  <div className="space-y-6 p-4 bg-white border-b sticky top-0 z-10">
     <div className="flex items-center justify-between">
       <div>
         <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
