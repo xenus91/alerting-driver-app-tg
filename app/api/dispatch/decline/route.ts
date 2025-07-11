@@ -22,8 +22,7 @@ export async function POST(request: Request) {
     const messageResult = await sql`
       SELECT 
         telegram_id,
-        telegram_message_id,
-        chat_id
+        telegram_message_id        
       FROM trip_messages 
       WHERE 
         trip_id = ${trip_id} AND 
