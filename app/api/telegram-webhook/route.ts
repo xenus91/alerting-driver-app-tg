@@ -1500,7 +1500,6 @@ export async function POST(request: NextRequest) {
       }
     }
   }
-}
 
 export async function GET() {
   console.log("GET request to telegram-webhook endpoint")
