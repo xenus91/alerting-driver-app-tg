@@ -60,7 +60,7 @@ export async function POST(request: Request) {
         // Удаляем кнопки у исходного сообщения
         if (telegram_message_id && chat_id) {
           await editMessageReplyMarkup(
-            chat_id,
+            telegram_id,
             telegram_message_id,
             { inline_keyboard: [] } // Пустой массив удаляет все кнопки
           )
@@ -70,7 +70,7 @@ export async function POST(request: Request) {
 
         if (telegram_message_id) {
           await sendReplyToMessage(
-            chat_id, 
+            telegram_id, 
             telegram_message_id, 
             messageText
           )
