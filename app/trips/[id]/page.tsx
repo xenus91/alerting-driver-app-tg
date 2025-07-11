@@ -1364,34 +1364,38 @@ const handleDispatcherReject = async (comment: string) => {
                           <Edit className="h-3 w-3 mr-2" />
                           Корректировка
                         </Button>
-                           {driver.overall_response_status === "pending" && (
-                                    <div className="flex gap-1">
-                                      <Button
-                                        onClick={() => handleOpenConfirmationModal(
-                                          driver.phone, 
-                                          driver.full_name || driver.first_name || "Неизвестный"
-                                        )}
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-200"
-                                      >
-                                        <CheckCircle className="h-3 w-3 mr-2" />
-                                        Подтвердить
-                                      </Button>
-                                      <Button
-                                        onClick={() => handleOpenConfirmationModal(
-                                          driver.phone, 
-                                          driver.full_name || driver.first_name || "Неизвестный"
-                                        )}
-                                        variant="outline"
-                                        size="sm"
-                                        className="flex-1 bg-red-100 hover:bg-red-200 text-red-800 border-red-200"
-                                      >
-                                        <XCircle className="h-3 w-3 mr-2" />
-                                        Отклонить
-                                      </Button>
-                                    </div>
-                                  )}
+                         {driver.overall_response_status === "pending" && (
+                              <div className="flex gap-1">
+                                <Button
+                                  onClick={() => setConfirmationModal({
+                                    isOpen: true,
+                                    phone: driver.phone,
+                                    driverName: driver.full_name || driver.first_name || "Неизвестный",
+                                    initialAction: "confirm"
+                                  })}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-200"
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-2" />
+                                  Подтвердить
+                                </Button>
+                                <Button
+                                  onClick={() => setConfirmationModal({
+                                    isOpen: true,
+                                    phone: driver.phone,
+                                    driverName: driver.full_name || driver.first_name || "Неизвестный",
+                                    initialAction: "reject"
+                                  })}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-red-100 hover:bg-red-200 text-red-800 border-red-200"
+                                >
+                                  <XCircle className="h-3 w-3 mr-2" />
+                                  Отклонить
+                                </Button>
+                              </div>
+                            )}
                         {driver.overall_response_status === "confirmed" ? (
                           <Button
                             disabled
