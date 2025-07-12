@@ -363,6 +363,7 @@ const handleDispatcherReject = async (comment: string) => {
           overall_status: "pending",
           overall_response_status: "pending",
           messageIds: [],
+          dispatcher_comment: "", // Добавляем поле инициализацией
         })
       }
 
