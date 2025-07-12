@@ -112,6 +112,7 @@ interface GroupedDriver {
   sent_at?: string
   response_at?: string
   response_comment?: string
+  dispatcher_comment?: string // Добавлено новое поле
   messageIds: number[]
 }
 
