@@ -221,6 +221,7 @@ export default function TripsPage() {
   const getTripStatus = (trip: TripData) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
+    const declinedNum = Number(trip.declined_responses)
     const sentNum = Number(trip.sent_messages)
     const totalNum = Number(trip.total_messages)
     const totalResponses = confirmedNum + rejectedNum
