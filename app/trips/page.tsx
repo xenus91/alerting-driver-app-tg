@@ -488,7 +488,7 @@ export default function TripsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">{trip.total_messages}</div>
                       <div className="text-sm text-muted-foreground">Всего</div>
