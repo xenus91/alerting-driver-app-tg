@@ -423,6 +423,7 @@ const handleDispatcherReject = async (comment: string) => {
     } else if (responseStatuses.every((s) => s === "confirmed")) {
       driver.overall_response_status = "confirmed";
       driver.response_at = driver.trips.find((t) => t.response_status === "confirmed" && t.response_at)?.response_at;
+      driver.response_comment = driver.trips.find((t) => t.response_status === "confirmed" && t.response_comment)?.response_comment;
     } else if (responseStatuses.some((s) => s === "rejected")) {
       driver.overall_response_status = "rejected";
       driver.response_at = driver.trips.find((t) => t.response_status === "rejected" && t.response_at)?.response_at;
