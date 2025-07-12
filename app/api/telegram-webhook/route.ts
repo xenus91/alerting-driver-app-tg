@@ -895,6 +895,21 @@ export async function POST(request: NextRequest) {
               timestamp: timestamp,
             });
           }
+                // ДОБАВЛЕНА ПРОВЕРКА ВЕРИФИКАЦИИ
+            if (!existingUser.verified) {
+              await sendMessage(
+                chatId,
+                "❌ Ваш аккаунт еще не верифицирован администратором.\n\n" +
+                "ℹ️ Обратитесь к администратору системы для получения доступа.\n"
+              );
+              return NextResponse.json({
+                ok: true,
+                status: "user_not_verified",
+                timestamp: timestamp,
+              });
+            }
+
+
 
           // Получаем все доступные точки с координатами
           const allPoints = await getAllPoints();
