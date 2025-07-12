@@ -1375,7 +1375,7 @@ const handleDispatcherReject = async (comment: string) => {
                         </div>
                       )}
 
-                      {!driver.dispatcher_comment && !driver.response_comment && "—"}
+                      {!driver.response_comment && !driver.dispatcher_comment && "—"}
                     </div>
                   </TableCell>
                     <TableCell>
