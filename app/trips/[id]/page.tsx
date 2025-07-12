@@ -1370,7 +1370,7 @@ const handleDispatcherReject = async (comment: string) => {
                       )}
                       {driver.dispatcher_comment && (
                         <div className="flex items-start gap-1 text-red-600">
-                          <span className="mt-0.5">👤</span> {/* Иконка диспетчера */}
+                          <span className="mt-0.5">👤💬</span> {/* Иконка диспетчера */}
                           <span className="text-sm">{driver.dispatcher_comment}</span>
                         </div>
                       )}
