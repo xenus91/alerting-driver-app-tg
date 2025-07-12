@@ -338,6 +338,7 @@ export default function TripsPage() {
   const canDeleteTrip = (trip: TripData) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
+    const declinedNum = Number(trip.declined_responses)
     const sentNum = Number(trip.sent_messages)
     const errorNum = Number(trip.error_messages)
     const totalResponses = confirmedNum + rejectedNum
