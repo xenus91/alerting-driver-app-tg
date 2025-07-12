@@ -415,6 +415,7 @@ export default function TripsPage() {
             const responsePercentage = calculateResponsePercentage(
               trip.confirmed_responses,
               trip.rejected_responses,
+              trip.declined_responses,
               trip.sent_messages,
             )
 
@@ -510,7 +511,27 @@ export default function TripsPage() {
                         </>
                       )}
                     </div>
-
+                                        {/* Отменено - кликабельное */}
+                    <div className="text-center">
+                      {Number(trip.declined_responses) > 0 ? (
+                        <Link
+                          href={`/trips/${trip.id}?filter=rejected`}
+                          className="block hover:opacity-80 transition-opacity"
+                        >
+                          <div className="text-2xl font-bold text-red-600 cursor-pointer hover:text-red-700 transition-colors">
+                            {trip.declined_responses}
+                          </div>
+                          <div className="text-sm text-muted-foreground hover:text-red-600 transition-colors">
+                            Отменено
+                          </div>
+                        </Link>
+                      ) : (
+                        <>
+                          <div className="text-2xl font-bold text-red-600">{trip.rejected_responses}</div>
+                          <div className="text-sm text-muted-foreground">Отклонено</div>
+                        </>
+                      )}
+                    </div>
                     {/* Отклонено - кликабельное */}
                     <div className="text-center">
                       {Number(trip.rejected_responses) > 0 ? (
