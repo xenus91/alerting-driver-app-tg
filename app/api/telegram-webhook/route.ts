@@ -3,6 +3,8 @@ import { neon } from "@neondatabase/serverless"
 
 import { sendReplyToMessage, sendMessage, editMessageReplyMarkup } from "@/lib/telegram"
 
+import * as support from './support';
+
 const sql = neon(process.env.DATABASE_URL!)
 
 interface TelegramMessage {
