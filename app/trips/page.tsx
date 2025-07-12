@@ -202,7 +202,7 @@ export default function TripsPage() {
     const sentNum = Number(sent)
 
     if (sentNum === 0) return 0
-    const totalResponses = confirmedNum + rejectedNum
+    const totalResponses = confirmedNum + rejectedNum + declinedNum
     const percentage = (totalResponses / sentNum) * 100
 
     console.log(
