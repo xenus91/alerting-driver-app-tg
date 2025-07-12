@@ -304,6 +304,7 @@ export default function TripsPage() {
 
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
+    const declinedNum = Number(trip.declined_responses)
     const sentNum = Number(trip.sent_messages)
     const totalResponses = confirmedNum + rejectedNum
 
