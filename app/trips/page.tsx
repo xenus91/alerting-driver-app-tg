@@ -597,8 +597,11 @@ export default function TripsPage() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">Прогресс ответов</span>
                         <span className="text-sm text-muted-foreground">
-                          {responsePercentage}% ({Number(trip.confirmed_responses) + Number(trip.rejected_responses)}/
-                          {trip.sent_messages})
+                           {responsePercentage}% (
+                            {Number(trip.confirmed_responses) + 
+                            Number(trip.rejected_responses) + 
+                            Number(trip.declined_responses)}/
+                            {trip.sent_messages})
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
