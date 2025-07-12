@@ -3,7 +3,7 @@ import { neon } from "@neondatabase/serverless"
 
 import { sendReplyToMessage, sendMessage, editMessageReplyMarkup } from "@/lib/telegram"
 
-import * as support from './support';
+import * as support from "@/lib/telegram"
 
 const sql = neon(process.env.DATABASE_URL!)
 
