@@ -1361,24 +1361,23 @@ const handleDispatcherReject = async (comment: string) => {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                    <div className="max-w-xs space-y-1">
-                      {driver.response_comment && (
-                        <div className="flex items-start gap-1">
-                          <span className="mt-0.5">🚚</span> {/* Иконка водителя */}
-                          <span className="text-sm">{driver.response_comment}</span>
-                        </div>
-                      )}
-                      {driver.dispatcher_comment && (
-                        <div className="flex items-start gap-1 text-red-600">
-                          <span className="mt-0.5">👤💬</span> {/* Иконка диспетчера */}
-                          <span className="text-sm">{driver.dispatcher_comment}</span>
-                        </div>
-                      )}
-
-                      {!driver.response_comment && !driver.dispatcher_comment && "—"}
-                    </div>
-                  </TableCell>
+                     <TableCell>
+                      <div className="max-w-xs space-y-1">
+                        {driver.response_comment && (
+                          <div className="flex items-start gap-1">
+                            <span className="mt-0.5">🚚</span>
+                            <span className="text-sm">{driver.response_comment}</span>
+                          </div>
+                        )}
+                        {driver.dispatcher_comment && ( // Добавляем отображение комментария диспетчера
+                          <div className="flex items-start gap-1 text-red-600">
+                            <span className="mt-0.5">👤💬</span>
+                            <span className="text-sm">{driver.dispatcher_comment}</span>
+                          </div>
+                        )}
+                        {!driver.response_comment && !driver.dispatcher_comment && "—"}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Button
