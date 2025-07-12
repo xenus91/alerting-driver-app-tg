@@ -193,10 +193,12 @@ export default function TripsPage() {
   const calculateResponsePercentage = (
     confirmed: string | number,
     rejected: string | number,
+    declined: string | number, // Добавляем declined
     sent: string | number,
   ) => {
     const confirmedNum = Number(confirmed)
     const rejectedNum = Number(rejected)
+    const declinedNum = Number(declined) // Добавляем declined
     const sentNum = Number(sent)
 
     if (sentNum === 0) return 0
