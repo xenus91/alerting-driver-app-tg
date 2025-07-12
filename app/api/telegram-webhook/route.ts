@@ -874,6 +874,27 @@ export async function POST(request: NextRequest) {
         }
       }
 
+            // Обработка команды /ask
+      if (messageText === "/ask") {
+          // Проверка регистрации и роли
+          if (!existingUser || existingUser.registration_state !== 'completed') {
+              await sendMessage(chatId, "❌ Для обращения к диспетчеру завершите регистрацию: /start");
+              return NextResponse.json({ status: "registration_required" });
+          }
+
+          // Проверка верификации
+          if (!existingUser.verified) {
+              await sendMessage(chatId, "❌ Ваш аккаунт не верифицирован. Обратитесь к администратору.");
+              return NextResponse.json({ status: "not_verified" });
+          }
+
+          // Установка состояния ожидания вопроса
+          await setUserPendingAction(existingUser.id, "awaiting_support_question");
+          await sendMessage(chatId, "✉️ Введите ваш вопрос для диспетчера:");
+
+          return NextResponse.json({ status: "awaiting_question" });
+      }
+
       // Обработка команды /toroute
       if (messageText === "/toroute") {
         console.log("=== PROCESSING /TOROUTE COMMAND ===");
