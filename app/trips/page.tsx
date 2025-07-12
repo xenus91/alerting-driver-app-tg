@@ -32,6 +32,7 @@ interface TripData {
   error_messages: string | number
   confirmed_responses: string | number
   rejected_responses: string | number
+  declined_responses: string | number
   pending_responses: string | number
   first_sent_at?: string
   last_sent_at?: string
