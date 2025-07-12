@@ -520,7 +520,7 @@ export default function TripsPage() {
                         </>
                       )}
                     </div>
-                                        {/* Отменено - кликабельное */}
+                    {/* Отменено - кликабельное */}
                     <div className="text-center">
                       {Number(trip.declined_responses) > 0 ? (
                         <Link
