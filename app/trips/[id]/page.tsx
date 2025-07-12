@@ -411,6 +411,12 @@ const handleDispatcherReject = async (comment: string) => {
 
       // Общий статус ответа
       const responseStatuses = driver.trips.map((t) => t.response_status)
+        // ДОБАВЛЕНО: проверка статуса "declined"
+      if (responseStatuses.some((s) => s === "declined")) {
+        driver.overall_response_status = "declined";
+        driver.response_at = driver.trips.find((t) => t.response_at)?.response_at;
+        driver.response_comment = driver.trips.find((t) => t.response_comment)?.response_comment;
+      } 
       if (responseStatuses.every((s) => s === "confirmed")) {
         driver.overall_response_status = "confirmed"
         driver.response_at = driver.trips.find((t) => t.response_at)?.response_at
