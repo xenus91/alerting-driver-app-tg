@@ -1361,14 +1361,22 @@ const handleDispatcherReject = async (comment: string) => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      {driver.response_comment ? (
-                        <div className="max-w-xs">
+                    <div className="max-w-xs space-y-1">
+                      {driver.dispatcher_comment && (
+                        <div className="flex items-start gap-1 text-red-600">
+                          <span className="mt-0.5">👤</span> {/* Иконка диспетчера */}
+                          <span className="text-sm">{driver.dispatcher_comment}</span>
+                        </div>
+                      )}
+                      {driver.response_comment && (
+                        <div className="flex items-start gap-1">
+                          <span className="mt-0.5">🚚</span> {/* Иконка водителя */}
                           <span className="text-sm">{driver.response_comment}</span>
                         </div>
-                      ) : (
-                        "—"
                       )}
-                    </TableCell>
+                      {!driver.dispatcher_comment && !driver.response_comment && "—"}
+                    </div>
+                  </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
                         <Button
