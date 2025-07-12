@@ -347,7 +347,7 @@ export default function TripsPage() {
     const declinedNum = Number(trip.declined_responses)
     const sentNum = Number(trip.sent_messages)
     const errorNum = Number(trip.error_messages)
-    const totalResponses = confirmedNum + rejectedNum
+    const totalResponses = confirmedNum + rejectedNum + declinedNum
 
     return sentNum > 0 && (totalResponses === sentNum || trip.status === "completed" || errorNum > 0)
   }
