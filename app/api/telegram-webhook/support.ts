@@ -79,12 +79,15 @@ export async function handleOperatorReply(
   return ticket;
 }
 
-// Проверка прав оператора
-export async function isOperator(userId: number): Promise<boolean> {
-  const user = await getUserById(userId);
-  return !!user && ['operator', 'admin'].includes(user.role) && user.verified;
+export async function isOperator(telegramId: number): Promise<boolean> {
+  try {
+    const user = await getUserByTelegramId(telegramId);
+    return !!user && ['operator', 'admin'].includes(user.role) && user.verified;
+  } catch (error) {
+    console.error("Error checking operator status:", error);
+    return false;
+  }
 }
-
 // Получение пользователя по ID
 async function getUserById(userId: number) {
   const [user] = await sql`
