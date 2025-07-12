@@ -96,6 +96,7 @@ interface TripData {
   status: string
   response_status: string
   response_comment?: string
+  dispatcher_comment?: string  // Добавлено новое поле
   sent_at?: string
   response_at?: string
   error_message?: string
