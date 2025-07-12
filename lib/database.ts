@@ -600,6 +600,7 @@ export async function getTrips(carparkFilter?: string) {
           COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_responses,
           COUNT(DISTINCT CASE WHEN tm.response_status = 'rejected' THEN u.telegram_id END) AS rejected_responses,
           COUNT(DISTINCT CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN u.telegram_id END) AS pending_responses,
+          COUNT(DISTINCT CASE WHEN tm.response_status = 'declined' AND tm.status = 'sent' THEN u.telegram_id END) AS declined_responses,
           MIN(tm.sent_at) AS first_sent_at,
           MAX(tm.sent_at) AS last_sent_at
         FROM trips t
@@ -621,6 +622,7 @@ export async function getTrips(carparkFilter?: string) {
           COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_responses,
           COUNT(DISTINCT CASE WHEN tm.response_status = 'rejected' THEN u.telegram_id END) AS rejected_responses,
           COUNT(DISTINCT CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN u.telegram_id END) AS pending_responses,
+          COUNT(DISTINCT CASE WHEN tm.response_status = 'declined' AND tm.status = 'sent' THEN u.telegram_id END) AS declined_responses,
           MIN(tm.sent_at) AS first_sent_at,
           MAX(tm.sent_at) AS last_sent_at
         FROM trips t
