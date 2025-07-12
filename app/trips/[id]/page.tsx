@@ -757,7 +757,7 @@ const handleDispatcherReject = async (comment: string) => {
         )
       case "rejected":
         return <Badge variant="destructive">Отклонено</Badge>
-            case "declined":
+      case "declined":
         return <Badge variant="destructive">Отменено</Badge>
       case "pending":
         return <Badge variant="secondary">Ожидает ответа</Badge>
