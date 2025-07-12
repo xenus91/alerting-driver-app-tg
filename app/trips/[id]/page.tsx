@@ -782,7 +782,7 @@ const handleDispatcherReject = async (comment: string) => {
         return "Подтвержденные"
       case "rejected":
         return "Отклоненные"
-            case "declined":
+      case "declined":
         return "Отмененные"
       case "error":
         return "С ошибками"
