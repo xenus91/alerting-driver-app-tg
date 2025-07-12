@@ -488,8 +488,8 @@ const handleDispatcherReject = async (comment: string) => {
         return "Отклонено"
       case "pending":
         return "Ожидает ответа"
-          case "declined":
-      return "Отменено"
+      case "declined":
+        return "Отменено"
       default:
         return responseStatus
     }
