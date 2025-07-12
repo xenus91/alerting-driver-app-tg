@@ -37,7 +37,7 @@ export async function POST(request: Request) {
       SET 
         response_status = 'confirmed',
         dispatcher_comment = ${dispatcher_comment || null},
-        response_comment = 'Подтвержден(ы) диспечтером',
+        response_comment = 'Подтвержден(ы) диспетчером',
         response_at = NOW()
       WHERE 
         trip_id = ${trip_id} AND 
