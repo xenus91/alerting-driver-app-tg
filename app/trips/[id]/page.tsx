@@ -506,8 +506,8 @@ const handleDispatcherReject = async (comment: string) => {
       filtered = filtered.filter((driver) => driver.overall_response_status === "confirmed")
     } else if (activeFilter === "rejected") {
       filtered = filtered.filter((driver) => driver.overall_response_status === "rejected")
-      else if (activeFilter === "declined") {
-      filtered = filtered.filter((driver) => driver.overall_response_status === "declined")
+    } else if (activeFilter === "declined") {
+      filtered = filtered.filter((driver) => driver.overall_response_status === "rejected")
     } else if (activeFilter === "error") {
       filtered = filtered.filter((driver) => driver.overall_status === "error")
     }
@@ -757,7 +757,7 @@ const handleDispatcherReject = async (comment: string) => {
         )
       case "rejected":
         return <Badge variant="destructive">Отклонено</Badge>
-      case "declined":
+            case "declined":
         return <Badge variant="destructive">Отменено</Badge>
       case "pending":
         return <Badge variant="secondary">Ожидает ответа</Badge>
