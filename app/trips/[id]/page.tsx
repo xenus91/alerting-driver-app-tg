@@ -379,6 +379,7 @@ const handleDispatcherReject = async (comment: string) => {
         status: message.status,
         response_status: message.response_status,
         response_comment: message.response_comment,
+        dispatcher_comment: message.dispatcher_comment,  // Добавлено новое поле
         sent_at: message.sent_at,
         response_at: message.response_at,
         error_message: message.error_message,
