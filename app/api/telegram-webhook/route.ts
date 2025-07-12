@@ -344,6 +344,51 @@ export async function POST(request: NextRequest) {
     console.log("=== FULL TELEGRAM UPDATE ===")
     console.log(JSON.stringify(update, null, 2))
 
+     // --- ОБРАБОТКА ОТВЕТОВ ОПЕРАТОРОВ ---
+    if (update.message && 
+        update.message.chat.id.toString() === process.env.SUPPORT_OPERATOR_CHAT_ID &&
+        update.message.reply_to_message) {
+      
+      console.log("=== PROCESSING OPERATOR REPLY ===")
+      
+      const message = update.message;
+      const operatorId = message.from.id;
+      
+      // Проверяем права оператора
+      const isOperator = await support.isOperator(operatorId);
+      if (!isOperator) {
+        await sendMessage(
+          message.chat.id,
+          "❌ Только операторы могут отвечать на вопросы",
+          { reply_to_message_id: message.message_id }
+        );
+        return NextResponse.json({ status: "operator_only" });
+      }
+
+      // Обрабатываем ответ
+      const result = await support.handleOperatorReply(
+        message,
+        update.message.reply_to_message
+      );
+
+      if (result) {
+        await sendMessage(
+          message.chat.id,
+          "✅ Ответ отправлен пользователю",
+          { reply_to_message_id: message.message_id }
+        );
+      } else {
+        await sendMessage(
+          message.chat.id,
+          "❌ Не удалось обработать ответ. Обращение не найдено или уже закрыто.",
+          { reply_to_message_id: message.message_id }
+        );
+      }
+      
+      return NextResponse.json({ status: "support_answer_processed" });
+    }
+
+
     // Обработка callback query (нажатие кнопок)
     if (update.callback_query) {
       console.log("=== PROCESSING CALLBACK QUERY ===")
@@ -803,6 +848,67 @@ export async function POST(request: NextRequest) {
       await answerCallbackQuery(callbackQuery.id, "Неизвестная команда")
       return NextResponse.json({ ok: true, status: "callback_ignored" })
     }
+     // --- ОБРАБОТКА СООБЩЕНИЙ ---
+    if (update.message) {
+      const message = update.message;
+      const chatId = message.chat.id;
+      const userId = message.from.id;
+      const messageText = message.text;
+
+      console.log(`=== PROCESSING MESSAGE ===`);
+      console.log(`User: ${userId} (${message.from.first_name})`);
+      console.log(`Chat: ${chatId}`);
+      console.log(`Text: "${messageText}"`);
+
+      const existingUser = await getUserByTelegramId(userId);
+
+      // --- ОБРАБОТКА КОМАНДЫ /ASK ---
+      if (messageText === "/ask") {
+        console.log("=== PROCESSING /ASK COMMAND ===");
+
+        // Проверка регистрации и верификации
+        if (!existingUser || existingUser.registration_state !== "completed") {
+          await sendMessage(chatId, "❌ Для обращения к диспетчеру завершите регистрацию: /start");
+          return NextResponse.json({ status: "registration_required" });
+        }
+        if (!existingUser.verified) {
+          await sendMessage(chatId, "❌ Ваш аккаунт не верифицирован. Обратитесь к администратору.");
+          return NextResponse.json({ status: "not_verified" });
+        }
+
+        // Установка состояния ожидания вопроса
+        await setUserPendingAction(existingUser.id, "awaiting_support_question");
+        await sendMessage(chatId, "✉️ Введите ваш вопрос для диспетчера:");
+
+        return NextResponse.json({ status: "awaiting_question" });
+      }
+
+      // --- ОБРАБОТКА ВОПРОСА ПОЛЬЗОВАТЕЛЯ ---
+      if (existingUser) {
+        const pendingAction = await getUserPendingAction(existingUser.id);
+        
+        if (pendingAction?.action_type === "awaiting_support_question" && messageText) {
+          console.log(`Processing support question: "${messageText}"`);
+          
+          try {
+            // Пересылаем вопрос в поддержку
+            await support.forwardToSupport(
+              existingUser.id,
+              message,
+              messageText
+            );
+            
+            await deleteUserPendingAction(existingUser.id);
+            await sendMessage(chatId, "✅ Ваш вопрос передан диспетчеру. Ответ придет в этот чат.");
+            
+            return NextResponse.json({ status: "question_forwarded" });
+          } catch (error) {
+            console.error("Error forwarding to support:", error);
+            await sendMessage(chatId, "❌ Произошла ошибка при отправке вопроса. Попробуйте позже.");
+            return NextResponse.json({ status: "support_error" });
+          }
+        }
+      }
 
     // Обработка обычных сообщений (текст, контакты и т.д.)
     if (update.message) {
@@ -874,26 +980,7 @@ export async function POST(request: NextRequest) {
         }
       }
 
-            // Обработка команды /ask
-      if (messageText === "/ask") {
-          // Проверка регистрации и роли
-          if (!existingUser || existingUser.registration_state !== 'completed') {
-              await sendMessage(chatId, "❌ Для обращения к диспетчеру завершите регистрацию: /start");
-              return NextResponse.json({ status: "registration_required" });
-          }
-
-          // Проверка верификации
-          if (!existingUser.verified) {
-              await sendMessage(chatId, "❌ Ваш аккаунт не верифицирован. Обратитесь к администратору.");
-              return NextResponse.json({ status: "not_verified" });
-          }
-
-          // Установка состояния ожидания вопроса
-          await setUserPendingAction(existingUser.id, "awaiting_support_question");
-          await sendMessage(chatId, "✉️ Введите ваш вопрос для диспетчера:");
-
-          return NextResponse.json({ status: "awaiting_question" });
-      }
+      
 
       // Обработка команды /toroute
       if (messageText === "/toroute") {
