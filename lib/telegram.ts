@@ -87,13 +87,13 @@ export async function forwardToSupport(
   const [ticket] = await sql`
     INSERT INTO support_tickets (
       user_id, 
-      user_telegram_id,  // Добавляем обязательное поле
+      user_telegram_id,  
       question, 
       operator_message_id, 
       user_message_id
     ) VALUES (
       ${user.id}, 
-      ${user.telegram_id},  // Используем telegram_id пользователя
+      ${user.telegram_id},  
       ${question}, 
       ${operatorMessage.message_id}, 
       ${userMessage.message_id}
