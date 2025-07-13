@@ -365,7 +365,7 @@ export async function POST(request: NextRequest) {
   try {
     const update: TelegramUpdate = await request.json();
 
-    // --- Обработка ответов операторов ---
+      // --- Обработка ответов операторов ---
     if (update.message && 
         update.message.chat.id.toString() === process.env.SUPPORT_OPERATOR_CHAT_ID &&
         update.message.reply_to_message) {
@@ -383,12 +383,45 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ status: "operator_only" });
       }
 
-      await handleOperatorReply(message, update.message.reply_to_message);
-      await sendMessage(
-        message.chat.id,
-        "✅ Ответ отправлен пользователю",
-        { reply_to_message_id: message.message_id }
+      // Обрабатываем ответ оператора
+      const result = await handleOperatorReply(
+        message, 
+        update.message.reply_to_message
       );
+
+      if (result) {
+        // Добавляем сообщение в историю тикета
+        if (result.ticketId && message.text) {
+          await addMessageToTicket(
+            result.ticketId, 
+            operatorId, 
+            message.text, 
+            true
+          );
+          
+          // Проверяем, хочет ли оператор закрыть тикет
+          if (message.text.toLowerCase().includes('/close')) {
+            await updateTicketStatus(result.ticketId, 'closed');
+            await sendMessage(
+              message.chat.id,
+              "✅ Диалог завершен. Тикет закрыт.",
+              { reply_to_message_id: message.message_id }
+            );
+          } else {
+            await sendMessage(
+              message.chat.id,
+              "✅ Ответ отправлен пользователю",
+              { reply_to_message_id: message.message_id }
+            );
+          }
+        }
+      } else {
+        await sendMessage(
+          message.chat.id,
+          "❌ Не удалось обработать ответ",
+          { reply_to_message_id: message.message_id }
+        );
+      }
       
       return NextResponse.json({ status: "support_answer_processed" });
     }
