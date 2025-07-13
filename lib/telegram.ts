@@ -58,50 +58,48 @@ interface SupportTicket {
 
 
 
-// Отправка вопроса операторам
 export async function forwardToSupport(
   userId: number,
   userMessage: TelegramMessage,
-  question: string
-): Promise<SupportTicket> {
-  const user = await getUserById(userId);
-  if (!user) throw new Error("User not found");
+  text: string,
+  ticketId: number
+) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+  
+  // Формируем текст сообщения с ссылкой на тикет
+  const messageText = `✉️ Новое сообщение по тикету #${ticketId}:\n\n${text}`;
+  
+  const payload = {
+    chat_id: process.env.SUPPORT_OPERATOR_CHAT_ID,
+    text: messageText,
+    reply_markup: {
+      inline_keyboard: [[
+        { 
+          text: "Ответить", 
+          callback_data: `reply_ticket_${ticketId}`
+        }
+      ]]
+    }
+  };
 
-  // Проверяем наличие telegram_id у пользователя
-  if (!user.telegram_id) {
-    throw new Error("User telegram_id is missing");
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    });
+
+    const data = await response.json();
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to forward message to support");
+    }
+
+    return data.result;
+  } catch (error) {
+    console.error("Error forwarding to support:", error);
+    throw error;
   }
-
-  const messageText = 
-    `❓ НОВЫЙ ВОПРОС\n\n` +
-    `👤 От: ${user.full_name}\n` +
-    `📱 Тел: +${user.phone}\n` +
-    `🏢 Автопарк: ${user.carpark}\n` +
-    `👔 Роль: ${user.role}\n\n` +
-    `💬 Вопрос:\n${question}`;
-
-  const operatorMessage = await sendMessage(
-    SUPPORT_CHAT_ID,
-    messageText
-  );
-
-  const [ticket] = await sql`
-    INSERT INTO support_tickets (
-      user_id, 
-      user_telegram_id,  
-      question, 
-      operator_message_id, 
-      user_message_id
-    ) VALUES (
-      ${user.id}, 
-      ${user.telegram_id},  
-      ${question}, 
-      ${operatorMessage.message_id}, 
-      ${userMessage.message_id}
-    ) RETURNING *
-  `;
-
-  return ticket;
 }
 
 // Обработка ответа оператора
