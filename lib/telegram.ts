@@ -59,7 +59,7 @@ interface SupportTicket {
 
 
 export async function forwardToSupport(
-  userTelegramId: number,  // Основной идентификатор для связи
+  userTelegramId: number,
   userMessage: TelegramMessage,
   text: string,
   ticketId: number
@@ -67,37 +67,20 @@ export async function forwardToSupport(
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
   const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
   
-  // Валидация параметров
-  if (!userTelegramId) {
-    throw new Error("userTelegramId is required");
-  }
-  if (!ticketId) {
-    throw new Error("ticketId is required");
-  }
-
-  // Формируем информативное сообщение
+  // Формируем текст сообщения
   const messageText = [
     `✉️ Новое сообщение в тикете #${ticketId}`,
     `👤 Пользователь: ${userTelegramId}`,
-    `📅 ${new Date().toLocaleString()}`,
     `---`,
     `${text}`,
     `---`,
-    `Для ответа нажмите кнопку ниже`
+    `Ответьте на это сообщение (reply)`
   ].join('\n');
 
   const payload = {
     chat_id: process.env.SUPPORT_OPERATOR_CHAT_ID,
     text: messageText,
-    parse_mode: "HTML",
-    reply_markup: {
-      inline_keyboard: [[
-        { 
-          text: "📝 Ответить", 
-          callback_data: `reply_ticket_${ticketId}_${userTelegramId}`
-        }
-      ]]
-    }
+    parse_mode: "HTML"
   };
 
   try {
@@ -116,12 +99,7 @@ export async function forwardToSupport(
 
     return data.result;
   } catch (error) {
-    console.error("Error in forwardToSupport:", {
-      error,
-      userTelegramId,
-      ticketId,
-      text: text.substring(0, 50) + (text.length > 50 ? "..." : "")
-    });
+    console.error("Error in forwardToSupport:", error);
     throw error;
   }
 }
