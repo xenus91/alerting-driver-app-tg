@@ -60,6 +60,7 @@ interface SupportTicket {
 
 export async function forwardToSupport(
   userId: number,
+  userTelegramId: number,
   userMessage: TelegramMessage,
   text: string,
   ticketId: number
@@ -67,8 +68,10 @@ export async function forwardToSupport(
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
   const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
   
-  // Формируем текст сообщения с ссылкой на тикет
-  const messageText = `✉️ Новое сообщение по тикету #${ticketId}:\n\n${text}`;
+  // Формируем текст сообщения с информацией о пользователе
+  const messageText = `✉️ Новое сообщение от пользователя (ID: ${userTelegramId})\n\n` +
+                     `Тикет #${ticketId}\n\n` +
+                     `Сообщение: ${text}`;
   
   const payload = {
     chat_id: process.env.SUPPORT_OPERATOR_CHAT_ID,
