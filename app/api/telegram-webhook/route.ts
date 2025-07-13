@@ -744,7 +744,11 @@ export async function POST(request: NextRequest) {
         if (pendingAction?.action_type === "awaiting_support_question") {
           try {
             // Создаем тикет
-            const ticket = await createSupportTicket(existingUser.id, messageText);
+            const ticket = await createSupportTicket(existingUser.id,
+                userId, // userTelegramId
+                messageText,
+                message.message_id
+              );
             
             // Пересылаем вопрос в поддержку
             await forwardToSupport(
