@@ -51,13 +51,18 @@ interface TelegramUpdate {
 }
 
 // НОВЫЕ ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ ТИКЕТАМИ
-async function createSupportTicket(userId: number, question: string) {
+async function createSupportTicket(
+  userId: number, 
+  userTelegramId: number, 
+  question: string,
+  userMessageId: number
+) {
   try {
     const result = await sql`
       INSERT INTO support_tickets 
-        (user_id, question, status, created_at) 
+        (user_id, user_telegram_id, question, user_message_id, status) 
       VALUES 
-        (${userId}, ${question}, 'open', NOW())
+        (${userId}, ${userTelegramId}, ${question}, ${userMessageId}, 'open')
       RETURNING *
     `;
     return result[0];
@@ -66,7 +71,6 @@ async function createSupportTicket(userId: number, question: string) {
     throw error;
   }
 }
-
 async function getActiveUserTicket(userId: number) {
   try {
     const result = await sql`
