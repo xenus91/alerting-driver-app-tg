@@ -1,125 +1,61 @@
-import { type NextRequest, NextResponse } from "next/server";
-import { neon } from "@neondatabase/serverless";
+import { type NextRequest, NextResponse } from "next/server"
+import { neon } from "@neondatabase/serverless"
 
-import { 
-  sendReplyToMessage, 
-  sendMessage, 
-  editMessageReplyMarkup,
-  forwardToSupport,
-  isOperator,
-  handleOperatorReply
-} from "@/lib/telegram";
+import { sendReplyToMessage, sendMessage, editMessageReplyMarkup } from "@/lib/telegram"
 
-const sql = neon(process.env.DATABASE_URL!);
+const sql = neon(process.env.DATABASE_URL!)
 
 interface TelegramMessage {
-  message_id: number;
+  message_id: number
   from: {
-    id: number;
-    first_name: string;
-    last_name?: string;
-    username?: string;
-  };
+    id: number
+    first_name: string
+    last_name?: string
+    username?: string
+  }
   chat: {
-    id: number;
-    type: string;
-  };
-  text?: string;
+    id: number
+    type: string
+  }
+  text?: string
   contact?: {
-    phone_number: string;
-    first_name: string;
-    last_name?: string;
-  };
+    phone_number: string
+    first_name: string
+    last_name?: string
+  }
 }
 
 interface TelegramCallbackQuery {
-  id: string;
+  id: string
   from: {
-    id: number;
-    first_name: string;
-    last_name?: string;
-    username?: string;
-  };
-  message?: TelegramMessage;
-  data?: string;
+    id: number
+    first_name: string
+    last_name?: string
+    username?: string
+  }
+  message?: TelegramMessage
+  data?: string
 }
 
 interface TelegramUpdate {
-  update_id: number;
-  message?: TelegramMessage;
-  callback_query?: TelegramCallbackQuery;
+  update_id: number
+  message?: TelegramMessage
+  callback_query?: TelegramCallbackQuery
 }
 
-// НОВЫЕ ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ ТИКЕТАМИ
-async function createSupportTicket(
-  userId: number, 
-  userTelegramId: number, 
-  question: string,
-  userMessageId: number
-) {
-  try {
-    const result = await sql`
-      INSERT INTO support_tickets 
-        (user_id, user_telegram_id, question, user_message_id, status) 
-      VALUES 
-        (${userId}, ${userTelegramId}, ${question}, ${userMessageId}, 'open')
-      RETURNING *
-    `;
-    return result[0];
-  } catch (error) {
-    console.error("Error creating support ticket:", error);
-    throw error;
-  }
-}
-async function getActiveUserTicket(userId: number) {
-  try {
-    const result = await sql`
-      SELECT * FROM support_tickets 
-      WHERE user_id = ${userId} AND status = 'open'
-      ORDER BY created_at DESC 
-      LIMIT 1
-    `;
-    return result[0];
-  } catch (error) {
-    console.error("Error getting active ticket:", error);
-    throw error;
-  }
-}
-
-async function updateTicketStatus(ticketId: number, status: string) {
-  try {
-    await sql`
-      UPDATE support_tickets 
-      SET status = ${status}, closed_at = NOW()
-      WHERE id = ${ticketId}
-    `;
-  } catch (error) {
-    console.error("Error updating ticket status:", error);
-    throw error;
-  }
-}
-
-async function addMessageToTicket(ticketId: number, userId: number, message: string, isOperator: boolean = false) {
-  try {
-    await sql`
-      INSERT INTO ticket_messages 
-        (ticket_id, user_id, message, is_operator) 
-      VALUES 
-        (${ticketId}, ${userId}, ${message}, ${isOperator})
-    `;
-  } catch (error) {
-    console.error("Error adding message to ticket:", error);
-    throw error;
-  }
-}
 
 async function sendMessageWithButtons(
   chatId: number,
   text: string,
   buttons: Array<Array<{ text: string; callback_data: string }>>,
 ) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  console.log("=== SENDING MESSAGE WITH BUTTONS ===")
+  console.log("Chat ID:", chatId)
+  console.log("Text:", text)
+  console.log("Buttons:", JSON.stringify(buttons, null, 2))
 
   try {
     const payload = {
@@ -129,7 +65,9 @@ async function sendMessageWithButtons(
       reply_markup: {
         inline_keyboard: buttons,
       },
-    };
+    }
+
+    console.log("Full payload:", JSON.stringify(payload, null, 2))
 
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
@@ -137,23 +75,27 @@ async function sendMessageWithButtons(
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
-    });
+    })
 
-    const data = await response.json();
+    const data = await response.json()
+    console.log("Telegram API response:", JSON.stringify(data, null, 2))
+
     if (!data.ok) {
-      throw new Error(data.description || "Failed to send message with buttons");
+      throw new Error(data.description || "Failed to send message with buttons")
     }
 
-    return data.result;
+    console.log("=== BUTTONS MESSAGE SENT SUCCESSFULLY ===")
+    return data.result
   } catch (error) {
-    console.error("Error sending Telegram message with buttons:", error);
-    throw error;
+    console.error("Error sending Telegram message with buttons:", error)
+    throw error
   }
 }
 
+
 async function sendContactRequest(chatId: number) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
@@ -165,31 +107,40 @@ async function sendContactRequest(chatId: number) {
         chat_id: chatId,
         text: "Пожалуйста, поделитесь своим номером телефона для регистрации в системе рассылки.",
         reply_markup: {
-          keyboard: [[{
-            text: "📱 Поделиться номером",
-            request_contact: true,
-          }]],
+          keyboard: [
+            [
+              {
+                text: "📱 Поделиться номером",
+                request_contact: true,
+              },
+            ],
+          ],
           one_time_keyboard: true,
           resize_keyboard: true,
         },
       }),
-    });
+    })
 
-    const data = await response.json();
+    const data = await response.json()
+
     if (!data.ok) {
-      throw new Error(data.description || "Failed to send contact request");
+      throw new Error(data.description || "Failed to send contact request")
     }
 
-    return data.result;
+    return data.result
   } catch (error) {
-    console.error("Error sending contact request:", error);
-    throw error;
+    console.error("Error sending contact request:", error)
+    throw error
   }
 }
 
 async function answerCallbackQuery(callbackQueryId: string, text?: string) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!;
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`;
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  console.log("=== ANSWERING CALLBACK QUERY ===")
+  console.log("Callback Query ID:", callbackQueryId)
+  console.log("Answer text:", text)
 
   try {
     const response = await fetch(`${TELEGRAM_API_URL}/answerCallbackQuery`, {
@@ -202,24 +153,29 @@ async function answerCallbackQuery(callbackQueryId: string, text?: string) {
         text: text,
         show_alert: false,
       }),
-    });
+    })
 
-    const data = await response.json();
+    const data = await response.json()
+    console.log("answerCallbackQuery response:", JSON.stringify(data, null, 2))
+
     if (!data.ok) {
-      console.error("Failed to answer callback query:", data.description);
-      return null;
+      console.error("Failed to answer callback query:", data.description)
+      return null
     }
 
-    return data.result;
+    console.log("=== CALLBACK QUERY ANSWERED ===")
+    return data.result
   } catch (error) {
-    console.error("Error answering callback query:", error);
-    return null;
+    console.error("Error answering callback query:", error)
+    return null
   }
 }
 
 async function createUser(telegramId: number, phone: string, name: string) {
   try {
-    const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone;
+    const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone
+
+    console.log(`Creating user: telegramId=${telegramId}, phone=${normalizedPhone}, name=${name}`)
 
     const result = await sql`
       INSERT INTO users (telegram_id, phone, name, registration_state)
@@ -229,12 +185,13 @@ async function createUser(telegramId: number, phone: string, name: string) {
         name = EXCLUDED.name,
         registration_state = 'awaiting_first_name'
       RETURNING *
-    `;
+    `
 
-    return result[0];
+    console.log("User created/updated:", result[0])
+    return result[0]
   } catch (error) {
-    console.error("Error creating user:", error);
-    throw error;
+    console.error("Error creating user:", error)
+    throw error
   }
 }
 
@@ -242,17 +199,20 @@ async function getUserByTelegramId(telegramId: number) {
   try {
     const result = await sql`
       SELECT * FROM users WHERE telegram_id = ${telegramId}
-    `;
-    return result[0];
+    `
+    console.log(`User found for telegram_id ${telegramId}:`, result[0] || "not found")
+    return result[0]
   } catch (error) {
-    console.error("Error getting user by telegram id:", error);
-    throw error;
+    console.error("Error getting user by telegram id:", error)
+    throw error
   }
 }
 
 async function updateUserRegistrationStep(telegramId: number, step: string, data?: any) {
   try {
-    let updateQuery;
+    console.log(`Updating registration step for user ${telegramId}: ${step} = ${data}`)
+
+    let updateQuery
 
     switch (step) {
       case "first_name":
@@ -261,16 +221,16 @@ async function updateUserRegistrationStep(telegramId: number, step: string, data
           SET temp_first_name = ${data}, registration_state = 'awaiting_last_name'
           WHERE telegram_id = ${telegramId}
           RETURNING *
-        `;
-        break;
+        `
+        break
       case "last_name":
         updateQuery = sql`
           UPDATE users 
           SET temp_last_name = ${data}, registration_state = 'awaiting_carpark'
           WHERE telegram_id = ${telegramId}
           RETURNING *
-        `;
-        break;
+        `
+        break
       case "carpark":
         updateQuery = sql`
           UPDATE users 
@@ -283,23 +243,27 @@ async function updateUserRegistrationStep(telegramId: number, step: string, data
               temp_last_name = NULL
           WHERE telegram_id = ${telegramId}
           RETURNING *
-        `;
-        break;
+        `
+        break
       default:
-        throw new Error(`Unknown registration step: ${step}`);
+        throw new Error(`Unknown registration step: ${step}`)
     }
 
-    const result = await updateQuery;
-    return result[0];
+    const result = await updateQuery
+    console.log(`User registration step updated:`, result[0])
+    return result[0]
   } catch (error) {
-    console.error("Error updating user registration step:", error);
-    throw error;
+    console.error("Error updating user registration step:", error)
+    throw error
   }
 }
 
 async function setUserPendingAction(userId: number, actionType: string, relatedMessageId?: number, actionData?: any) {
   try {
-    const dataString = actionData ? JSON.stringify(actionData) : null;
+    const dataString = actionData ? JSON.stringify(actionData) : null
+    console.log(
+      `Setting pending action for user ${userId}: ${actionType}, messageId: ${relatedMessageId}, data: ${dataString}`,
+    )
 
     const result = await sql`
       INSERT INTO user_pending_actions (user_id, action_type, related_message_id, action_data)
@@ -310,12 +274,12 @@ async function setUserPendingAction(userId: number, actionType: string, relatedM
         action_data = EXCLUDED.action_data,
         created_at = CURRENT_TIMESTAMP
       RETURNING *
-    `;
-    
-    return result[0];
+    `
+    console.log(`Pending action set for user ${userId}:`, result[0])
+    return result[0]
   } catch (error) {
-    console.error("Error setting user pending action:", error);
-    throw error;
+    console.error("Error setting user pending action:", error)
+    throw error
   }
 }
 
@@ -323,11 +287,12 @@ async function getUserPendingAction(userId: number) {
   try {
     const result = await sql`
       SELECT * FROM user_pending_actions WHERE user_id = ${userId}
-    `;
-    return result[0];
+    `
+    console.log(`Pending action for user ${userId}:`, result[0] || "not found")
+    return result[0]
   } catch (error) {
-    console.error("Error getting user pending action:", error);
-    throw error;
+    console.error("Error getting user pending action:", error)
+    throw error
   }
 }
 
@@ -335,10 +300,11 @@ async function deleteUserPendingAction(userId: number) {
   try {
     await sql`
       DELETE FROM user_pending_actions WHERE user_id = ${userId}
-    `;
+    `
+    console.log(`Pending action deleted for user ${userId}`)
   } catch (error) {
-    console.error("Error deleting user pending action:", error);
-    throw error;
+    console.error("Error deleting user pending action:", error)
+    throw error
   }
 }
 
@@ -349,356 +315,456 @@ async function getAllPoints() {
       FROM points 
       WHERE latitude IS NOT NULL AND longitude IS NOT NULL
       ORDER BY point_id ASC
-    `;
-    return result;
+    `
+    return result
   } catch (error) {
-    console.error("Error getting all points:", error);
-    throw error;
+    console.error("Error getting all points:", error)
+    throw error
   }
 }
 
 function buildRouteUrl(points: Array<{ latitude: string; longitude: string }>) {
-  if (points.length < 2) return null;
-  const coordinates = points.map((p) => `${p.latitude},${p.longitude}`).join("~");
-  return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`;
+  if (points.length < 2) {
+    return null
+  }
+
+  const coordinates = points.map((p) => `${p.latitude},${p.longitude}`).join("~")
+
+  return `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
 }
 
 export async function POST(request: NextRequest) {
-  const timestamp = new Date().toISOString();
+  const timestamp = new Date().toISOString()
+  console.log(`=== TELEGRAM WEBHOOK RECEIVED at ${timestamp} ===`)
 
   try {
-    const update: TelegramUpdate = await request.json();
+    const update: TelegramUpdate = await request.json()
+    console.log("=== FULL TELEGRAM UPDATE ===")
+    console.log(JSON.stringify(update, null, 2))
 
- // --- Обработка ответов операторов ---
-if (update.message && 
-    update.message.chat.id.toString() === process.env.SUPPORT_OPERATOR_CHAT_ID &&
-    update.message.reply_to_message) {
-  
-  console.log("=== PROCESSING OPERATOR REPLY ===");
-  const message = update.message;
-  const operatorId = message.from.id;
-  
-  try {
-    // 1. Проверка прав оператора
-    const isOp = await isOperator(operatorId);
-    if (!isOp) {
-      await sendMessage(
-        message.chat.id,
-        "❌ Только операторы могут отвечать на вопросы",
-        { reply_to_message_id: message.message_id }
-      );
-      return NextResponse.json({ status: "operator_only" });
-    }
-
-    // 2. Получение исходного сообщения
-    const originalMessage = update.message.reply_to_message.text;
-    if (!originalMessage) {
-      throw new Error("Original message text is missing");
-    }
-
-    // 3. Извлечение ticketId
-    const ticketIdMatch = originalMessage.match(/тикет[еа]? #?(\d+)/i);
-    if (!ticketIdMatch) {
-      throw new Error(`Ticket ID not found in: ${originalMessage.substring(0, 100)}`);
-    }
-    const ticketId = parseInt(ticketIdMatch[1]);
-
-    // 4. Получение тикета из БД
-    const ticket = await sql`
-      SELECT * FROM support_tickets 
-      WHERE id = ${ticketId}
-      LIMIT 1
-    `;
-    if (!ticket || ticket.length === 0) {
-      throw new Error(`Ticket ${ticketId} not found`);
-    }
-
-    // 5. Проверка user_telegram_id
-    if (!ticket.user_telegram_id) {
-      throw new Error(`Missing user_telegram_id in ticket ${ticketId}`);
-    }
-
-    // 6. Отправка ответа пользователю
-    await sendMessage(
-      ticket.user_telegram_id,
-      `📩 Ответ диспетчера:\n\n${message.text}`,
-      { parse_mode: "HTML" }
-    );
-
-    // 7. Обновление тикета
-    await sql`
-      UPDATE support_tickets 
-      SET 
-        operator_chat_id = ${message.chat.id},
-        operator_message_id = ${message.message_id},
-        answered_at = NOW(),
-        status = 'answered'
-      WHERE id = ${ticketId}
-    `;
-
-    // 8. Подтверждение оператору
-    await sendMessage(
-      message.chat.id,
-      "✅ Ответ отправлен пользователю",
-      { reply_to_message_id: message.message_id }
-    );
-    
-    return NextResponse.json({ status: "support_answer_processed" });
-
-  } catch (error) {
-    console.error("OPERATOR REPLY ERROR:", {
-      error: error instanceof Error ? error.message : String(error),
-      operatorId,
-      message: message ? message.text : 'null',
-      replyToMessage: update.message.reply_to_message 
-        ? update.message.reply_to_message.text 
-        : 'null'
-    });
-    
-    await sendMessage(
-      message.chat.id,
-      "❌ Не удалось обработать ответ. Подробности в логах.",
-      { reply_to_message_id: message.message_id }
-    );
-    
-    return NextResponse.json({ 
-      status: "support_answer_error",
-      error: error instanceof Error ? error.message : String(error)
-    });
-  }
-}
-
-    // --- Обработка callback query ---
+    // Обработка callback query (нажатие кнопок)
     if (update.callback_query) {
-      const callbackQuery = update.callback_query;
-      const chatId = callbackQuery.message?.chat.id;
-      const messageId = callbackQuery.message?.message_id;
-      const userId = callbackQuery.from.id;
-      const data = callbackQuery.data;
+      console.log("=== PROCESSING CALLBACK QUERY ===")
+      const callbackQuery = update.callback_query
+      const chatId = callbackQuery.message?.chat.id
+      const messageId = callbackQuery.message?.message_id
+      const userId = callbackQuery.from.id
+      const data = callbackQuery.data
+
+      console.log(`Callback query from user ${userId}: ${data}`)
+      console.log("Chat ID:", chatId)
+      console.log("Message ID:", messageId)
 
       if (!chatId) {
-        return NextResponse.json({ ok: true, status: "no_chat_id" });
+        console.log("❌ No chat ID in callback query")
+        return NextResponse.json({ ok: true, status: "no_chat_id" })
       }
 
-      // Обработка выбора точки маршрута
+      // Обработка выбора точки для маршрута
       if (data?.startsWith("route_point_")) {
-        const pointId = data.replace("route_point_", "");
+        const pointId = data.replace("route_point_", "")
+        console.log(`🗺️ User ${userId} selected route point: ${pointId}`)
 
         try {
-          const user = await getUserByTelegramId(userId);
-          if (!user) throw new Error("User not found");
+          const user = await getUserByTelegramId(userId)
+          if (!user) {
+            throw new Error("User not found")
+          }
 
-          const pendingAction = await getUserPendingAction(user.id);
+          const pendingAction = await getUserPendingAction(user.id)
+
+          // Получаем информацию о выбранной точке
           const pointResult = await sql`
             SELECT point_id, point_name, latitude, longitude 
             FROM points 
             WHERE point_id = ${pointId}
             LIMIT 1
-          `;
+          `
 
-          if (pointResult.length === 0) throw new Error("Point not found");
-          const selectedPoint = pointResult[0];
+          if (pointResult.length === 0) {
+            throw new Error("Point not found")
+          }
 
-          let routePoints = [];
-          let stepMessage = "";
+          const selectedPoint = pointResult[0]
+
+          let routePoints = []
+          let stepMessage = ""
 
           if (pendingAction?.action_type === "building_route_start") {
-            routePoints = [selectedPoint];
-            stepMessage = `✅ Точка отправления: <b>${selectedPoint.point_id} ${selectedPoint.point_name}</b>\n\n🎯 Выберите точку назначения:`;
-            await setUserPendingAction(user.id, "building_route_continue", null, { points: routePoints });
-          } 
-          else if (pendingAction?.action_type === "building_route_continue") {
-            const existingData = pendingAction.action_data ? JSON.parse(pendingAction.action_data) : { points: [] };
-            routePoints = [...existingData.points, selectedPoint];
+            // Первая точка выбрана
+            routePoints = [selectedPoint]
+            stepMessage = `✅ Точка отправления: <b>${selectedPoint.point_id} ${selectedPoint.point_name}</b>\n\n🎯 Теперь выберите точку назначения:`
 
-            stepMessage = `🗺️ <b>Маршрут строится:</b>\n\n`;
+            await setUserPendingAction(user.id, "building_route_continue", null, { points: routePoints })
+          } else if (pendingAction?.action_type === "building_route_continue") {
+            // Добавляем следующую точку
+            const existingData = pendingAction.action_data ? JSON.parse(pendingAction.action_data) : { points: [] }
+            routePoints = [...existingData.points, selectedPoint]
+
+            stepMessage = `🗺️ <b>Маршрут строится:</b>\n\n`
             routePoints.forEach((point, index) => {
-              const emoji = index === 0 ? "🚀" : index === routePoints.length - 1 ? "🏁" : "📍";
-              stepMessage += `${emoji} ${index + 1}. ${point.point_id} ${point.point_name}\n`;
-            });
+              const emoji = index === 0 ? "🚀" : index === routePoints.length - 1 ? "🏁" : "📍"
+              stepMessage += `${emoji} ${index + 1}. ${point.point_id} ${point.point_name}\n`
+            })
 
-            stepMessage += `\n💡 Выберите следующую точку или завершите построение маршрута:`;
-            await setUserPendingAction(user.id, "building_route_continue", null, { points: routePoints });
+            if (routePoints.length >= 2) {
+              stepMessage += `\n💡 Выберите следующую точку или завершите построение маршрута:`
+            } else {
+              stepMessage += `\n🎯 Выберите следующую точку:`
+            }
+
+            await setUserPendingAction(user.id, "building_route_continue", null, { points: routePoints })
           }
 
-          await answerCallbackQuery(callbackQuery.id, `Добавлена точка: ${selectedPoint.point_name}`);
-          if (messageId) await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] });
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, `Добавлена точка: ${selectedPoint.point_name}`)
 
-          const allPoints = await getAllPoints();
-          const selectedPointIds = routePoints.map((p) => p.point_id);
-          const availablePoints = allPoints.filter((p) => !selectedPointIds.includes(p.point_id));
+          // Скрываем кнопки предыдущего сообщения
+          if (messageId) {
+            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          }
 
-          const buttons = [];
-          const controlButtons = [];
+          // Получаем все доступные точки для следующего выбора
+          const allPoints = await getAllPoints()
 
+          // Исключаем уже выбранные точки
+          const selectedPointIds = routePoints.map((p) => p.point_id)
+          const availablePoints = allPoints.filter((p) => !selectedPointIds.includes(p.point_id))
+
+          // Формируем кнопки
+          const buttons = []
+
+          // Кнопки управления ВВЕРХУ
+          const controlButtons = []
+
+          // Кнопка "Завершить" если уже есть минимум 2 точки
           if (routePoints.length >= 2) {
             controlButtons.push({
-              text: "✅ Завершить построение",
+              text: "✅ Завершить построение маршрута",
               callback_data: "route_finish",
-            });
+            })
           }
 
+          // Кнопка отмены
           controlButtons.push({
             text: "❌ Отменить",
             callback_data: "route_cancel",
-          });
+          })
 
-          buttons.push(controlButtons);
+          // Добавляем кнопки управления в первый ряд
+          buttons.push(controlButtons)
 
+          // Кнопки с точками (по 2 в ряд) ВНИЗУ
           for (let i = 0; i < availablePoints.length; i += 2) {
-            const row = [];
+            const row = []
             row.push({
               text: `${availablePoints[i].point_id} ${availablePoints[i].point_name}`,
               callback_data: `route_point_${availablePoints[i].point_id}`,
-            });
+            })
             if (i + 1 < availablePoints.length) {
               row.push({
                 text: `${availablePoints[i + 1].point_id} ${availablePoints[i + 1].point_name}`,
                 callback_data: `route_point_${availablePoints[i + 1].point_id}`,
-              });
+              })
             }
-            buttons.push(row);
+            buttons.push(row)
           }
 
-          await sendMessageWithButtons(chatId, stepMessage, buttons);
-          return NextResponse.json({ ok: true, status: "route_point_selected" });
+          await sendMessageWithButtons(chatId, stepMessage, buttons)
+
+          console.log("=== ROUTE POINT SELECTED ===")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_point_selected",
+            point_id: pointId,
+            total_points: routePoints.length,
+            timestamp: timestamp,
+          })
         } catch (error) {
-          console.error("Error processing route point selection:", error);
-          await sendMessage(chatId, "❌ Произошла ошибка при выборе точки маршрута.");
-          return NextResponse.json({ ok: true, status: "route_point_error" });
+          console.error("Error processing route point selection:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при выборе точки маршрута.")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_point_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          })
         }
       }
 
-      // Обработка завершения маршрута
+      // Обработка завершения построения маршрута
       if (data === "route_finish") {
-        try {
-          const user = await getUserByTelegramId(userId);
-          if (!user) throw new Error("User not found");
+        console.log(`🏁 User ${userId} finishing route building`)
 
-          const pendingAction = await getUserPendingAction(user.id);
-          if (!pendingAction || pendingAction.action_type !== "building_route_continue") {
-            throw new Error("No route building in progress");
+        try {
+          const user = await getUserByTelegramId(userId)
+          if (!user) {
+            throw new Error("User not found")
           }
 
-          const routeData = JSON.parse(pendingAction.action_data);
-          const routePoints = routeData.points;
-          if (routePoints.length < 2) throw new Error("Not enough points for route");
+          const pendingAction = await getUserPendingAction(user.id)
+          if (!pendingAction || pendingAction.action_type !== "building_route_continue") {
+            throw new Error("No route building in progress")
+          }
 
-          const routeUrl = buildRouteUrl(routePoints);
-          if (!routeUrl) throw new Error("Failed to build route URL");
+          const routeData = JSON.parse(pendingAction.action_data)
+          const routePoints = routeData.points
 
-          let routeMessage = `🗺️ <b>Маршрут построен!</b>\n\n📍 <b>Точки маршрута:</b>\n`;
+          if (routePoints.length < 2) {
+            throw new Error("Not enough points for route")
+          }
+
+          // Строим URL маршрута
+          const routeUrl = buildRouteUrl(routePoints)
+
+          if (!routeUrl) {
+            throw new Error("Failed to build route URL")
+          }
+
+          // Формируем сообщение с маршрутом
+          let routeMessage = `🗺️ <b>Маршрут построен!</b>\n\n`
+          routeMessage += `📍 <b>Точки маршрута:</b>\n`
+
           routePoints.forEach((point, index) => {
-            const emoji = index === 0 ? "🚀" : index === routePoints.length - 1 ? "🏁" : "📍";
-            routeMessage += `${emoji} ${index + 1}. ${point.point_id} ${point.point_name}\n`;
-          });
-          routeMessage += `\n🔗 <a href="${routeUrl}">Открыть маршрут в Яндекс.Картах</a>`;
+            const emoji = index === 0 ? "🚀" : index === routePoints.length - 1 ? "🏁" : "📍"
+            routeMessage += `${emoji} ${index + 1}. ${point.point_id} ${point.point_name}\n`
+          })
 
-          await answerCallbackQuery(callbackQuery.id, "Маршрут построен!");
-          if (messageId) await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] });
-          await sendMessage(chatId, routeMessage);
-          await deleteUserPendingAction(user.id);
+          routeMessage += `\n🔗 <a href="${routeUrl}">Открыть маршрут в Яндекс.Картах</a>`
 
-          return NextResponse.json({ ok: true, status: "route_finished" });
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, "Маршрут построен!")
+
+          // Скрываем кнопки
+          if (messageId) {
+            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          }
+
+          // Отправляем готовый маршрут
+          await sendMessage(chatId, routeMessage)
+
+          // Удаляем pending action
+          await deleteUserPendingAction(user.id)
+
+          console.log("=== ROUTE FINISHED ===")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_finished",
+            points_count: routePoints.length,
+            route_url: routeUrl,
+            timestamp: timestamp,
+          })
         } catch (error) {
-          console.error("Error finishing route:", error);
-          await sendMessage(chatId, "❌ Произошла ошибка при построении маршрута.");
-          return NextResponse.json({ ok: true, status: "route_finish_error" });
+          console.error("Error finishing route:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при построении маршрута.")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_finish_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          })
         }
       }
 
-      // Обработка отмены маршрута
+      // Обработка отмены построения маршрута
       if (data === "route_cancel") {
+        console.log(`❌ User ${userId} cancelling route building`)
+
         try {
-          const user = await getUserByTelegramId(userId);
-          if (user) await deleteUserPendingAction(user.id);
+          const user = await getUserByTelegramId(userId)
+          if (user) {
+            await deleteUserPendingAction(user.id)
+          }
 
-          await answerCallbackQuery(callbackQuery.id, "Построение маршрута отменено");
-          if (messageId) await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] });
-          await sendMessage(chatId, "❌ Построение маршрута отменено.");
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, "Построение маршрута отменено")
 
-          return NextResponse.json({ ok: true, status: "route_cancelled" });
+          // Скрываем кнопки
+          if (messageId) {
+            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+          }
+
+          await sendMessage(chatId, "❌ Построение маршрута отменено.")
+
+          return NextResponse.json({
+            ok: true,
+            status: "route_cancelled",
+            timestamp: timestamp,
+          })
         } catch (error) {
-          console.error("Error cancelling route:", error);
-          return NextResponse.json({ ok: true, status: "route_cancel_error" });
+          console.error("Error cancelling route:", error)
+          return NextResponse.json({
+            ok: true,
+            status: "route_cancel_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          })
         }
       }
 
       // Обработка выбора автопарка
       if (data?.startsWith("carpark_")) {
-        const carpark = data.replace("carpark_", "");
+        const carpark = data.replace("carpark_", "")
+        console.log(`🏢 User ${userId} selected carpark: ${carpark}`)
 
         try {
-          await answerCallbackQuery(callbackQuery.id, `Выбран автопарк ${carpark}`);
-          if (messageId) await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] });
+          // Сначала отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, `Выбран автопарк ${carpark}`)
 
-          const user = await updateUserRegistrationStep(userId, "carpark", carpark);
+          // Скрываем кнопки (убираем reply_markup)
+          if (messageId) {
+            await editMessageReplyMarkup(chatId, messageId, { inline_keyboard: [] })
+            console.log("✅ Buttons hidden after carpark selection")
+          }
+
+          // Обновляем пользователя в базе
+          const user = await updateUserRegistrationStep(userId, "carpark", carpark)
+          console.log("✅ Registration completed for user:", user)
+
+          // Отправляем финальное сообщение
           const completionMessage =
-            `🎉 Регистрация завершена!\n\n` +
+            `🎉 Отлично! Регистрация завершена.\n\n` +
             `👤 Уважаемый(ая) ${user.first_name}!\n\n` +
+            `✅ Вы успешно зарегистрированы в системе уведомлений.\n\n` +
             `📱 Телефон: +${user.phone}\n` +
             `👤 ФИО: ${user.full_name}\n` +
             `🏢 Автопарк: ${carpark}\n\n` +
-            `🚛 Вы будете получать уведомления о рейсах.`;
+            `🚛 Теперь вы будете получать уведомления о предстоящих рейсах.\n` +
+            `📋 Система будет присылать информацию о:\n` +
+            `• Времени погрузки\n` +
+            `• Маршруте следования\n` +
+            `• Необходимых документах\n\n` +
+            `❓ Если у вас есть вопросы, обратитесь к диспетчеру.`
 
-          await sendMessage(chatId, completionMessage);
-          return NextResponse.json({ ok: true, status: "registration_completed" });
+          await sendMessage(chatId, completionMessage)
+
+          console.log("=== USER REGISTRATION COMPLETED SUCCESSFULLY ===")
+
+          return NextResponse.json({
+            ok: true,
+            status: "registration_completed",
+            user_id: userId,
+            carpark: carpark,
+            timestamp: timestamp,
+          })
         } catch (error) {
-          console.error("Error completing registration:", error);
-          await sendMessage(chatId, "❌ Произошла ошибка при завершении регистрации.");
-          return NextResponse.json({ ok: true, status: "registration_error" });
+          console.error("❌ Error completing registration:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при завершении регистрации. Попробуйте еще раз.")
+
+          return NextResponse.json({
+            ok: true,
+            status: "registration_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          })
         }
       }
 
-      // Обработка подтверждения рейса
+      // Обработка подтверждения рейса с реплаем
       if (data?.startsWith("confirm_")) {
-        const messageId = Number.parseInt(data.split("_")[1]);
+        const messageId = Number.parseInt(data.split("_")[1])
+        console.log(`Processing confirmation for message ${messageId}`)
 
         try {
+          // Получаем информацию о сообщении
           const messageResult = await sql`
-            SELECT phone, trip_id, telegram_message_id
+            SELECT 
+              trip_id,
+              phone,
+              telegram_message_id
             FROM trip_messages 
-            WHERE id = ${messageId} OR telegram_id = ${userId}
+            WHERE id = ${messageId}
             LIMIT 1
-          `;
+          `
 
-          if (messageResult.length === 0) throw new Error("No pending messages found");
-          const { phone, trip_id, telegram_message_id } = messageResult[0];
+          let phone, trip_id, telegramMessageId
+          if (messageResult.length === 0) {
+            console.log(`Message ${messageId} not found, trying to find by user telegram_id`)
 
-          await sql`
-            UPDATE trip_messages 
-            SET response_status = 'confirmed', 
-                response_at = ${new Date().toISOString()}
-            WHERE phone = ${phone} AND trip_id = ${trip_id}
-          `;
+            // Альтернативный поиск
+            const userMessageResult = await sql`
+              SELECT 
+                trip_id,
+                phone,
+                telegram_message_id
+              FROM trip_messages
+              WHERE telegram_id = ${userId} AND response_status = 'pending'
+              LIMIT 1
+            `
 
-          await answerCallbackQuery(callbackQuery.id, "Спасибо! Рейс подтвержден!");
-          if (callbackQuery.message?.message_id) {
-            await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] });
+            if (userMessageResult.length === 0) {
+              throw new Error(`No pending messages found for user ${userId}`)
+            }
+
+            phone = userMessageResult[0].phone
+            trip_id = userMessageResult[0].trip_id
+            telegramMessageId = userMessageResult[0].telegram_message_id
+          } else {
+            phone = messageResult[0].phone
+            trip_id = messageResult[0].trip_id
+            telegramMessageId = messageResult[0].telegram_message_id
           }
 
+          // Обновляем ВСЕ сообщения этого водителя
+          const updateResult = await sql`
+            UPDATE trip_messages 
+            SET response_status = 'confirmed', 
+                response_comment = NULL,
+                response_at = ${new Date().toISOString()}
+            WHERE phone = ${phone} AND trip_id = ${trip_id}
+            RETURNING id
+          `
+
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, "Спасибо! Рейс подтвержден!")
+
+          // Скрываем кнопки
+          if (callbackQuery.message?.message_id) {
+            await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] })
+          }
+
+          // Отправляем реплай на исходное сообщение
           await sendReplyToMessage(
             chatId, 
-            telegram_message_id, 
+            telegramMessageId, 
             "✅ Рейс(ы) подтвержден(ы)\n\nСпасибо за ваш ответ!"
           );
 
-          return NextResponse.json({ ok: true, status: "confirmed_processed" });
+          return NextResponse.json({ ok: true, status: "confirmed_processed" })
         } catch (error) {
-          console.error("Error processing confirmation:", error);
-          await sendMessage(chatId, "❌ Произошла ошибка при обработке подтверждения.");
-          return NextResponse.json({ ok: true, status: "confirmation_error" });
+          console.error("Error processing confirmation:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при обработке подтверждения.")
+          return NextResponse.json({ ok: true, status: "confirmation_error" })
         }
       }
 
-      // Обработка отклонения рейса
+      // Обработка отклонения рейса с запросом причины
       if (data?.startsWith("reject_")) {
-        const messageId = Number.parseInt(data.split("_")[1]);
+        const messageId = Number.parseInt(data.split("_")[1])
+        console.log(`Processing rejection for message ${messageId}`)
 
         try {
-          const user = await getUserByTelegramId(userId);
-          if (!user) throw new Error("User not found");
+          const user = await getUserByTelegramId(userId)
+          if (!user) {
+            throw new Error("User not found")
+          }
 
+          // Проверяем pending сообщения
+          const pendingCheck = await sql`
+            SELECT COUNT(*) as count
+            FROM trip_messages 
+            WHERE telegram_id = ${userId} AND response_status = 'pending'
+          `
+
+          if (pendingCheck[0].count === 0) {
+            throw new Error("No pending messages found for this user")
+          }
+
+          // Устанавливаем pending action для ожидания причины
           await setUserPendingAction(
             user.id, 
             "awaiting_rejection_reason", 
@@ -707,167 +773,100 @@ if (update.message &&
               chatId, 
               originalMessageId: callbackQuery.message?.message_id 
             }
-          );
+          )
 
-          await answerCallbackQuery(callbackQuery.id, "Внесите комментарий");
+          // Отвечаем на callback query
+          await answerCallbackQuery(callbackQuery.id, "Внесите комментарий")
+
+          // Скрываем кнопки исходного сообщения
           if (callbackQuery.message?.message_id) {
-            await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] });
+            await editMessageReplyMarkup(chatId, callbackQuery.message.message_id, { inline_keyboard: [] })
           }
 
-          await sendMessage(chatId, `📝 Пожалуйста, укажите причину отклонения рейса:`);
-          return NextResponse.json({ ok: true, status: "awaiting_rejection_reason" });
+          // Отправляем запрос причины
+          await sendMessage(
+            chatId,
+            `📝 Пожалуйста, укажите причину отклонения рейса в ответ на это сообщение:`
+          )
+
+          return NextResponse.json({ ok: true, status: "awaiting_rejection_reason" })
         } catch (error) {
-          console.error("Error processing rejection:", error);
-          await sendMessage(chatId, "❌ Произошла ошибка при обработке отклонения.");
-          return NextResponse.json({ ok: true, status: "rejection_error" });
+          console.error("Error processing rejection:", error)
+          await sendMessage(chatId, "❌ Произошла ошибка при обработке отклонения.")
+          return NextResponse.json({ ok: true, status: "rejection_error" })
         }
       }
 
-      await answerCallbackQuery(callbackQuery.id, "Неизвестная команда");
-      return NextResponse.json({ ok: true, status: "callback_ignored" });
+      console.log("❓ Unknown callback query data:", data)
+      await answerCallbackQuery(callbackQuery.id, "Неизвестная команда")
+      return NextResponse.json({ ok: true, status: "callback_ignored" })
     }
 
-        // --- Обработка сообщений ---
+    // Обработка обычных сообщений (текст, контакты и т.д.)
     if (update.message) {
       const message = update.message;
       const chatId = message.chat.id;
       const userId = message.from.id;
       const messageText = message.text;
 
+      console.log(`=== PROCESSING MESSAGE ===`);
+      console.log(`User: ${userId} (${message.from.first_name})`);
+      console.log(`Chat: ${chatId}`);
+      console.log(`Text: "${messageText}"`);
+
+      // Получаем информацию о пользователе
       const existingUser = await getUserByTelegramId(userId);
-
-      // Обработка команды /ask
-      if (messageText === "/ask") {
-        if (!existingUser || existingUser.registration_state !== "completed") {
-          await sendMessage(chatId, "❌ Для обращения завершите регистрацию: /start");
-          return NextResponse.json({ status: "registration_required" });
-        }
-        if (!existingUser.verified) {
-          await sendMessage(chatId, "❌ Ваш аккаунт не верифицирован.");
-          return NextResponse.json({ status: "not_verified" });
-        }
-
-        // Проверяем активный тикет
-        const activeTicket = await getActiveUserTicket(existingUser.id);
-        if (activeTicket) {
-          await sendMessage(
-            chatId,
-            "✉️ У вас уже есть активное обращение. Продолжайте диалог в этом чате."
-          );
-          return NextResponse.json({ status: "ticket_already_open" });
-        }
-
-        await setUserPendingAction(existingUser.id, "awaiting_support_question");
-        await sendMessage(chatId, "✉️ Введите ваш вопрос для диспетчера:");
-        return NextResponse.json({ status: "awaiting_question" });
-      }
-
-      // Обработка закрытия чата пользователем
-      if (messageText === "/close") {
-        const activeTicket = await getActiveUserTicket(existingUser.id);
-        if (activeTicket) {
-          await updateTicketStatus(activeTicket.id, 'closed');
-          await sendMessage(chatId, "✅ Диалог с диспетчером завершен.");
-        } else {
-          await sendMessage(chatId, "❌ У вас нет активных диалогов.");
-        }
-        return NextResponse.json({ status: "chat_closed" });
-      }
-
-      // Обработка вопроса пользователя
-      if (existingUser && messageText) {
-        const pendingAction = await getUserPendingAction(existingUser.id);
-        
-        // Первый вопрос в новом тикете
-        if (pendingAction?.action_type === "awaiting_support_question") {
-          try {
-            // Создаем тикет
-            const ticket = await createSupportTicket(existingUser.id,
-                userId, // userTelegramId
-                messageText,
-                message.message_id
-              );
-            
-            // Пересылаем вопрос в поддержку
-            await forwardToSupport(
-              userId, // userTelegramId
-              message,
-              messageText,
-              ticket.id
-            );
-            
-            await deleteUserPendingAction(existingUser.id);
-            await sendMessage(chatId, "✅ Ваш вопрос передан диспетчеру. Ожидайте ответа.");
-            
-            return NextResponse.json({ status: "question_forwarded" });
-          } catch (error) {
-            console.error("Error forwarding to support:", error);
-            await sendMessage(chatId, "❌ Ошибка при отправке вопроса.");
-            return NextResponse.json({ status: "support_error" });
-          }
-        }
-        
-        // Продолжение диалога в существующем тикете
-        const activeTicket = await getActiveUserTicket(existingUser.id);
-        if (activeTicket) {
-          try {
-            // Пересылаем сообщение в поддержку
-            await forwardToSupport(
-              userId, // userTelegramId
-              message,
-              messageText,
-              activeTicket.id
-            );
-            
-            // Добавляем сообщение в историю
-            await addMessageToTicket(activeTicket.id, existingUser.id, messageText);
-            
-            await sendMessage(chatId, "✉️ Ваше сообщение передано диспетчеру.");
-            return NextResponse.json({ status: "followup_sent" });
-          } catch (error) {
-            console.error("Error sending followup:", error);
-            await sendMessage(chatId, "❌ Ошибка при отправке сообщения.");
-            return NextResponse.json({ status: "followup_error" });
-          }
-        }
-      }
 
       // Обработка причины отклонения рейса
       if (existingUser && messageText) {
         const pendingAction = await getUserPendingAction(existingUser.id);
         
-        if (pendingAction?.action_type === "awaiting_rejection_reason") {
+        if (pendingAction && pendingAction.action_type === "awaiting_rejection_reason") {
+          console.log(`Processing rejection reason: "${messageText}"`);
+          
           try {
+            // Получаем данные из pending action
             const actionData = JSON.parse(pendingAction.action_data || "{}");
             const tripMessageId = pendingAction.related_message_id;
             const originalMessageId = actionData.originalMessageId;
             
-            if (!tripMessageId) throw new Error("No trip message ID");
+            if (!tripMessageId) {
+              throw new Error("No trip message ID in pending action");
+            }
 
-            await sql`
+            // Обновляем запись в базе данных
+            const updateResult = await sql`
               UPDATE trip_messages 
               SET response_status = 'rejected', 
                   response_comment = ${messageText},
                   response_at = ${new Date().toISOString()}
               WHERE id = ${tripMessageId}
+              RETURNING id
             `;
 
+            console.log(`Updated ${updateResult.length} messages`);
+
+            // Удаляем pending action
             await deleteUserPendingAction(existingUser.id);
 
+            // Отправляем подтверждение с реплаем
             if (originalMessageId) {
               await sendReplyToMessage(
                 chatId,
                 originalMessageId,
-                `❌ Рейс отклонен.\n\nПричина: ${messageText}`
+                `❌ Рейс отклонен.\n\nПричина: ${messageText}\n\nСпасибо за ответ.`
               );
             } else {
-              await sendMessage(chatId, `❌ Рейс отклонен.\n\nПричина: ${messageText}`);
+              await sendMessage(
+                chatId,
+                `❌ Рейс отклонен.\n\nПричина: ${messageText}\n\nСпасибо за ответ.`
+              );
             }
 
             return NextResponse.json({ ok: true, status: "rejection_reason_processed" });
           } catch (error) {
             console.error("Error processing rejection reason:", error);
-            await sendMessage(chatId, "❌ Ошибка при сохранении причины.");
+            await sendMessage(chatId, "❌ Произошла ошибка при сохранении причины отклонения.");
             return NextResponse.json({ ok: true, status: "rejection_reason_error" });
           }
         }
@@ -875,28 +874,66 @@ if (update.message &&
 
       // Обработка команды /toroute
       if (messageText === "/toroute") {
+        console.log("=== PROCESSING /TOROUTE COMMAND ===");
+
         try {
-          if (existingUser) await deleteUserPendingAction(existingUser.id);
+          // Очищаем любые pending actions при старте команды
+          if (existingUser) {
+            await deleteUserPendingAction(existingUser.id);
+            console.log("Cleared pending actions for user on /toroute");
+          }
 
+          // Проверяем, зарегистрирован ли пользователь
           if (!existingUser || existingUser.registration_state !== "completed") {
-            await sendMessage(chatId, "❌ Для использования команды завершите регистрацию: /start");
-            return NextResponse.json({ status: "user_not_registered" });
+            await sendMessage(
+              chatId,
+              "❌ Для использования команды /toroute необходимо сначала зарегистрироваться. Отправьте /start",
+            );
+            return NextResponse.json({
+              ok: true,
+              status: "user_not_registered",
+              timestamp: timestamp,
+            });
           }
-          
-          if (!existingUser.verified) {
-            await sendMessage(chatId, "❌ Ваш аккаунт не верифицирован.");
-            return NextResponse.json({ status: "user_not_verified" });
-          }
+                // ДОБАВЛЕНА ПРОВЕРКА ВЕРИФИКАЦИИ
+            if (!existingUser.verified) {
+              await sendMessage(
+                chatId,
+                "❌ Ваш аккаунт еще не верифицирован администратором.\n\n" +
+                "ℹ️ Обратитесь к администратору системы для получения доступа.\n"
+              );
+              return NextResponse.json({
+                ok: true,
+                status: "user_not_verified",
+                timestamp: timestamp,
+              });
+            }
 
+
+
+          // Получаем все доступные точки с координатами
           const allPoints = await getAllPoints();
+
           if (allPoints.length < 2) {
-            await sendMessage(chatId, "❌ Недостаточно точек для построения маршрута.");
-            return NextResponse.json({ status: "insufficient_points" });
+            await sendMessage(
+              chatId,
+              "❌ Недостаточно точек с координатами для построения маршрута. Обратитесь к администратору.",
+            );
+            return NextResponse.json({
+              ok: true,
+              status: "insufficient_points",
+              timestamp: timestamp,
+            });
           }
 
+          // Устанавливаем pending action для начала построения маршрута
           await setUserPendingAction(existingUser.id, "building_route_start", null, { points: [] });
 
+          const welcomeMessage = `🗺️ <b>Построение маршрута</b>\n\n` + `📍 Выберите точку отправления из списка ниже:`;
+
+          // Формируем кнопки с точками (по 2 в ряд)
           const buttons = [];
+
           for (let i = 0; i < allPoints.length; i += 2) {
             const row = [];
             row.push({
@@ -912,196 +949,493 @@ if (update.message &&
             buttons.push(row);
           }
 
-          buttons.push([{ text: "❌ Отменить", callback_data: "route_cancel" }]);
+          // Кнопка отмены
+          buttons.push([
+            {
+              text: "❌ Отменить",
+              callback_data: "route_cancel",
+            },
+          ]);
 
-          await sendMessageWithButtons(
-            chatId,
-            `🗺️ <b>Построение маршрута</b>\n\n📍 Выберите точку отправления:`,
-            buttons
-          );
+          await sendMessageWithButtons(chatId, welcomeMessage, buttons);
 
-          return NextResponse.json({ status: "toroute_started" });
+          console.log("=== /TOROUTE COMMAND PROCESSED SUCCESSFULLY ===");
+
+          return NextResponse.json({
+            ok: true,
+            status: "toroute_started",
+            available_points: allPoints.length,
+            timestamp: timestamp,
+            user_id: userId,
+            chat_id: chatId,
+          });
         } catch (error) {
-          console.error("Error processing /toroute:", error);
-          await sendMessage(chatId, "❌ Ошибка при запуске построения маршрута.");
-          return NextResponse.json({ status: "toroute_error" });
+          console.error("=== ERROR PROCESSING /TOROUTE ===", error);
+          await sendMessage(chatId, "❌ Произошла ошибка при запуске построения маршрута.");
+          return NextResponse.json({
+            ok: true,
+            status: "toroute_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          });
         }
       }
 
       // Обработка команды /status
       if (messageText === "/status") {
+        console.log("=== PROCESSING /STATUS COMMAND ===");
+
         try {
           if (!existingUser) {
-            await sendMessage(chatId, "❌ Вы не зарегистрированы.\n📱 Для регистрации отправьте /start");
-            return NextResponse.json({ status: "user_not_found" });
+            await sendMessage(chatId, "❌ Вы не зарегистрированы в системе.\n\n📱 Для регистрации отправьте /start");
+            return NextResponse.json({
+              ok: true,
+              status: "user_not_found",
+              timestamp: timestamp,
+            });
           }
 
-          let statusMessage = `📊 <b>Ваш статус:</b>\n\n`;
+          let statusMessage = `📊 <b>Ваш статус в системе:</b>\n\n`;
           statusMessage += `👤 <b>Пользователь:</b> ${existingUser.first_name || "Не указано"}\n`;
           statusMessage += `📱 <b>Телефон:</b> +${existingUser.phone}\n`;
 
           if (existingUser.registration_state === "completed") {
             statusMessage += `✅ <b>Статус:</b> Регистрация завершена\n`;
             statusMessage += `👤 <b>ФИО:</b> ${existingUser.full_name}\n`;
-            statusMessage += `🏢 <b>Автопарк:</b> ${existingUser.carpark}\n`;
-            statusMessage += `🔒 <b>Верификация:</b> ${existingUser.verified ? "✅" : "❌"}\n\n`;
+            statusMessage += `🏢 <b>Автопарк:</b> ${existingUser.carpark}\n\n`;
             statusMessage += `🚛 Вы получаете уведомления о рейсах`;
           } else {
             statusMessage += `⏳ <b>Статус:</b> Регистрация не завершена\n`;
             statusMessage += `📝 <b>Этап:</b> ${existingUser.registration_state}\n\n`;
-            statusMessage += `💡 Для завершения отправьте /start`;
+            statusMessage += `💡 Для завершения регистрации отправьте /start`;
           }
 
           await sendMessage(chatId, statusMessage);
-          return NextResponse.json({ status: "status_sent" });
+
+          return NextResponse.json({
+            ok: true,
+            status: "status_sent",
+            registration_state: existingUser.registration_state,
+            timestamp: timestamp,
+          });
         } catch (error) {
           console.error("Error processing /status:", error);
-          await sendMessage(chatId, "❌ Ошибка при получении статуса.");
-          return NextResponse.json({ status: "status_error" });
+          await sendMessage(chatId, "❌ Произошла ошибка при получении статуса.");
+          return NextResponse.json({
+            ok: true,
+            status: "status_error",
+            timestamp: timestamp,
+          });
         }
       }
 
       // Обработка команды /help
       if (messageText === "/help") {
+        console.log("=== PROCESSING /HELP COMMAND ===");
+
         try {
-          let helpMessage = `❓ <b>Справка по боту</b>\n\n`;
+          let helpMessage = `❓ <b>Справка по использованию бота</b>\n\n`;
+          helpMessage += `🤖 <b>Этот бот предназначен для:</b>\n`;
+          helpMessage += `• Получения уведомлений о рейсах\n`;
+          helpMessage += `• Подтверждения/отклонения рейсов\n`;
+          helpMessage += `• Построения маршрутов между точками\n\n`;
+
           helpMessage += `📋 <b>Доступные команды:</b>\n`;
-          helpMessage += `🚀 /start - Начать регистрацию\n`;
-          helpMessage += `🗺️ /toroute - Построить маршрут\n`;
-          helpMessage += `📊 /status - Проверить статус\n`;
-          helpMessage += `❓ /help - Показать справку\n`;
-          helpMessage += `✉️ /ask - Задать вопрос диспетчеру\n\n`;
-          helpMessage += `🆘 <b>Техподдержка:</b>\nОбратитесь к администратору системы.`;
+          helpMessage += `🚀 /start - Начать работу и регистрацию\n`;
+          helpMessage += `🗺️ /toroute - Построить маршрут между точками\n`;
+          helpMessage += `📊 /status - Проверить статус регистрации\n`;
+          helpMessage += `❓ /help - Показать эту справку\n\n`;
+
+          if (existingUser && existingUser.registration_state === "completed") {
+            helpMessage += `✅ <b>Вы зарегистрированы!</b>\n`;
+            helpMessage += `🚛 Ожидайте уведомления о рейсах\n\n`;
+          } else {
+            helpMessage += `📱 <b>Для начала работы:</b>\n`;
+            helpMessage += `1. Отправьте /start\n`;
+            helpMessage += `2. Поделитесь номером телефона\n`;
+            helpMessage += `3. Заполните данные регистрации\n\n`;
+          }
+
+          helpMessage += `🆘 <b>Нужна помощь?</b>\n`;
+          helpMessage += `Обратитесь к диспетчеру или администратору системы.`;
 
           await sendMessage(chatId, helpMessage);
-          return NextResponse.json({ status: "help_sent" });
+
+          return NextResponse.json({
+            ok: true,
+            status: "help_sent",
+            timestamp: timestamp,
+          });
         } catch (error) {
           console.error("Error processing /help:", error);
-          await sendMessage(chatId, "❌ Ошибка при получении справки.");
-          return NextResponse.json({ status: "help_error" });
+          await sendMessage(chatId, "❌ Произошла ошибка при получении справки.");
+          return NextResponse.json({
+            ok: true,
+            status: "help_error",
+            timestamp: timestamp,
+          });
         }
       }
 
       // Обработка команды /start
       if (messageText === "/start") {
-        try {
-          if (existingUser) await deleteUserPendingAction(existingUser.id);
+        console.log("=== PROCESSING /START COMMAND ===");
 
-          if (existingUser && existingUser.registration_state === "completed") {
-            const message = 
-              `👋 Здравствуйте, ${existingUser.first_name}!\n\n` +
-              `✅ Вы уже зарегистрированы.\n\n` +
-              `💡 Для построения маршрута используйте /toroute`;
-            await sendMessage(chatId, message);
-            return NextResponse.json({ status: "user_already_registered" });
+        try {
+          // Очищаем любые pending actions при старте
+          if (existingUser) {
+            await deleteUserPendingAction(existingUser.id);
+            console.log("Cleared pending actions for user on /start");
           }
 
-          await sendMessage(chatId, "🤖 Добро пожаловать в систему уведомлений!");
+          // Проверяем, зарегистрирован ли пользователь
+          if (existingUser && existingUser.registration_state === "completed") {
+            const registeredMessage =
+              `👋 Здравствуйте, ${existingUser.first_name}!\n\n` +
+              `✅ Вы уже зарегистрированы в системе уведомлений.\n\n` +
+              `📋 Ваши данные:\n` +
+              `👤 ФИО: ${existingUser.full_name}\n` +
+              `📱 Телефон: +${existingUser.phone}\n` +
+              `🏢 Автопарк: ${existingUser.carpark}\n\n` +
+              `🚛 Ожидайте сообщения о предстоящих рейсах.\n\n` +
+              `💡 <b>Доступные команды:</b>\n` +
+              `🗺️ /toroute - Построить маршрут между точками`;
+
+            await sendMessage(chatId, registeredMessage);
+
+            return NextResponse.json({
+              ok: true,
+              status: "user_already_registered",
+              timestamp: timestamp,
+            });
+          }
+
+          // Если пользователь не зарегистрирован или регистрация не завершена
+          const welcomeMessage =
+            "🤖 Добро пожаловать в систему уведомлений!\n\n" +
+            "Этот бот используется для получения важных сообщений о рейсах и логистических операциях.\n\n" +
+            "📱 Для регистрации в системе необходимо поделиться номером телефона.\n\n" +
+            "🔒 Ваши данные будут использованы только для отправки рабочих уведомлений.";
+
+          await sendMessage(chatId, welcomeMessage);
           await sendContactRequest(chatId);
-          return NextResponse.json({ status: "start_processed" });
+
+          console.log("=== /START COMMAND PROCESSED SUCCESSFULLY ===");
+
+          return NextResponse.json({
+            ok: true,
+            status: "start_processed",
+            timestamp: timestamp,
+            user_id: userId,
+            chat_id: chatId,
+          });
         } catch (error) {
-          console.error("Error processing /start:", error);
-          return NextResponse.json({ status: "start_error" });
+          console.error("=== ERROR PROCESSING /START ===", error);
+          return NextResponse.json({
+            ok: true,
+            status: "start_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          });
+        }
+      }
+
+      // Проверяем, есть ли pending action для пользователя
+      if (existingUser) {
+        const pendingAction = await getUserPendingAction(existingUser.id);
+
+        if (pendingAction && pendingAction.action_type === "awaiting_rejection_reason" && messageText) {
+          console.log(`Processing rejection reason: "${messageText}"`);
+
+          try {
+            // Находим все pending сообщения этого пользователя
+            const userMessagesResult = await sql`
+              SELECT phone, trip_id
+              FROM trip_messages 
+              WHERE telegram_id = ${userId} AND response_status = 'pending'
+              LIMIT 1
+            `;
+
+            if (userMessagesResult.length === 0) {
+              throw new Error("No pending messages found for this user");
+            }
+
+            const phone = userMessagesResult[0].phone;
+            const trip_id = userMessagesResult[0].trip_id;
+            console.log(`Rejecting for phone: ${phone}, trip_id: ${trip_id}`);
+
+            // Обновляем ВСЕ сообщения этого водителя в этой рассылке
+            const updateResult = await sql`
+              UPDATE trip_messages 
+              SET response_status = 'rejected', 
+                  response_comment = ${messageText},
+                  response_at = ${new Date().toISOString()}
+              WHERE phone = ${phone} AND trip_id = ${trip_id}
+              RETURNING id
+            `;
+
+            console.log(`Updated ${updateResult.length} messages for phone ${phone}`);
+
+            // Удаляем pending action
+            await deleteUserPendingAction(existingUser.id);
+
+            await sendMessage(chatId, `❌ Рейс отклонен.\n\nПричина: ${messageText}\n\nСпасибо за ответ.`);
+
+            console.log("=== REJECTION REASON PROCESSED ===");
+
+            return NextResponse.json({
+              ok: true,
+              status: "rejection_reason_processed",
+              message_id: pendingAction.related_message_id,
+              updated_messages: updateResult.length,
+              reason: messageText,
+              timestamp: timestamp,
+            });
+          } catch (error) {
+            console.error("Error processing rejection reason:", error);
+            await sendMessage(chatId, "❌ Произошла ошибка при сохранении причины отклонения.");
+
+            return NextResponse.json({
+              ok: true,
+              status: "rejection_reason_error",
+              error: error instanceof Error ? error.message : "Unknown error",
+              timestamp: timestamp,
+            });
+          }
         }
       }
 
       // Обработка контакта (номера телефона)
       if (message.contact) {
-        try {
-          const phone = message.contact.phone_number;
-          const name = `${message.contact.first_name} ${message.contact.last_name || ""}`.trim();
+        console.log("=== PROCESSING CONTACT ===");
+        console.log("Contact data:", message.contact);
 
-          await createUser(userId, phone, name);
-          await sendMessage(chatId, "📝 Теперь введите ваше Имя и Отчество (например: Иван Петрович):");
-          
-          return NextResponse.json({ status: "contact_processed" });
+        const phone = message.contact.phone_number;
+        const name = `${message.contact.first_name} ${message.contact.last_name || ""}`.trim();
+
+        try {
+          const user = await createUser(userId, phone, name);
+
+          const firstStepMessage =
+            `📝 Отлично! Номер телефона получен: +${phone.startsWith("+") ? phone.slice(1) : phone}\n\n` +
+            `Теперь для завершения регистрации:\n\n` +
+            `👤 Пожалуйста, введите ваше Имя и Отчество\n` +
+            `(например: Иван Петрович)`;
+
+          await sendMessage(chatId, firstStepMessage);
+
+          console.log("=== CONTACT PROCESSED, AWAITING FIRST NAME ===");
+
+          return NextResponse.json({
+            ok: true,
+            status: "contact_processed_awaiting_first_name",
+            phone: phone,
+            name: name,
+            timestamp: timestamp,
+          });
         } catch (error) {
-          console.error("Error processing contact:", error);
-          await sendMessage(chatId, "❌ Ошибка при регистрации.");
-          return NextResponse.json({ status: "contact_error" });
+          console.error("=== ERROR PROCESSING CONTACT ===", error);
+          await sendMessage(chatId, "❌ Произошла ошибка при регистрации. Попробуйте еще раз.");
+
+          return NextResponse.json({
+            ok: true,
+            status: "contact_error",
+            error: error instanceof Error ? error.message : "Unknown error",
+            timestamp: timestamp,
+          });
         }
       }
 
-      // Обработка текстовых сообщений в процессе регистрации
-      if (messageText) {
+      // Обработка текстовых сообщений в зависимости от состояния регистрации
+      if (messageText && messageText !== "/start" && messageText !== "/toroute") {
+        console.log("=== PROCESSING TEXT MESSAGE ===");
+        console.log("Existing user:", existingUser);
+
         if (!existingUser) {
-          await sendMessage(chatId, "👋 Для начала работы отправьте /start");
-          return NextResponse.json({ status: "help_sent" });
+          // Пользователь не зарегистрирован
+          const helpMessage =
+            "👋 Для работы с системой уведомлений необходимо зарегистрироваться.\n\n" +
+            "📱 Пожалуйста, поделитесь своим номером телефона, нажав на кнопку ниже.";
+
+          await sendMessage(chatId, helpMessage);
+          await sendContactRequest(chatId);
+
+          return NextResponse.json({
+            ok: true,
+            status: "help_sent",
+            timestamp: timestamp,
+          });
         }
 
-        // Обработка имени
+        // Обработка шагов регистрации
         if (existingUser.registration_state === "awaiting_first_name") {
+          console.log(`Processing first name input: "${messageText}"`);
+
+          // Валидация имени и отчества
           const nameParts = messageText.trim().split(/\s+/);
           if (nameParts.length < 2) {
-            await sendMessage(chatId, "❌ Введите Имя и Отчество через пробел (например: Иван Петрович)");
-            return NextResponse.json({ status: "invalid_first_name_format" });
+            await sendMessage(chatId, "❌ Пожалуйста, введите Имя и Отчество через пробел.\n\nПример: Иван Петрович");
+            return NextResponse.json({
+              ok: true,
+              status: "invalid_first_name_format",
+              timestamp: timestamp,
+            });
           }
 
           try {
             await updateUserRegistrationStep(userId, "first_name", messageText.trim());
-            await sendMessage(chatId, "✅ Теперь введите вашу Фамилию:");
-            return NextResponse.json({ status: "first_name_processed" });
+
+            const lastNameMessage =
+              `✅ Имя и отчество получены: ${messageText.trim()}\n\n` + `👤 Теперь введите вашу Фамилию:`;
+
+            await sendMessage(chatId, lastNameMessage);
+
+            console.log("=== FIRST NAME PROCESSED ===");
+
+            return NextResponse.json({
+              ok: true,
+              status: "first_name_processed",
+              first_name: messageText.trim(),
+              timestamp: timestamp,
+            });
           } catch (error) {
             console.error("Error processing first name:", error);
-            await sendMessage(chatId, "❌ Ошибка при обработке имени.");
-            return NextResponse.json({ status: "first_name_error" });
+            await sendMessage(chatId, "❌ Произошла ошибка. Попробуйте еще раз.");
+
+            return NextResponse.json({
+              ok: true,
+              status: "first_name_error",
+              error: error instanceof Error ? error.message : "Unknown error",
+              timestamp: timestamp,
+            });
           }
         }
 
-        // Обработка фамилии
         if (existingUser.registration_state === "awaiting_last_name") {
+          console.log(`Processing last name input: "${messageText}"`);
+
+          // Валидация фамилии
           const lastName = messageText.trim();
           if (lastName.length < 2) {
-            await sendMessage(chatId, "❌ Введите корректную фамилию.");
-            return NextResponse.json({ status: "invalid_last_name_format" });
+            await sendMessage(chatId, "❌ Пожалуйста, введите корректную фамилию.");
+            return NextResponse.json({
+              ok: true,
+              status: "invalid_last_name_format",
+              timestamp: timestamp,
+            });
           }
 
           try {
             await updateUserRegistrationStep(userId, "last_name", lastName);
-            
-            const buttons = [[
-              { text: "🚛 Автопарк 8009", callback_data: "carpark_8009" },
-              { text: "🚚 Автопарк 8012", callback_data: "carpark_8012" },
-            ]];
-            
-            await sendMessageWithButtons(
-              chatId, 
-              "🏢 Выберите ваше автохозяйство:", 
-              buttons
-            );
-            
-            return NextResponse.json({ status: "last_name_processed" });
+
+            const carparkMessage =
+              `✅ Фамилия получена: ${lastName}\n\n` +
+              `🏢 Последний шаг - выберите ваше автохозяйство:\n\n` +
+              `Нажмите на одну из кнопок ниже:`;
+
+            const carparkButtons = [
+              [
+                { text: "🚛 Автопарк 8009", callback_data: "carpark_8009" },
+                { text: "🚚 Автопарк 8012", callback_data: "carpark_8012" },
+              ],
+            ];
+
+            await sendMessageWithButtons(chatId, carparkMessage, carparkButtons);
+
+            console.log("=== LAST NAME PROCESSED, SHOWING CARPARK BUTTONS ===");
+
+            return NextResponse.json({
+              ok: true,
+              status: "last_name_processed_awaiting_carpark",
+              last_name: lastName,
+              timestamp: timestamp,
+            });
           } catch (error) {
             console.error("Error processing last name:", error);
-            await sendMessage(chatId, "❌ Ошибка при обработке фамилии.");
-            return NextResponse.json({ status: "last_name_error" });
+            await sendMessage(chatId, "❌ Произошла ошибка. Попробуйте еще раз.");
+
+            return NextResponse.json({
+              ok: true,
+              status: "last_name_error",
+              error: error instanceof Error ? error.message : "Unknown error",
+              timestamp: timestamp,
+            });
           }
         }
 
-        // Пользователь уже зарегистрирован
         if (existingUser.registration_state === "completed") {
-          await sendMessage(chatId, "ℹ️ Для построения маршрута используйте /toroute");
-          return NextResponse.json({ status: "user_already_registered" });
+          // Пользователь уже зарегистрирован
+          const registeredMessage =
+            `👋 Здравствуйте, ${existingUser.first_name}!\n\n` +
+            `✅ Вы уже зарегистрированы в системе уведомлений.\n\n` +
+            `📋 Ваши данные:\n` +
+            `👤 ФИО: ${existingUser.full_name}\n` +
+            `📱 Телефон: +${existingUser.phone}\n` +
+            `🏢 Автопарк: ${existingUser.carpark}\n\n` +
+            `🚛 Ожидайте сообщения о предстоящих рейсах.\n\n` +
+            `💡 <b>Доступные команды:</b>\n` +
+            `🗺️ /toroute - Построить маршрут между точками`;
+
+          await sendMessage(chatId, registeredMessage);
+
+          return NextResponse.json({
+            ok: true,
+            status: "user_already_registered",
+            timestamp: timestamp,
+          });
         }
 
-        await sendMessage(chatId, "❓ Неизвестная команда. Используйте /help для справки.");
-        return NextResponse.json({ status: "unknown_command" });
+        // Неизвестное состояние
+        console.log(`Unknown registration state: ${existingUser.registration_state}`);
+        await sendMessage(chatId, "❓ Неизвестная команда. Используйте /start для начала работы.");
+
+        return NextResponse.json({
+          ok: true,
+          status: "unknown_state",
+          registration_state: existingUser.registration_state,
+          timestamp: timestamp,
+        });
       }
 
-      return NextResponse.json({ status: "ignored" });
+      console.log("No specific handler for this message type");
+      return NextResponse.json({
+        ok: true,
+        status: "ignored",
+        message_type: message.contact ? "contact" : messageText ? "text" : "other",
+        timestamp: timestamp,
+      });
     }
 
-    return NextResponse.json({ status: "ignored" });
+    console.log("No specific handler for this update type");
+    return NextResponse.json({
+      ok: true,
+      status: "ignored",
+      update_type: update.callback_query ? "callback_query" : update.message ? "message" : "other",
+      timestamp: timestamp,
+    });
   } catch (error) {
-    console.error("CRITICAL ERROR:", error);
-    return NextResponse.json({ status: "error" });
+    console.error("=== CRITICAL TELEGRAM WEBHOOK ERROR ===")
+    console.error("Error details:", error)
+    console.error("Stack trace:", error instanceof Error ? error.stack : "No stack trace")
+
+    return NextResponse.json({
+      ok: true,
+      status: "error_handled",
+      error: error instanceof Error ? error.message : "Unknown error",
+      timestamp: timestamp,
+    })
   }
 }
 
 export async function GET() {
+  console.log("GET request to telegram-webhook endpoint")
+
   return NextResponse.json({
-    status: "Telegram webhook endpoint",
+    status:
+      "Telegram webhook endpoint is working with FULL REGISTRATION LOGIC + CALLBACK HANDLING + ERROR RESILIENCE + ROUTE BUILDING",
     timestamp: new Date().toISOString(),
     environment: process.env.NODE_ENV,
-  });
+    vercel_url: process.env.VERCEL_URL,
+    endpoint: "/api/telegram-webhook",
+  })
 }
