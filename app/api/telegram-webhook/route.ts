@@ -773,6 +773,7 @@ export async function POST(request: NextRequest) {
             // Пересылаем сообщение в поддержку
             await forwardToSupport(
               existingUser.id,
+              userId, // userTelegramId
               message,
               messageText,
               activeTicket.id
