@@ -685,7 +685,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ ok: true, status: "callback_ignored" });
     }
 
-    // --- Обработка сообщений ---
+        // --- Обработка сообщений ---
     if (update.message) {
       const message = update.message;
       const chatId = message.chat.id;
@@ -705,25 +705,83 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ status: "not_verified" });
         }
 
+        // Проверяем активный тикет
+        const activeTicket = await getActiveUserTicket(existingUser.id);
+        if (activeTicket) {
+          await sendMessage(
+            chatId,
+            "✉️ У вас уже есть активное обращение. Продолжайте диалог в этом чате."
+          );
+          return NextResponse.json({ status: "ticket_already_open" });
+        }
+
         await setUserPendingAction(existingUser.id, "awaiting_support_question");
         await sendMessage(chatId, "✉️ Введите ваш вопрос для диспетчера:");
         return NextResponse.json({ status: "awaiting_question" });
+      }
+
+      // Обработка закрытия чата пользователем
+      if (messageText === "/close") {
+        const activeTicket = await getActiveUserTicket(existingUser.id);
+        if (activeTicket) {
+          await updateTicketStatus(activeTicket.id, 'closed');
+          await sendMessage(chatId, "✅ Диалог с диспетчером завершен.");
+        } else {
+          await sendMessage(chatId, "❌ У вас нет активных диалогов.");
+        }
+        return NextResponse.json({ status: "chat_closed" });
       }
 
       // Обработка вопроса пользователя
       if (existingUser && messageText) {
         const pendingAction = await getUserPendingAction(existingUser.id);
         
+        // Первый вопрос в новом тикете
         if (pendingAction?.action_type === "awaiting_support_question") {
           try {
-            await forwardToSupport(existingUser.id, message, messageText);
+            // Создаем тикет
+            const ticket = await createSupportTicket(existingUser.id, messageText);
+            
+            // Пересылаем вопрос в поддержку
+            await forwardToSupport(
+              existingUser.id,
+              message,
+              messageText,
+              ticket.id
+            );
+            
             await deleteUserPendingAction(existingUser.id);
-            await sendMessage(chatId, "✅ Ваш вопрос передан диспетчеру.");
+            await sendMessage(chatId, "✅ Ваш вопрос передан диспетчеру. Ожидайте ответа.");
+            
             return NextResponse.json({ status: "question_forwarded" });
           } catch (error) {
             console.error("Error forwarding to support:", error);
             await sendMessage(chatId, "❌ Ошибка при отправке вопроса.");
             return NextResponse.json({ status: "support_error" });
+          }
+        }
+        
+        // Продолжение диалога в существующем тикете
+        const activeTicket = await getActiveUserTicket(existingUser.id);
+        if (activeTicket) {
+          try {
+            // Пересылаем сообщение в поддержку
+            await forwardToSupport(
+              existingUser.id,
+              message,
+              messageText,
+              activeTicket.id
+            );
+            
+            // Добавляем сообщение в историю
+            await addMessageToTicket(activeTicket.id, existingUser.id, messageText);
+            
+            await sendMessage(chatId, "✉️ Ваше сообщение передано диспетчеру.");
+            return NextResponse.json({ status: "followup_sent" });
+          } catch (error) {
+            console.error("Error sending followup:", error);
+            await sendMessage(chatId, "❌ Ошибка при отправке сообщения.");
+            return NextResponse.json({ status: "followup_error" });
           }
         }
       }
