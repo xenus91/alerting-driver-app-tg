@@ -369,53 +369,63 @@ export async function POST(request: NextRequest) {
   try {
     const update: TelegramUpdate = await request.json();
 
-     // --- Обработка ответов операторов ---
+ // --- Обработка ответов операторов ---
 if (update.message && 
     update.message.chat.id.toString() === process.env.SUPPORT_OPERATOR_CHAT_ID &&
     update.message.reply_to_message) {
   
+  console.log("=== PROCESSING OPERATOR REPLY ===");
   const message = update.message;
   const operatorId = message.from.id;
   
-  const isOp = await isOperator(operatorId);
-  if (!isOp) {
-    await sendMessage(
-      message.chat.id,
-      "❌ Только операторы могут отвечать на вопросы",
-      { reply_to_message_id: message.message_id }
-    );
-    return NextResponse.json({ status: "operator_only" });
-  }
-
   try {
-    // Получаем текст оригинального сообщения
+    // 1. Проверка прав оператора
+    const isOp = await isOperator(operatorId);
+    if (!isOp) {
+      await sendMessage(
+        message.chat.id,
+        "❌ Только операторы могут отвечать на вопросы",
+        { reply_to_message_id: message.message_id }
+      );
+      return NextResponse.json({ status: "operator_only" });
+    }
+
+    // 2. Получение исходного сообщения
     const originalMessage = update.message.reply_to_message.text;
-    
-    // Извлекаем ID тикета из сообщения
-    const ticketIdMatch = originalMessage.match(/тикете #(\d+)/);
+    if (!originalMessage) {
+      throw new Error("Original message text is missing");
+    }
+
+    // 3. Извлечение ticketId
+    const ticketIdMatch = originalMessage.match(/тикет[еа]? #?(\d+)/i);
     if (!ticketIdMatch) {
-      throw new Error("Ticket ID not found in original message");
+      throw new Error(`Ticket ID not found in: ${originalMessage.substring(0, 100)}`);
     }
     const ticketId = parseInt(ticketIdMatch[1]);
-    
-    // Получаем информацию о тикете
+
+    // 4. Получение тикета из БД
     const ticket = await sql`
       SELECT * FROM support_tickets 
       WHERE id = ${ticketId}
       LIMIT 1
     `;
-    
     if (!ticket || ticket.length === 0) {
       throw new Error(`Ticket ${ticketId} not found`);
     }
 
-    // Отправляем ответ пользователю
+    // 5. Проверка user_telegram_id
+    if (!ticket.user_telegram_id) {
+      throw new Error(`Missing user_telegram_id in ticket ${ticketId}`);
+    }
+
+    // 6. Отправка ответа пользователю
     await sendMessage(
       ticket.user_telegram_id,
-      `📩 Ответ диспетчера:\n\n${message.text}`
+      `📩 Ответ диспетчера:\n\n${message.text}`,
+      { parse_mode: "HTML" }
     );
 
-    // Обновляем статус тикета
+    // 7. Обновление тикета
     await sql`
       UPDATE support_tickets 
       SET 
@@ -426,7 +436,7 @@ if (update.message &&
       WHERE id = ${ticketId}
     `;
 
-    // Подтверждаем оператору
+    // 8. Подтверждение оператору
     await sendMessage(
       message.chat.id,
       "✅ Ответ отправлен пользователю",
@@ -434,14 +444,27 @@ if (update.message &&
     );
     
     return NextResponse.json({ status: "support_answer_processed" });
+
   } catch (error) {
-    console.error("Error processing operator reply:", error);
+    console.error("OPERATOR REPLY ERROR:", {
+      error: error instanceof Error ? error.message : String(error),
+      operatorId,
+      message: message ? message.text : 'null',
+      replyToMessage: update.message.reply_to_message 
+        ? update.message.reply_to_message.text 
+        : 'null'
+    });
+    
     await sendMessage(
       message.chat.id,
-      "❌ Не удалось отправить ответ. Проверьте формат сообщения.",
+      "❌ Не удалось обработать ответ. Подробности в логах.",
       { reply_to_message_id: message.message_id }
     );
-    return NextResponse.json({ status: "support_answer_error" });
+    
+    return NextResponse.json({ 
+      status: "support_answer_error",
+      error: error instanceof Error ? error.message : String(error)
+    });
   }
 }
 
