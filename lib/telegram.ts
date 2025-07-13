@@ -66,6 +66,11 @@ export async function forwardToSupport(
   const user = await getUserById(userId);
   if (!user) throw new Error("User not found");
 
+  // Проверяем наличие telegram_id у пользователя
+  if (!user.telegram_id) {
+    throw new Error("User telegram_id is missing");
+  }
+
   const messageText = 
     `❓ НОВЫЙ ВОПРОС\n\n` +
     `👤 От: ${user.full_name}\n` +
@@ -81,9 +86,17 @@ export async function forwardToSupport(
 
   const [ticket] = await sql`
     INSERT INTO support_tickets (
-      user_id, question, operator_message_id, user_message_id
+      user_id, 
+      user_telegram_id,  // Добавляем обязательное поле
+      question, 
+      operator_message_id, 
+      user_message_id
     ) VALUES (
-      ${user.id}, ${question}, ${operatorMessage.message_id}, ${userMessage.message_id}
+      ${user.id}, 
+      ${user.telegram_id},  // Используем telegram_id пользователя
+      ${question}, 
+      ${operatorMessage.message_id}, 
+      ${userMessage.message_id}
     ) RETURNING *
   `;
 
