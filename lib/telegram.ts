@@ -1,4 +1,5 @@
 import { neon } from "@neondatabase/serverless"
+import { getUserByTelegramId } from "./database";
 
 const sql = neon(process.env.DATABASE_URL!)
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
