@@ -369,66 +369,81 @@ export async function POST(request: NextRequest) {
   try {
     const update: TelegramUpdate = await request.json();
 
-      // --- Обработка ответов операторов ---
-    if (update.message && 
-        update.message.chat.id.toString() === process.env.SUPPORT_OPERATOR_CHAT_ID &&
-        update.message.reply_to_message) {
-      
-      const message = update.message;
-      const operatorId = message.from.id;
-      
-      const isOp = await isOperator(operatorId);
-      if (!isOp) {
-        await sendMessage(
-          message.chat.id,
-          "❌ Только операторы могут отвечать на вопросы",
-          { reply_to_message_id: message.message_id }
-        );
-        return NextResponse.json({ status: "operator_only" });
-      }
+     // --- Обработка ответов операторов ---
+if (update.message && 
+    update.message.chat.id.toString() === process.env.SUPPORT_OPERATOR_CHAT_ID &&
+    update.message.reply_to_message) {
+  
+  const message = update.message;
+  const operatorId = message.from.id;
+  
+  const isOp = await isOperator(operatorId);
+  if (!isOp) {
+    await sendMessage(
+      message.chat.id,
+      "❌ Только операторы могут отвечать на вопросы",
+      { reply_to_message_id: message.message_id }
+    );
+    return NextResponse.json({ status: "operator_only" });
+  }
 
-      // Обрабатываем ответ оператора
-      const result = await handleOperatorReply(
-        message, 
-        update.message.reply_to_message
-      );
-
-      if (result) {
-        // Добавляем сообщение в историю тикета
-        if (result.ticketId && message.text) {
-          await addMessageToTicket(
-            result.ticketId, 
-            operatorId, 
-            message.text, 
-            true
-          );
-          
-          // Проверяем, хочет ли оператор закрыть тикет
-          if (message.text.toLowerCase().includes('/close')) {
-            await updateTicketStatus(result.ticketId, 'closed');
-            await sendMessage(
-              message.chat.id,
-              "✅ Диалог завершен. Тикет закрыт.",
-              { reply_to_message_id: message.message_id }
-            );
-          } else {
-            await sendMessage(
-              message.chat.id,
-              "✅ Ответ отправлен пользователю",
-              { reply_to_message_id: message.message_id }
-            );
-          }
-        }
-      } else {
-        await sendMessage(
-          message.chat.id,
-          "❌ Не удалось обработать ответ",
-          { reply_to_message_id: message.message_id }
-        );
-      }
-      
-      return NextResponse.json({ status: "support_answer_processed" });
+  try {
+    // Получаем текст оригинального сообщения
+    const originalMessage = update.message.reply_to_message.text;
+    
+    // Извлекаем ID тикета из сообщения
+    const ticketIdMatch = originalMessage.match(/тикете #(\d+)/);
+    if (!ticketIdMatch) {
+      throw new Error("Ticket ID not found in original message");
     }
+    const ticketId = parseInt(ticketIdMatch[1]);
+    
+    // Получаем информацию о тикете
+    const ticket = await sql`
+      SELECT * FROM support_tickets 
+      WHERE id = ${ticketId}
+      LIMIT 1
+    `;
+    
+    if (!ticket || ticket.length === 0) {
+      throw new Error(`Ticket ${ticketId} not found`);
+    }
+
+    // Отправляем ответ пользователю
+    await sendMessage(
+      ticket.user_telegram_id,
+      `📩 Ответ диспетчера:\n\n${message.text}`
+    );
+
+    // Обновляем статус тикета
+    await sql`
+      UPDATE support_tickets 
+      SET 
+        operator_chat_id = ${message.chat.id},
+        operator_message_id = ${message.message_id},
+        answered_at = NOW(),
+        status = 'answered'
+      WHERE id = ${ticketId}
+    `;
+
+    // Подтверждаем оператору
+    await sendMessage(
+      message.chat.id,
+      "✅ Ответ отправлен пользователю",
+      { reply_to_message_id: message.message_id }
+    );
+    
+    return NextResponse.json({ status: "support_answer_processed" });
+  } catch (error) {
+    console.error("Error processing operator reply:", error);
+    await sendMessage(
+      message.chat.id,
+      "❌ Не удалось отправить ответ. Проверьте формат сообщения.",
+      { reply_to_message_id: message.message_id }
+    );
+    return NextResponse.json({ status: "support_answer_error" });
+  }
+}
 
     // --- Обработка callback query ---
     if (update.callback_query) {
