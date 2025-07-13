@@ -50,6 +50,65 @@ interface TelegramUpdate {
   callback_query?: TelegramCallbackQuery;
 }
 
+// НОВЫЕ ФУНКЦИИ ДЛЯ УПРАВЛЕНИЯ ТИКЕТАМИ
+async function createSupportTicket(userId: number, question: string) {
+  try {
+    const result = await sql`
+      INSERT INTO support_tickets 
+        (user_id, question, status, created_at) 
+      VALUES 
+        (${userId}, ${question}, 'open', NOW())
+      RETURNING *
+    `;
+    return result[0];
+  } catch (error) {
+    console.error("Error creating support ticket:", error);
+    throw error;
+  }
+}
+
+async function getActiveUserTicket(userId: number) {
+  try {
+    const result = await sql`
+      SELECT * FROM support_tickets 
+      WHERE user_id = ${userId} AND status = 'open'
+      ORDER BY created_at DESC 
+      LIMIT 1
+    `;
+    return result[0];
+  } catch (error) {
+    console.error("Error getting active ticket:", error);
+    throw error;
+  }
+}
+
+async function updateTicketStatus(ticketId: number, status: string) {
+  try {
+    await sql`
+      UPDATE support_tickets 
+      SET status = ${status}, closed_at = NOW()
+      WHERE id = ${ticketId}
+    `;
+  } catch (error) {
+    console.error("Error updating ticket status:", error);
+    throw error;
+  }
+}
+
+async function addMessageToTicket(ticketId: number, userId: number, message: string, isOperator: boolean = false) {
+  try {
+    await sql`
+      INSERT INTO ticket_messages 
+        (ticket_id, user_id, message, is_operator) 
+      VALUES 
+        (${ticketId}, ${userId}, ${message}, ${isOperator})
+    `;
+  } catch (error) {
+    console.error("Error adding message to ticket:", error);
+    throw error;
+  }
+}
+
 async function sendMessageWithButtons(
   chatId: number,
   text: string,
