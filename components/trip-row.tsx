@@ -170,6 +170,21 @@ export const TripRow = memo(
   }) => {
     const inputRef = useRef<HTMLInputElement>(null)
 
+    // Функция для сортировки точек
+    const sortPoints = (points: PointData[]): PointData[] => {
+      return [...points].sort((a, b) => {
+        // Сначала сортируем по типу: 'P' перед 'D'
+        if (a.point_type !== b.point_type) {
+          return a.point_type === "P" ? -1 : 1;
+        }
+        // Затем сортируем по point_num по возрастанию
+        return a.point_num - b.point_num;
+      });
+    }; 
+
+        // Создаем отсортированную версию точек для отображения
+    const sortedPoints = sortPoints(trip.points);
+
     useEffect(() => {
       if (inputRef.current && document.activeElement === inputRef.current) {
         inputRef.current.focus()
@@ -253,14 +268,21 @@ export const TripRow = memo(
             </TableRow>
           </TableHeader>
           <TableBody>
-            {trip.points.map((point, pointIndex) => {
+            {/* Используем отсортированный массив для отображения */}
+            {sortedPoints.map((point) => {
+              // Находим индекс точки в оригинальном массиве
+              const originalIndex = trip.points.findIndex(
+                p => p.point_type === point.point_type && 
+                     p.point_num === point.point_num && 
+                     p.point_id === point.point_id
+              );
               const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
               return (
                 <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}`}>
                   <TableCell>
                     <Select
                       value={point.point_type}
-                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, pointIndex, "point_type", value)}
+                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, originalIndex, "point_type", value)}
                     >
                       <SelectTrigger className="w-20">
                         <SelectValue />
@@ -283,7 +305,7 @@ export const TripRow = memo(
                     <Input
                       type="number"
                       value={point.point_num}
-                      onChange={(e) => updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))}
+                      onChange={(e) => updatePoint(tripIndex, originalIndex, "point_num", Number.parseInt(e.target.value))}
                       className="w-16"
                     />
                   </TableCell>
@@ -291,10 +313,10 @@ export const TripRow = memo(
                     <PointSelector
                       value={point.point_id}
                       onChange={(selectedPoint) => {
-                        updatePoint(tripIndex, pointIndex, "point_id", selectedPoint.point_id)
-                        updatePoint(tripIndex, pointIndex, "point_name", selectedPoint.point_name)
-                        updatePoint(tripIndex, pointIndex, "latitude", selectedPoint.latitude)
-                        updatePoint(tripIndex, pointIndex, "longitude", selectedPoint.longitude)
+                        updatePoint(tripIndex, originalIndex, "point_id", selectedPoint.point_id)
+                        updatePoint(tripIndex, originalIndex, "point_name", selectedPoint.point_name)
+                        updatePoint(tripIndex, originalIndex, "latitude", selectedPoint.latitude)
+                        updatePoint(tripIndex, originalIndex, "longitude", selectedPoint.longitude)
                       }}
                       pointKey={pointKey}
                       availablePoints={availablePoints}
@@ -304,7 +326,7 @@ export const TripRow = memo(
                   </TableCell>
                   <TableCell>
                     <Button
-                      onClick={() => removePoint(tripIndex, pointIndex)}
+                      onClick={() => removePoint(tripIndex, originalIndex)}
                       variant="outline"
                       size="sm"
                       className="text-red-600"

@@ -79,7 +79,7 @@ export async function GET(request: Request) {
       usersQuery = sql`
         SELECT id, telegram_id, phone, name, created_at, first_name, last_name, full_name, role, verified, carpark, registration_state
         FROM users
-        WHERE role = 'driver' AND carpark = ${currentUser.carpark}
+        WHERE role IN  ('driver','operator') AND carpark = ${currentUser.carpark}
         ORDER BY created_at DESC
       `
     } else {

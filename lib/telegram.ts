@@ -39,6 +39,112 @@ export interface TelegramUpdate {
   callback_query?: TelegramCallbackQuery
 }
 
+export async function sendReplyToMessage(chatId: number, replyToMessageId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      text: text,
+      parse_mode: "HTML",
+      reply_to_message_id: replyToMessageId
+    }
+
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send reply message")
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error sending reply message:", error)
+    await sendMessage(chatId, text)
+    throw error
+  }
+}
+
+export async function sendMessage(chatId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: "HTML",
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send message")
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error sending Telegram message:", error)
+    throw error
+  }
+}
+
+export async function editMessageReplyMarkup(chatId: number, messageId: number, replyMarkup?: any) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  console.log("=== EDITING MESSAGE REPLY MARKUP ===")
+  console.log("Chat ID:", chatId)
+  console.log("Message ID:", messageId)
+  console.log("New reply markup:", JSON.stringify(replyMarkup, null, 2))
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: replyMarkup,
+    }
+
+    const response = await fetch(`${TELEGRAM_API_URL}/editMessageReplyMarkup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+    console.log("editMessageReplyMarkup response:", JSON.stringify(data, null, 2))
+
+    if (!data.ok) {
+      console.error("Failed to edit message reply markup:", data.description)
+      return null
+    }
+
+    console.log("=== MESSAGE REPLY MARKUP EDITED SUCCESSFULLY ===")
+    return data.result
+  } catch (error) {
+    console.error("Error editing message reply markup:", error)
+    return null
+  }
+}
+
+
+
 // Функция для построения URL маршрута в Яндекс.Картах
 function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: number | string }>) {
   const validPoints = points.filter((p) => {
@@ -65,32 +171,7 @@ function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: n
   return url
 }
 
-export async function sendMessage(chatId: number, text: string) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        parse_mode: "HTML",
-      }),
-    })
 
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send message")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error sending Telegram message:", error)
-    throw error
-  }
-}
 
 export async function sendContactRequest(chatId: number) {
   try {
@@ -145,6 +226,7 @@ export async function sendMultipleTripMessageWithButtons(
       door_open_3?: string;
       latitude?: number | string;
       longitude?: number | string;
+      adress?: string;
     }>;
     unloading_points: Array<{
       point_id: string;
@@ -154,6 +236,7 @@ export async function sendMultipleTripMessageWithButtons(
       door_open_3?: string;
       latitude?: number | string;
       longitude?: number | string;
+      adress?: string; // Добавлено поле адреса
     }>;
   }>,
   firstName: string,
@@ -163,7 +246,7 @@ export async function sendMultipleTripMessageWithButtons(
   // Добавлен параметр isResend для различения первичной и повторной отправки
   isResend = false,
   // === КОНЕЦ ИЗМЕНЕНИЙ ===
-  previousTelegramMessageId?: number
+  previousTelegramMessageId?: number,
 ): Promise<{ message_id: number; messageText: string }> {
   try {
     console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`);
@@ -242,22 +325,46 @@ export async function sendMultipleTripMessageWithButtons(
 
       message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`;
 
-      // Пункты погрузки
+       // Погрузка с адресом и ссылкой
       if (trip.loading_points.length > 0) {
-        message += `📦 <b>Погрузка:</b>\n`
+        message += `📦 <b>Погрузка:</b>\n`;
         trip.loading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
+          
+          // Добавляем адрес с гиперссылкой
+          if (point.adress) {
+            if (point.latitude && point.longitude) {
+              const lat = typeof point.latitude === 'string' ? point.latitude : String(point.latitude);
+              const lng = typeof point.longitude === 'string' ? point.longitude : String(point.longitude);
+              const mapUrl = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`;
+              message += `   📍 <a href="${mapUrl}">${point.adress}</a>\n`;
+            } else {
+              message += `   📍 ${point.adress}\n`;
+            }
+          }
         });
         message += `\n`;
       }
 
-      // Пункты разгрузки
+      // Разгрузка с адресом и ссылкой
       if (trip.unloading_points.length > 0) {
         message += `📤 <b>Разгрузка:</b>\n`;
         trip.unloading_points.forEach((point, index) => {
           message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`;
+          
+          // Добавляем адрес с гиперссылкой
+          if (point.adress) {
+            if (point.latitude && point.longitude) {
+              const lat = typeof point.latitude === 'string' ? point.latitude : String(point.latitude);
+              const lng = typeof point.longitude === 'string' ? point.longitude : String(point.longitude);
+              const mapUrl = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`;
+              message += `   📍 <a href="${mapUrl}">${point.adress}</a>\n`;
+            } else {
+              message += `   📍 ${point.adress}\n`;
+            }
+          }
 
-          // Окна приемки для пункта разгрузки
+          // Окна приемки
           const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim());
           if (windows.length > 0) {
             message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`;
@@ -573,32 +680,7 @@ export async function answerCallbackQuery(callbackQueryId: string, text?: string
   }
 }
 
-export async function editMessageReplyMarkup(chatId: number, messageId: number, replyMarkup?: any) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/editMessageReplyMarkup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        message_id: messageId,
-        reply_markup: replyMarkup,
-      }),
-    })
 
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to edit message reply markup")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error editing message reply markup:", error)
-    throw error
-  }
-}
 
 export async function sendTelegramMessage(chatId: number, text: string, messageId?: number) {
   const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!

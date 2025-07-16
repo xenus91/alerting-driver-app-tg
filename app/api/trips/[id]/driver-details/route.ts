@@ -17,7 +17,7 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
 
     // Получаем все рейсы водителя с точками
     const result = await sql`
-      SELECT DISTINCT
+      SELECT
         tm.phone,
         tm.trip_identifier,
         tm.vehicle_number,
@@ -29,9 +29,14 @@ export async function GET(request: NextRequest, { params }: { params: { id: stri
         p.point_name,
         tm.id as message_id
       FROM trip_messages tm
-      LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
+      LEFT JOIN (
+        SELECT * 
+        FROM trip_points 
+        WHERE driver_phone = ${phone}  -- Фильтр по водителю в подзапросе
+      ) tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
       LEFT JOIN points p ON tp.point_id = p.id
-      WHERE tm.trip_id = ${tripId} AND tm.phone = ${phone}
+      WHERE tm.trip_id = ${tripId} 
+        AND tm.phone = ${phone}
       ORDER BY tm.trip_identifier, tp.point_type DESC, tp.point_num
     `
 

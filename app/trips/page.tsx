@@ -32,6 +32,7 @@ interface TripData {
   error_messages: string | number
   confirmed_responses: string | number
   rejected_responses: string | number
+  declined_responses: string | number
   pending_responses: string | number
   first_sent_at?: string
   last_sent_at?: string
@@ -192,14 +193,16 @@ export default function TripsPage() {
   const calculateResponsePercentage = (
     confirmed: string | number,
     rejected: string | number,
+    declined: string | number, // Добавляем declined
     sent: string | number,
   ) => {
     const confirmedNum = Number(confirmed)
     const rejectedNum = Number(rejected)
+    const declinedNum = Number(declined) // Добавляем declined
     const sentNum = Number(sent)
 
     if (sentNum === 0) return 0
-    const totalResponses = confirmedNum + rejectedNum
+    const totalResponses = confirmedNum + rejectedNum + declinedNum
     const percentage = (totalResponses / sentNum) * 100
 
     console.log(
@@ -221,9 +224,10 @@ export default function TripsPage() {
   const getTripStatus = (trip: TripData) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
+    const declinedNum = Number(trip.declined_responses)
     const sentNum = Number(trip.sent_messages)
     const totalNum = Number(trip.total_messages)
-    const totalResponses = confirmedNum + rejectedNum
+    const totalResponses = confirmedNum + rejectedNum + declinedNum
 
     if (sentNum === 0) return "Не отправлена"
     if (trip.status === "completed" || totalResponses === sentNum) return "Завершена"
@@ -277,6 +281,7 @@ export default function TripsPage() {
   const getCardBackgroundColor = (trip: TripData) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
+    const declinedNum = Number(trip.declined_responses)
     const pendingNum = Number(trip.pending_responses)
     const sentNum = Number(trip.sent_messages)
 
@@ -304,6 +309,7 @@ export default function TripsPage() {
 
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
+    const declinedNum = Number(trip.declined_responses)
     const sentNum = Number(trip.sent_messages)
     const totalResponses = confirmedNum + rejectedNum
 
@@ -338,9 +344,10 @@ export default function TripsPage() {
   const canDeleteTrip = (trip: TripData) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
+    const declinedNum = Number(trip.declined_responses)
     const sentNum = Number(trip.sent_messages)
     const errorNum = Number(trip.error_messages)
-    const totalResponses = confirmedNum + rejectedNum
+    const totalResponses = confirmedNum + rejectedNum + declinedNum
 
     return sentNum > 0 && (totalResponses === sentNum || trip.status === "completed" || errorNum > 0)
   }
@@ -369,24 +376,27 @@ export default function TripsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
-          <p className="text-muted-foreground">Управление рассылками и отслеживание ответов водителей</p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => setShowQuickTripForm(true)} className="bg-blue-600 hover:bg-blue-700">
-            <Zap className="h-4 w-4 mr-2" />
-            Быстрая рассылка
-          </Button>
-          <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Обновить
-          </Button>
-        </div>
+<div className="flex flex-col h-screen">
+  {/* Фиксированная верхняя часть */}
+  <div className="space-y-6 p-4 bg-white border-b sticky top-0 z-10">
+    <div className="flex items-center justify-between">
+      <div>
+        <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
+        <p className="text-muted-foreground">Управление рассылками и отслеживание ответов водителей</p>
       </div>
-
+      <div className="flex gap-2">
+        <Button onClick={() => setShowQuickTripForm(true)} className="bg-blue-600 hover:bg-blue-700">
+          <Zap className="h-4 w-4 mr-2" />
+          Быстрая рассылка
+        </Button>
+        <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
+          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+          Обновить
+        </Button>
+      </div>
+    </div>
+  </div>
+  <div className="flex-1 overflow-auto">
       {isLoading ? (
         <div className="flex items-center justify-center p-8">
           <RefreshCw className="h-6 w-6 animate-spin mr-2" />
@@ -412,6 +422,7 @@ export default function TripsPage() {
             const responsePercentage = calculateResponsePercentage(
               trip.confirmed_responses,
               trip.rejected_responses,
+              trip.declined_responses,
               trip.sent_messages,
             )
 
@@ -477,11 +488,13 @@ export default function TripsPage() {
                   </div>
                 </CardHeader>
                 <CardContent>
-                  <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+                  <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
+                  {/* Всего */}
                     <div className="text-center">
                       <div className="text-2xl font-bold text-blue-600">{trip.total_messages}</div>
                       <div className="text-sm text-muted-foreground">Всего</div>
                     </div>
+                    {/* Отправлено */}
                     <div className="text-center">
                       <div className="text-2xl font-bold text-green-600">{trip.sent_messages}</div>
                       <div className="text-sm text-muted-foreground">Отправлено</div>
@@ -507,7 +520,20 @@ export default function TripsPage() {
                         </>
                       )}
                     </div>
-
+                    {/* Отменено (новый блок) */}
+                      <div className="text-center">
+                        {Number(trip.declined_responses) > 0 ? (
+                          <Link href={`/trips/${trip.id}?filter=declined`}>
+                            <div className="text-2xl font-bold text-red-600">{trip.declined_responses}</div>
+                            <div className="text-sm text-muted-foreground hover:text-red-600">Отменено</div>
+                          </Link>
+                        ) : (
+                          <>
+                            <div className="text-2xl font-bold text-red-600">{trip.declined_responses}</div>
+                            <div className="text-sm text-muted-foreground">Отменено</div>
+                          </>
+                        )}
+                      </div>
                     {/* Отклонено - кликабельное */}
                     <div className="text-center">
                       {Number(trip.rejected_responses) > 0 ? (
@@ -571,8 +597,11 @@ export default function TripsPage() {
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium">Прогресс ответов</span>
                         <span className="text-sm text-muted-foreground">
-                          {responsePercentage}% ({Number(trip.confirmed_responses) + Number(trip.rejected_responses)}/
-                          {trip.sent_messages})
+                           {responsePercentage}% (
+                            {Number(trip.confirmed_responses) + 
+                            Number(trip.rejected_responses) + 
+                            Number(trip.declined_responses)}/
+                            {trip.sent_messages})
                         </span>
                       </div>
                       <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
@@ -603,6 +632,8 @@ export default function TripsPage() {
           })}
         </div>
       )}
+
+      </div>
 
       {/* Диалог ошибок */}
       {showErrorsDialog && (

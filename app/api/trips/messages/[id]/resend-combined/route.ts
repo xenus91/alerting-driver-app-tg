@@ -85,22 +85,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.log(`Processing trip: ${message.trip_identifier}`);
 
       // Получаем точки для каждого рейса
-      const pointsResult = await sql`
-        SELECT DISTINCT
-          tp.point_type,
-          tp.point_num,
-          p.point_id,
-          p.point_name,
-          p.door_open_1,
-          p.door_open_2,
-          p.door_open_3,
-          p.latitude,
-          p.longitude
-        FROM trip_points tp
-        JOIN points p ON tp.point_id = p.id
-        WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${message.trip_identifier}
-        ORDER BY tp.point_type DESC, tp.point_num
-      `;
+     const pointsResult = await sql`
+  SELECT DISTINCT
+    tp.point_type,
+    tp.point_num,
+    p.point_id,
+    p.point_name,
+    p.door_open_1,
+    p.door_open_2,
+    p.door_open_3,
+    p.latitude,
+    p.longitude,
+    p.adress
+  FROM (
+    SELECT * FROM trip_points 
+    WHERE driver_phone = ${phone}  
+  ) tp
+  JOIN points p ON tp.point_id = p.id
+  WHERE tp.trip_id = ${tripId} 
+    AND tp.trip_identifier = ${message.trip_identifier}
+  ORDER BY tp.point_type DESC, tp.point_num
+`;
 
       console.log(`Found ${pointsResult.length} points for trip ${message.trip_identifier}`);
 
@@ -116,6 +121,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           door_open_3: point.door_open_3,
           latitude: point.latitude,
           longitude: point.longitude,
+          adress: point.adress // Добавляем адрес
         };
 
         if (point.point_type === "P") {

@@ -83,12 +83,20 @@ export async function POST(request: NextRequest) {
  * Это устраняет ошибку NOT NULL для столбца message в таблице trip_messages.
  * Логика формирования текста перенесена из sendFromUploadedData для идентичности с предыдущей реализацией.
  */
-function generateMessageText(trips: any[], firstName: string): string {
+async function generateMessageText(trips: any[], firstName: string): string {
   let message = `🌅 <b>Доброго времени суток!</b>\n\n`
   message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
 
   const isMultiple = trips.length > 1
   message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
+
+  // Получаем все точки из базы данных
+  const allPoints = await getAllPoints();
+  const pointsMap = new Map<string, Point>();
+  for (const point of allPoints) {
+    pointsMap.set(point.point_id, point);
+  }
+
 
   const sortedTrips = [...trips].sort((a, b) => {
     const timeA = new Date(a.planned_loading_time || "").getTime()
@@ -142,22 +150,60 @@ function generateMessageText(trips: any[], firstName: string): string {
 
     if (trip.loading_points.length > 0) {
       message += `📦 <b>Погрузка:</b>\n`
-      trip.loading_points.forEach((point: any, index: number) => {
-        message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
-      })
+      for (const [index, pointData] of trip.loading_points.entries()) {
+        const pointInfo = pointsMap.get(pointData.point_id);
+        if (!pointInfo) {
+          message += `${index + 1}) <b>${pointData.point_id} (точка не найдена)</b>\n`
+          continue;
+        }
+
+        message += `${index + 1}) <b>${pointInfo.point_id} ${pointInfo.point_name}</b>\n`
+        
+        // Добавляем адрес с гиперссылкой
+        if (pointInfo.adress) {
+          if (pointInfo.latitude && pointInfo.longitude) {
+            const mapUrl = `https://yandex.ru/maps/?pt=${pointInfo.longitude},${pointInfo.latitude}&z=16&l=map`
+            message += `   📍 <a href="${mapUrl}">${pointInfo.adress}</a>\n`
+          } else {
+            message += `   📍 ${pointInfo.adress}\n`
+          }
+        }
+      }
       message += `\n`
     }
 
+// Разгрузка с адресом и ссылкой
     if (trip.unloading_points.length > 0) {
       message += `📤 <b>Разгрузка:</b>\n`
-      trip.unloading_points.forEach((point: any, index: number) => {
-        message += `${index + 1}) <b>${point.point_id} ${point.point_name}</b>\n`
+      for (const [index, pointData] of trip.unloading_points.entries()) {
+        const pointInfo = pointsMap.get(pointData.point_id);
+        if (!pointInfo) {
+          message += `${index + 1}) <b>${pointData.point_id} (точка не найдена)</b>\n`
+          continue;
+        }
 
-        const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
+        message += `${index + 1}) <b>${pointInfo.point_id} ${pointInfo.point_name}</b>\n`
+        
+        // Добавляем адрес с гиперссылкой
+        if (pointInfo.adress) {
+          if (pointInfo.latitude && pointInfo.longitude) {
+            const mapUrl = `https://yandex.ru/maps/?pt=${pointInfo.longitude},${pointInfo.latitude}&z=16&l=map`
+            message += `   📍 <a href="${mapUrl}">${pointInfo.adress}</a>\n`
+          } else {
+            message += `   📍 ${pointInfo.adress}\n`
+          }
+        }
+
+        const windows = [
+          pointInfo.door_open_1, 
+          pointInfo.door_open_2, 
+          pointInfo.door_open_3
+        ].filter(w => w && w.trim());
+        
         if (windows.length > 0) {
           message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
         }
-      })
+      }
       message += `\n`
     }
 
@@ -292,7 +338,8 @@ async function sendExistingMessages(tripId: number, sql: any) {
             p.door_open_2, 
             p.door_open_3,
             p.latitude,
-            p.longitude
+            p.longitude,
+            p.adress
           FROM trip_points tp
           JOIN points p ON tp.point_id = p.id
           WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${trip.trip_identifier}
@@ -470,6 +517,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
               door_open_3: point.door_open_3,
               latitude: point.latitude,
               longitude: point.longitude,
+              adress: point.adress
             })
           }
         }
@@ -486,6 +534,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
               door_open_3: point.door_open_3,
               latitude: point.latitude,
               longitude: point.longitude,
+              adress: point.adress
             })
           }
         }
@@ -503,7 +552,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
       const firstName = user.first_name || user.full_name || "Водитель"
 
       // Формируем текст сообщения до создания записей в базе
-      const messageText = generateMessageText(tripsForSending, firstName)
+      const messageText = await generateMessageText(tripsForSending, firstName)
       console.log(`Generated message text length: ${messageText.length}`)
       console.log(`Message preview: ${messageText.substring(0, 200)}...`)
 
@@ -524,6 +573,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             "P",
             loadingPoint.point_num,
             tripDataItem.trip_identifier,
+            phone // Номер водителя
           )
           console.log(`Created loading point: ${loadingPoint.point_id}`)
         }
@@ -541,6 +591,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
             "D",
             unloadingPoint.point_num,
             tripDataItem.trip_identifier,
+            phone // Номер водителя
           )
           console.log(`Created unloading point: ${unloadingPoint.point_id}`)
         }

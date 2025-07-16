@@ -31,6 +31,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     }
 
     const message = messageResult[0]
+    const phone = message.phone // Сохраняем номер для фильтрации
 
     if (!message.telegram_id) {
       return NextResponse.json(
@@ -61,7 +62,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         p.longitude
       FROM trip_points tp
       JOIN points p ON tp.point_id = p.id
-      WHERE tp.trip_id = ${message.trip_id} AND tp.trip_identifier = ${message.trip_identifier}
+      WHERE tp.trip_id = ${message.trip_id} AND tp.trip_identifier = ${message.trip_identifier} AND tp.driver_phone = ${phone}
       ORDER BY tp.point_type DESC, tp.point_num
     `
 

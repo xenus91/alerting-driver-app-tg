@@ -85,66 +85,7 @@ export default function HomePage() {
         </Alert>
       )}
 
-      {/* Исправление URL webhook */}
-      {/* Заменить компонент WebhookUrlFix на WebhookDiagnostics */}
-      {/*{!isLiteEnvironment && <WebhookDiagnostics />}*/}
 
-      {/* Тест callback query */}
-      {/*{!isLiteEnvironment && (*/}
-      {/*  <Card className="border-blue-200 bg-blue-50">*/}
-      {/*    <CardHeader>*/}
-      {/*      <CardTitle className="flex items-center gap-2 text-blue-800">*/}
-      {/*        <TestTube className="h-5 w-5" />*/}
-      {/*        Тест callback query (кнопок)*/}
-      {/*      </CardTitle>*/}
-      {/*      <CardDescription className="text-blue-700">Проверим, работают ли кнопки в Telegram боте</CardDescription>*/}
-      {/*    </CardHeader>*/}
-      {/*    <CardContent className="space-y-4">*/}
-      {/*      <div className="flex gap-2">*/}
-      {/*        <Button onClick={testCallbackQuery} disabled={isTestingCallback} size="sm">*/}
-      {/*          {isTestingCallback ? (*/}
-      {/*            <>*/}
-      {/*              <RefreshCw className="h-3 w-3 mr-1 animate-spin" />*/}
-      {/*              Отправка теста...*/}
-      {/*            </>*/}
-      {/*          ) : (*/}
-      {/*            <>*/}
-      {/*              <TestTube className="h-3 w-3 mr-1" />*/}
-      {/*              Отправить тест callback*/}
-      {/*            </>*/}
-      {/*          )}*/}
-      {/*        </Button>*/}
-      {/*      </div>*/}
-
-      {/*      {testResult && (*/}
-      {/*        <Alert className={testResult.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>*/}
-      {/*          <AlertDescription className={testResult.success ? "text-green-800" : "text-red-800"}>*/}
-      {/*            {testResult.success ? (*/}
-      {/*              <div>*/}
-      {/*                ✅ Тестовое сообщение отправлено! Перейдите в Telegram бота и нажмите кнопку "Тест callback".*/}
-      {/*                Затем проверьте логи Vercel на предмет callback_query.*/}
-      {/*              </div>*/}
-      {/*            ) : (*/}
-      {/*              <div>❌ {testResult.error}</div>*/}
-      {/*            )}*/}
-      {/*          </AlertDescription>*/}
-      {/*        </Alert>*/}
-      {/*      )}*/}
-
-      {/*      <div className="text-xs text-muted-foreground">*/}
-      {/*        <p>*/}
-      {/*          <strong>Как тестировать:</strong>*/}
-      {/*        </p>*/}
-      {/*        <ol className="list-decimal list-inside space-y-1 ml-2">*/}
-      {/*          <li>Нажмите "Отправить тест callback"</li>*/}
-      {/*          <li>Перейдите в Telegram бота</li>*/}
-      {/*          <li>Нажмите кнопку "Тест callback"</li>*/}
-      {/*          <li>Проверьте логи Vercel - должен появиться callback_query</li>*/}
-      {/*        </ol>*/}
-      {/*      </div>*/}
-      {/*    </CardContent>*/}
-      {/*  </Card>*/}
-      {/*)}*/}
 
       {/* Быстрые действия */}
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">

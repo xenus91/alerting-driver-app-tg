@@ -21,8 +21,13 @@ import {
   ArrowUp,
   ArrowDown,
   Edit,
+  CheckCircle,
+  XCircle ,
 } from "lucide-react"
 import { TripCorrectionModal } from "@/components/trip-correction-modal"
+import { DispatcherConfirmationModal  } from "@/components/dispatcher-confirmation-modal"
+import { DispatcherCancellationModal } from "@/components/dispatcher-cancellation-modal"
+
 
 interface TripMessage {
   id: number
@@ -43,6 +48,7 @@ interface TripMessage {
   planned_loading_time?: string
   driver_comment?: string
   trip_id?: number
+  dispatcher_comment?: string
 }
 
 /* ИЗМЕНЕНИЕ: Обновлён интерфейс TripPoint для поддержки phone и других необязательных полей */
@@ -53,6 +59,7 @@ interface TripPoint {
   point_name: string
   trip_identifier: string
   phone?: string
+  driver_phone?: string 
   point_short_id?: string
   door_open_1?: boolean
   door_open_2?: boolean
@@ -89,6 +96,7 @@ interface TripData {
   status: string
   response_status: string
   response_comment?: string
+  dispatcher_comment?: string  // Добавлено новое поле
   sent_at?: string
   response_at?: string
   error_message?: string
@@ -105,6 +113,7 @@ interface GroupedDriver {
   sent_at?: string
   response_at?: string
   response_comment?: string
+  dispatcher_comment?: string // Добавлено новое поле
   messageIds: number[]
 }
 
@@ -141,6 +150,118 @@ export default function TripDetailPage() {
     phone: string
     driverName: string
   } | null>(null)
+
+// В начале компонента, рядом с другими состояниями
+const [confirmationModal, setConfirmationModal] = useState<{
+  isOpen: boolean
+  phone: string
+  driverName: string
+  initialAction?: "confirm" | "reject"
+} | null>(null)
+
+  // Добавляем состояние для модалки отмены
+  const [cancellationModal, setCancellationModal] = useState<{
+    isOpen: boolean
+    phone: string
+    driverName: string
+  } | null>(null)
+
+  const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
+
+   // Функция для обработки отмены
+ const handleCancelForDriver = async (comment: string, phone: string) => {
+  try {
+    const response = await fetch(`/api/dispatch/decline`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ 
+        trip_id: tripId, // Добавляем trip_id
+        phone, 
+        dispatcher_comment: comment 
+      }),
+    })
+
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.error || 'Failed to cancel')
+    }
+
+    await fetchMessages()
+  } catch (error) {
+    console.error('Error canceling driver trips:', error)
+    throw error
+  }
+}
+
+  const handleOpenConfirmationModal = (phone: string, driverName: string) => {
+  setConfirmationModal({
+    isOpen: true,
+    phone,
+    driverName,
+  })
+}
+
+const handleDispatcherConfirm = async (comment: string) => {
+  if (!confirmationModal) return
+
+  try {
+    const response = await fetch('/api/dispatch/confirm', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        trip_id: tripId,
+        phone: confirmationModal.phone,
+        dispatcher_comment: comment
+      }),
+    })
+
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.error || 'Ошибка подтверждения')
+    }
+
+    await fetchMessages()
+    //alert('Рейс успешно подтвержден диспетчером!')
+  } catch (error) {
+    console.error('Ошибка при подтверждении рейса:', error)
+    throw error
+  }
+}
+
+const handleDispatcherReject = async (comment: string) => {
+  if (!confirmationModal) return
+
+  try {
+    const response = await fetch('/api/dispatch/reject', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        trip_id: tripId,
+        phone: confirmationModal.phone,
+        dispatcher_comment: comment,
+      }),
+    })
+
+    const data = await response.json()
+    if (!data.success) {
+      throw new Error(data.error || 'Ошибка отклонения')
+    }
+
+    await fetchMessages()
+    //alert('Рейс успешно отклонен диспетчером!')
+  } catch (error) {
+    console.error('Ошибка при отклонении рейса:', error)
+    throw error
+  }
+}
+
+
 
   // Проверяем можно ли удалить рассылку (все подтверждены или завершены)
   const canDeleteTrip = () => {
@@ -203,8 +324,10 @@ export default function TripDetailPage() {
   }, [tripId])
 
   // Построение маршрута для конкретного рейса
-  const buildRouteForTrip = (tripIdentifier: string): string => {
-    const points = tripPoints.filter((point) => point.trip_identifier === tripIdentifier)
+  const buildRouteForTrip = (tripIdentifier: string, driverPhone: string): string => {
+    const points = tripPoints.filter((point) => point.trip_identifier === tripIdentifier && 
+      // Используем существующее поле phone вместо добавления нового
+      point.driver_phone  === driverPhone)
 
     if (points.length === 0) {
       return "Нет данных"
@@ -240,6 +363,7 @@ export default function TripDetailPage() {
           overall_status: "pending",
           overall_response_status: "pending",
           messageIds: [],
+          dispatcher_comment: message.dispatcher_comment || "", // Добавляем комментарий
         })
       }
 
@@ -252,10 +376,11 @@ export default function TripDetailPage() {
         vehicle_number: message.vehicle_number || "",
         planned_loading_time: message.planned_loading_time || "",
         driver_comment: message.driver_comment || "",
-        route: buildRouteForTrip(message.trip_identifier || ""),
+        route: buildRouteForTrip(message.trip_identifier || "", driver.phone), // Передаем номер водителя
         status: message.status,
         response_status: message.response_status,
         response_comment: message.response_comment,
+        dispatcher_comment: message.dispatcher_comment,  // Добавлено новое поле
         sent_at: message.sent_at,
         response_at: message.response_at,
         error_message: message.error_message,
@@ -290,17 +415,23 @@ export default function TripDetailPage() {
 
       // Общий статус ответа
       const responseStatuses = driver.trips.map((t) => t.response_status)
-      if (responseStatuses.every((s) => s === "confirmed")) {
-        driver.overall_response_status = "confirmed"
-        driver.response_at = driver.trips.find((t) => t.response_at)?.response_at
-      } else if (responseStatuses.some((s) => s === "rejected")) {
-        driver.overall_response_status = "rejected"
-        driver.response_at = driver.trips.find((t) => t.response_at)?.response_at
-        driver.response_comment = driver.trips.find((t) => t.response_comment)?.response_comment
-      } else {
-        driver.overall_response_status = "pending"
-      }
-    })
+       // ПЕРЕРАБОТАННЫЙ КОД: правильный порядок проверки статусов
+    if (responseStatuses.some((s) => s === "declined")) {
+      driver.overall_response_status = "declined";
+      driver.response_at = driver.trips.find((t) => t.response_status === "declined" && t.response_at)?.response_at;
+      driver.response_comment = driver.trips.find((t) => t.response_status === "declined" && t.response_comment)?.response_comment;
+    } else if (responseStatuses.every((s) => s === "confirmed")) {
+      driver.overall_response_status = "confirmed";
+      driver.response_at = driver.trips.find((t) => t.response_status === "confirmed" && t.response_at)?.response_at;
+      driver.response_comment = driver.trips.find((t) => t.response_status === "confirmed" && t.response_comment)?.response_comment;
+    } else if (responseStatuses.some((s) => s === "rejected")) {
+      driver.overall_response_status = "rejected";
+      driver.response_at = driver.trips.find((t) => t.response_status === "rejected" && t.response_at)?.response_at;
+      driver.response_comment = driver.trips.find((t) => t.response_status === "rejected" && t.response_comment)?.response_comment;
+    } else {
+      driver.overall_response_status = "pending";
+    }
+  });
 
     return Array.from(driverMap.values())
   }
@@ -367,6 +498,8 @@ export default function TripDetailPage() {
         return "Отклонено"
       case "pending":
         return "Ожидает ответа"
+      case "declined":
+        return "Отменено"
       default:
         return responseStatus
     }
@@ -383,6 +516,8 @@ export default function TripDetailPage() {
       filtered = filtered.filter((driver) => driver.overall_response_status === "confirmed")
     } else if (activeFilter === "rejected") {
       filtered = filtered.filter((driver) => driver.overall_response_status === "rejected")
+    } else if (activeFilter === "declined") {
+      filtered = filtered.filter((driver) => driver.overall_response_status === "declined")
     } else if (activeFilter === "error") {
       filtered = filtered.filter((driver) => driver.overall_status === "error")
     }
@@ -632,6 +767,8 @@ export default function TripDetailPage() {
         )
       case "rejected":
         return <Badge variant="destructive">Отклонено</Badge>
+      case "declined":
+        return <Badge variant="destructive">Отменено</Badge>
       case "pending":
         return <Badge variant="secondary">Ожидает ответа</Badge>
       default:
@@ -657,6 +794,8 @@ export default function TripDetailPage() {
         return "Подтвержденные"
       case "rejected":
         return "Отклоненные"
+      case "declined":
+        return "Отмененные"
       case "error":
         return "С ошибками"
       default:
@@ -1223,14 +1362,22 @@ export default function TripDetailPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      {driver.response_comment ? (
-                        <div className="max-w-xs">
-                          <span className="text-sm">{driver.response_comment}</span>
-                        </div>
-                      ) : (
-                        "—"
-                      )}
+                     <TableCell>
+                      <div className="max-w-xs space-y-1">
+                        {driver.response_comment && (
+                          <div className="flex items-start gap-1">
+                            <span className="mt-0.5">🚚</span>
+                            <span className="text-sm">{driver.response_comment}</span>
+                          </div>
+                        )}
+                        {driver.dispatcher_comment && ( // Добавляем отображение комментария диспетчера
+                          <div className="flex items-start gap-1 text-red-600">
+                            <span className="mt-0.5">👤💬</span>
+                            <span className="text-sm">{driver.dispatcher_comment}</span>
+                          </div>
+                        )}
+                        {!driver.response_comment && !driver.dispatcher_comment && "—"}
+                      </div>
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-col gap-1">
@@ -1249,6 +1396,38 @@ export default function TripDetailPage() {
                           <Edit className="h-3 w-3 mr-2" />
                           Корректировка
                         </Button>
+                         {driver.overall_response_status === "pending" && (
+                              <div className="flex gap-1">
+                                <Button
+                                  onClick={() => setConfirmationModal({
+                                    isOpen: true,
+                                    phone: driver.phone,
+                                    driverName: driver.full_name || driver.first_name || "Неизвестный",
+                                    initialAction: "confirm"
+                                  })}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-green-100 hover:bg-green-200 text-green-800 border-green-200"
+                                >
+                                  <CheckCircle className="h-3 w-3 mr-2" />
+                                  Подтвердить
+                                </Button>
+                                <Button
+                                  onClick={() => setConfirmationModal({
+                                    isOpen: true,
+                                    phone: driver.phone,
+                                    driverName: driver.full_name || driver.first_name || "Неизвестный",
+                                    initialAction: "reject"
+                                  })}
+                                  variant="outline"
+                                  size="sm"
+                                  className="flex-1 bg-red-100 hover:bg-red-200 text-red-800 border-red-200"
+                                >
+                                  <XCircle className="h-3 w-3 mr-2" />
+                                  Отклонить
+                                </Button>
+                              </div>
+                            )}
                         {driver.overall_response_status === "confirmed" ? (
                           <Button
                             disabled
@@ -1280,6 +1459,22 @@ export default function TripDetailPage() {
                             )}
                           </Button>
                         )}
+                          {/* Новая кнопка Отменить */}
+                              <Button
+                                onClick={() => setCancellationModal({
+                                  isOpen: true,
+                                  phone: driver.phone,
+                                  driverName: driver.full_name || driver.first_name || "Неизвестный",
+                                })}
+                                variant="destructive"
+                                size="sm"
+                                className="w-full"
+                              >
+                                <span className="flex items-center justify-center">
+                                  <span className="mr-2">🚫</span>
+                                  Отменить
+                                </span>
+                              </Button>
                       </div>
                     </TableCell>
                   </TableRow>
@@ -1319,6 +1514,30 @@ export default function TripDetailPage() {
             fetchMessages()
             setCorrectionModal(null)
           }}
+        />
+      )}
+      {confirmationModal && (
+        <DispatcherConfirmationModal
+          isOpen={confirmationModal.isOpen}
+          onClose={() => setConfirmationModal(null)}
+          onConfirm={handleDispatcherConfirm}
+          onReject={handleDispatcherReject}
+          driverName={confirmationModal.driverName}
+          phone={confirmationModal.phone}
+          initialAction={confirmationModal.initialAction}
+        />
+)}
+ {/* Добавляем модалку для отмены */}
+     {cancellationModal && (
+        <DispatcherCancellationModal
+          isOpen={cancellationModal.isOpen}
+          onClose={() => setCancellationModal(null)}
+          onCancel={async (comment) => {
+            await handleCancelForDriver(comment, cancellationModal.phone)
+            setCancellationModal(null)
+          }}
+          driverName={cancellationModal.driverName}
+          phone={cancellationModal.phone}
         />
       )}
     </div>

@@ -37,7 +37,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         // Удаляем из trip_points
         await sql`
           DELETE FROM trip_points 
-          WHERE trip_id = ${tripId} 
+          WHERE trip_id = ${tripId}
+            AND driver_phone = ${phone} 
             AND trip_identifier = ${tripIdentifier}
         `
 
@@ -126,6 +127,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         await sql`
           DELETE FROM trip_points 
           WHERE trip_id = ${tripId} 
+            AND driver_phone = ${phone} 
             AND trip_identifier = ${originalTripIdentifier}
         `
 
@@ -138,8 +140,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
           if (pointResult.length > 0) {
             await sql`
-              INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier)
-              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier})
+              INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier, driver_phone )
+              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier}, ${phone} )
             `
 
             console.log(`Added point ${point.point_id} to trip ${tripData.new_trip_identifier}`)
@@ -154,32 +156,36 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
        */
       // Получаем данные о рейсах для отправки сообщения
       const messages = await sql`
-        SELECT 
-          tm.id,
-          tm.trip_identifier,
-          tm.vehicle_number,
-          tm.planned_loading_time,
-          tm.driver_comment,
-          tm.telegram_id,
-          u.first_name,
-          u.full_name,
-          tm.telegram_message_id,
-          tp.point_id,
-          p.point_name,
-          tp.point_type,
-          tp.point_num,
-          p.latitude,
-          p.longitude,
-          p.door_open_1,
-          p.door_open_2,
-          p.door_open_3
-        FROM trip_messages tm
-        LEFT JOIN trip_points tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
-        LEFT JOIN points p ON tp.point_id = p.id
-        LEFT JOIN users u ON tm.telegram_id = u.telegram_id
-        WHERE tm.trip_id = ${tripId}
-        AND tm.phone = ${phone}
-        ORDER BY tm.planned_loading_time
+       SELECT 
+    tm.id,
+    tm.trip_identifier,
+    tm.vehicle_number,
+    tm.planned_loading_time,
+    tm.driver_comment,
+    tm.telegram_id,
+    u.first_name,
+    u.full_name,
+    tm.telegram_message_id,
+    tp.point_id,
+    p.point_name,
+    p.adress,
+    tp.point_type,
+    tp.point_num,
+    p.latitude,
+    p.longitude,
+    p.door_open_1,
+    p.door_open_2,
+    p.door_open_3
+  FROM trip_messages tm
+  LEFT JOIN (
+    SELECT * FROM trip_points 
+    WHERE driver_phone = ${phone}  
+  ) tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
+  LEFT JOIN points p ON tp.point_id = p.id
+  LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+  WHERE tm.trip_id = ${tripId}
+    AND tm.phone = ${phone}
+  ORDER BY tm.planned_loading_time
       `
 
       if (messages.length === 0) {
@@ -205,6 +211,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           const point = {
             point_id: row.point_id,
             point_name: row.point_name,
+            adress: row.adress, // Добавляем адрес
             door_open_1: row.door_open_1,
             door_open_2: row.door_open_2,
             door_open_3: row.door_open_3,
