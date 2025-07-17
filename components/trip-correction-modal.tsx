@@ -28,7 +28,6 @@ interface PointData {
   longitude?: string
 }
 
-/* ИЗМЕНЕНИЕ: Обновлён интерфейс TripCorrectionModalProps, чтобы onCorrectionSent принимал corrections и deletedTrips вместо tripIdentifiers и pointIds */
 interface TripCorrectionModalProps {
   isOpen: boolean
   onClose: () => void
@@ -36,10 +35,8 @@ interface TripCorrectionModalProps {
   phone: string
   driverName: string
   onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
-   // Добавляем новый пропс для открытия модального окна конфликта
   onOpenConflictTrip: (driverPhone: string, driverName: string) => void
 }
-
 
 export function TripCorrectionModal({
   isOpen,
@@ -48,37 +45,22 @@ export function TripCorrectionModal({
   phone,
   driverName,
   onCorrectionSent,
-  onOpenConflictTrip 
+  onOpenConflictTrip
 }: TripCorrectionModalProps) {
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>>([])
-  const [pointSearchStates, setPointSearchStates] = useState<Record<string, { open: boolean; search: string }>>([])
+  const [pointSearchStates, setPointSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-
-  // Состояние для хранения конфликтных рейсов
-  // Состояние для хранения данных о конфликтных рейсах
   const [conflictedTrips, setConflictedTrips] = useState<Array<{
     trip_identifier: string;
     driver_phone: string;
     driver_name: string;
-  }>>([]);
-
-
-    
-    // Вызываем функцию открытия модального окна из родительского компонента
-    // (предполагается, что она передается через пропсы или контекст)
-    setCorrectionModal({
-      isOpen: true,
-      tripId,
-      phone: driverPhone,
-      driverName
-    });
-  };
+  }>>([])
 
   // Функция для открытия модального окна конфликтного рейса
   const openConflictTripModal = (driverPhone: string, driverName: string) => {
@@ -86,11 +68,8 @@ export function TripCorrectionModal({
     onOpenConflictTrip(driverPhone, driverName); // Вызываем функцию из пропсов
   };
 
-
-
   useEffect(() => {
     if (isOpen) {
-          // Сбрасываем состояние конфликтных рейсов при открытии модалки
       setConflictedTrips([])
       loadDriverDetails()
       loadAvailablePoints()
@@ -235,14 +214,13 @@ export function TripCorrectionModal({
     setIsSaving(true)
     setError(null)
     setSuccess(null)
-        // Сбрасываем конфликтные рейсы перед новой попыткой
     setConflictedTrips([])
 
     try {
       const flatCorrections = corrections.flatMap((trip) =>
         trip.points.map((point) => ({
           phone: trip.phone,
-          driver_phone: phone, // Добавлено новое поле
+          driver_phone: phone,
           trip_identifier: trip.trip_identifier,
           original_trip_identifier: trip.original_trip_identifier,
           vehicle_number: trip.vehicle_number,
@@ -265,7 +243,7 @@ export function TripCorrectionModal({
         },
         body: JSON.stringify({
           phone,
-          driver_phone: phone, // Добавлено
+          driver_phone: phone,
           corrections: flatCorrections,
           deletedTrips,
         }),
@@ -277,9 +255,8 @@ export function TripCorrectionModal({
         setSuccess("Корректировки сохранены успешно!")
         return true
       } else {
-        /* === ИСПРАВЛЕНИЕ: Обработка новой ошибки конфликта === */
         if (data.error === "trip_already_assigned") {
-          setConflictedTrips(data.trip_identifiers)
+          setConflictedTrips(data.conflict_data || [])
           setError(`Невозможно сохранить изменения: рейс(ы) ${data.trip_identifiers.join(", ")} уже назначен(ы) другому водителю.`)
         } else {
           setError(data.error || "Ошибка при сохранении корректировок")
@@ -296,58 +273,53 @@ export function TripCorrectionModal({
   }
 
   const sendCorrection = async () => {
-  setIsSending(true)
-  setError(null)
-  setSuccess(null)
+    setIsSending(true)
+    setError(null)
+    setSuccess(null)
+    setConflictedTrips([])
 
-  try {
-    console.log("sendCorrection: Starting saveCorrections")
-    const saveSuccess = await saveCorrections()
-    if (!saveSuccess) {
-        // Если была ошибка конфликта, не продолжаем отправку
+    try {
+      const saveSuccess = await saveCorrections()
+      if (!saveSuccess) {
         if (conflictedTrips.length > 0) return
         throw new Error("Не удалось сохранить корректировки перед отправкой")
       }
-    const messageIds = [...new Set(corrections.map((c) => c.message_id))]
-    
 
-    /* ИЗМЕНЕНИЕ: Передаём полные corrections и deletedTrips в onCorrectionSent вместо tripIdentifiers и pointIds */
-      console.log("sendCorrection: corrections:", corrections, "deletedTrips:", deletedTrips)
+      const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+      
+      const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          phone,
+          driver_phone: phone,
+          messageIds,
+          isCorrection: true,
+          deletedTrips,
+        }),
+      })
 
-    const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        phone,
-        driver_phone: phone, // Добавлено
-        messageIds,
-        isCorrection: true,
-        deletedTrips,
-      }),
-    })
+      const data = await response.json()
 
-    const data = await response.json()
-
-    if (data.success) {
-      setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
-      await new Promise((resolve) => setTimeout(resolve, 1000))
-              /* ИЗМЕНЕНИЕ: Исправлен вызов onCorrectionSent, чтобы передавать corrections и deletedTrips вместо tripIdentifiers, pointIds, points */
+      if (data.success) {
+        setSuccess("Корректировка отправлена водителю! Статус подтверждения сброшен - требуется новое подтверждение.")
+        await new Promise((resolve) => setTimeout(resolve, 1000))
         onCorrectionSent(corrections, deletedTrips)
-      setTimeout(() => {
-        onClose()
-      }, 3000)
-    } else {
-      setError(data.error || "Failed to send correction")
+        setTimeout(() => {
+          onClose()
+        }, 3000)
+      } else {
+        setError(data.error || "Ошибка при отправке корректировки")
+      }
+    } catch (error) {
+      setError("Ошибка при отправке корректировки")
+      console.error("Error sending correction:", error)
+    } finally {
+      setIsSending(false)
     }
-  } catch (error) {
-    setError("Error sending correction")
-    console.error("Error sending correction:", error)
-  } finally {
-    setIsSending(false)
   }
-}
 
   const formatDateTime = (dateString: string) => {
     if (!dateString) return ""
@@ -409,14 +381,12 @@ export function TripCorrectionModal({
           </AlertDescription>
         </Alert>
 
-        {/* === ИСПРАВЛЕНИЕ: Блок для отображения ошибок === */}
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
-        {/* Блок для отображения конфликтных рейсов */}
         {conflictedTrips.length > 0 && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
@@ -432,7 +402,7 @@ export function TripCorrectionModal({
                       size="sm"
                       variant="outline"
                       className="ml-2"
-                      onClick={() => onOpenConflictTrip(conflict.driver_phone, conflict.driver_name)}
+                      onClick={() => openConflictTripModal(conflict.driver_phone, conflict.driver_name)}
                     >
                       Просмотреть рейс
                     </Button>
@@ -442,8 +412,9 @@ export function TripCorrectionModal({
             </AlertDescription>
           </Alert>
         )}
+
         {success && (
-          <Alert variant="success">
+          <Alert>
             <AlertDescription className="text-green-600">{success}</AlertDescription>
           </Alert>
         )}
@@ -478,9 +449,8 @@ export function TripCorrectionModal({
                 correctionsLength={corrections.length}
                 formatDateTime={formatDateTime}
                 formatDateTimeForSave={formatDateTimeForSave}
-                // === ИСПРАВЛЕНИЕ: Помечаем конфликтные рейсы ===
-                isConflicted={conflictedTrips.includes(
-                  trip.original_trip_identifier || trip.trip_identifier
+                isConflicted={conflictedTrips.some(
+                  conflict => conflict.trip_identifier === (trip.original_trip_identifier || trip.trip_identifier)
                 )}
               />
             ))}
@@ -489,19 +459,6 @@ export function TripCorrectionModal({
               <Button onClick={onClose} variant="outline">
                 Отмена
               </Button>
-             {/* <Button onClick={saveCorrections} disabled={isSaving} variant="secondary">
-                {isSaving ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Сохранение...
-                  </>
-                ) : (
-                  <>
-                    <Save className="h-4 w-4 mr-2" />
-                    Сохранить
-                  </>
-                )}
-              </Button>*/}
               <Button 
                 onClick={sendCorrection} 
                 disabled={isSending || isSaving || conflictedTrips.length > 0}
