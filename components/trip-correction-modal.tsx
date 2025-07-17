@@ -416,7 +416,7 @@ export function TripCorrectionModal({
           </Alert>
         )}
 
-               {/* Блок для отображения конфликтных рейсов с кнопками */}
+        {/* Блок для отображения конфликтных рейсов */}
         {conflictedTrips.length > 0 && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
@@ -432,7 +432,7 @@ export function TripCorrectionModal({
                       size="sm"
                       variant="outline"
                       className="ml-2"
-                      onClick={() => openConflictTripModal(conflict.driver_phone, conflict.driver_name)}
+                      onClick={() => onOpenConflictTrip(conflict.driver_phone, conflict.driver_name)}
                     >
                       Просмотреть рейс
                     </Button>
