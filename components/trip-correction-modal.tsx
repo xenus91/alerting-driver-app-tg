@@ -415,7 +415,7 @@ export function TripCorrectionModal({
           </Alert>
         )}
 
-        {/* Блок для отображения конфликтных рейсов с кнопками */}
+               {/* Блок для отображения конфликтных рейсов с кнопками */}
         {conflictedTrips.length > 0 && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
@@ -441,7 +441,6 @@ export function TripCorrectionModal({
             </AlertDescription>
           </Alert>
         )}
-
         {success && (
           <Alert variant="success">
             <AlertDescription className="text-green-600">{success}</AlertDescription>
