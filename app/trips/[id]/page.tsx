@@ -1417,6 +1417,7 @@ const handleDispatcherReject = async (comment: string) => {
                           onClick={() =>
                             setCorrectionModal({
                               isOpen: true,
+                              tripId: parseInt(params.id),
                               phone: driver.phone,
                               driverName: driver.full_name || driver.first_name || "Неизвестный",
                             })
