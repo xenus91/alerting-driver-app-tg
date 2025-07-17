@@ -147,6 +147,7 @@ export default function TripDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [correctionModal, setCorrectionModal] = useState<{
     isOpen: boolean
+    tripId?: number // ID поездки
     phone: string
     driverName: string
   } | null>(null)
@@ -1524,7 +1525,7 @@ const handleDispatcherReject = async (comment: string) => {
             fetchMessages()
             setCorrectionModal(null)
           }}
-          onOpenConflictTrip={(driverPhone, driverName) => {
+          onOpenConflictTrip={(tripId, driverPhone, driverName) => {
     // Открываем то же модальное окно для другого водителя
     openCorrectionModal(correctionModal.tripId!, driverPhone, driverName);
   }}
