@@ -38,6 +38,12 @@ interface TripCorrectionModalProps {
   onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
 }
 
+interface ConflictedTrip {
+  trip_identifier: string;
+  driver_phone: string;
+  driver_name: string;
+}
+
 
 export function TripCorrectionModal({
   isOpen,
@@ -388,15 +394,30 @@ export function TripCorrectionModal({
           </Alert>
         )}
 
-        {/* === ИСПРАВЛЕНИЕ: Блок для отображения конфликтных рейсов === */}
+        {/* === ИСПРАВЛЕНИЕ: Блок для отображения конфликтных рейсов с ссылками === */}
         {conflictedTrips.length > 0 && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
               <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
-              <ul className="list-disc pl-5 mt-2">
+              <ul className="list-disc pl-5 mt-2 space-y-2">
                 {conflictedTrips.map((trip) => (
-                  <li key={trip} className="font-mono">{trip}</li>
+                  <li key={trip.trip_identifier} className="flex items-start">
+                    <span className="font-mono bg-gray-100 px-2 py-1 rounded mr-2">
+                      {trip.trip_identifier}
+                    </span>
+                    <span className="mr-2">(Водитель: {trip.driver_name})</span>
+                    <Button 
+                      variant="link"
+                      className="text-blue-500 p-0 h-auto"
+                      onClick={() => {
+                        onClose();
+                        onOpenDriverCorrection(trip.driver_phone, trip.driver_name);
+                      }}
+                    >
+                      Открыть корректировку
+                    </Button>
+                  </li>
                 ))}
               </ul>
             </AlertDescription>
