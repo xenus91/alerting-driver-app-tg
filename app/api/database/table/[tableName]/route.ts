@@ -5,6 +5,9 @@ import { Pool } from "@neondatabase/serverless";
 const pool = new Pool({ connectionString: process.env.DATABASE_URL });
 const NULL_PLACEHOLDER = "__NULL__"; // Должен соответствовать фронтенду
 
+// Добавлено: Разрешение для доступа к таблицам
+const API_KEY_PERMISSION = "read_database";
+
 export async function GET(
   request: NextRequest,
   { params }: { params: { tableName: string } }
@@ -23,35 +26,80 @@ export async function GET(
   const client = await pool.connect();
 
   try {
-    // Проверка авторизации
-    const authResponse = await fetch(`${request.nextUrl.origin}/api/auth/me`, {
-      headers: { Cookie: request.headers.get("cookie") || "" },
-      cache: "no-store",
-    });
-    if (!authResponse.ok) {
-      console.error(
-        `[API] Auth request failed with status: ${authResponse.status}, ${authResponse.statusText}`
+    // Добавлено: Проверка API ключа
+    let hasAccess = false;
+    const apiKey = 
+      request.headers.get("X-API-Key") ||
+      request.headers.get("Authorization")?.replace("Bearer ", "");
+    
+    if (apiKey) {
+      console.log(`[API] Checking API key access for table: ${tableName}`);
+      
+      // Проверяем валидность ключа и наличие разрешения
+      const keyCheck = await client.query(
+        `SELECT * FROM api_keys 
+         WHERE api_key = $1 
+           AND is_active = true 
+           AND (expires_at IS NULL OR expires_at > NOW())
+           AND $2 = ANY(permissions)`,
+        [apiKey, API_KEY_PERMISSION]
       );
-      return NextResponse.json(
-        {
-          success: false,
-          error: `Authentication endpoint failed: ${authResponse.statusText}`,
-        },
-        { status: authResponse.status }
-      );
+      
+      if (keyCheck.rowCount > 0) {
+        console.log(`[API] Valid API key used for table: ${tableName}`);
+        hasAccess = true;
+        
+        // Обновляем время последнего использования
+        await client.query(
+          `UPDATE api_keys 
+           SET last_used_at = NOW() 
+           WHERE id = $1`,
+          [keyCheck.rows[0].id]
+        );
+      }
     }
-    const authData = await authResponse.json();
-    if (!authData.success || authData.user?.role !== "admin") {
-      console.warn(
-        `[API] Access denied for table ${tableName}: user role=${
-          authData.user?.role || "unknown"
-        }`
-      );
+    
+    // Добавлено: Если нет доступа по API ключу, проверяем сессию администратора
+    if (!hasAccess) {
+      console.log(`[API] No valid API key, checking session for table: ${tableName}`);
+      const authResponse = await fetch(`${request.nextUrl.origin}/api/auth/me`, {
+        headers: { Cookie: request.headers.get("cookie") || "" },
+        cache: "no-store",
+      });
+      
+      if (!authResponse.ok) {
+        console.error(
+          `[API] Auth request failed with status: ${authResponse.status}, ${authResponse.statusText}`
+        );
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Authentication endpoint failed: ${authResponse.statusText}`,
+          },
+          { status: authResponse.status }
+        );
+      }
+      
+      const authData = await authResponse.json();
+      if (!authData.success || authData.user?.role !== "admin") {
+        console.warn(`[API] Access denied for table ${tableName}`);
+        return NextResponse.json(
+          { success: false, error: "Access denied" },
+          { status: 403 }
+        );
+      }
+      
+      hasAccess = true;
+    }
+    
+    // Добавлено: Если доступ не получен ни одним способом
+    if (!hasAccess) {
       return NextResponse.json(
         { success: false, error: "Access denied" },
         { status: 403 }
       );
     }
+
 
     // Проверка валидности таблицы
     console.log(`[API] Checking if table ${tableName} exists in public schema`);
