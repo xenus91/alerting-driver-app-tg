@@ -381,14 +381,30 @@ export function TripCorrectionModal({
           </AlertDescription>
         </Alert>
 
+        {/* === ИСПРАВЛЕНИЕ: Блок для отображения ошибок === */}
         {error && (
           <Alert variant="destructive">
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
 
+        {/* === ИСПРАВЛЕНИЕ: Блок для отображения конфликтных рейсов === */}
+        {conflictedTrips.length > 0 && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
+              <ul className="list-disc pl-5 mt-2">
+                {conflictedTrips.map((trip) => (
+                  <li key={trip} className="font-mono">{trip}</li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {success && (
-          <Alert>
+          <Alert variant="success">
             <AlertDescription className="text-green-600">{success}</AlertDescription>
           </Alert>
         )}
@@ -423,6 +439,10 @@ export function TripCorrectionModal({
                 correctionsLength={corrections.length}
                 formatDateTime={formatDateTime}
                 formatDateTimeForSave={formatDateTimeForSave}
+                // === ИСПРАВЛЕНИЕ: Помечаем конфликтные рейсы ===
+                isConflicted={conflictedTrips.includes(
+                  trip.original_trip_identifier || trip.trip_identifier
+                )}
               />
             ))}
 
@@ -443,7 +463,11 @@ export function TripCorrectionModal({
                   </>
                 )}
               </Button>
-              <Button onClick={sendCorrection} disabled={isSending || isSaving}>
+              <Button 
+                onClick={sendCorrection} 
+                disabled={isSending || isSaving || conflictedTrips.length > 0}
+                title={conflictedTrips.length > 0 ? "Сначала разрешите конфликты рейсов" : ""}
+              >
                 {isSending ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
