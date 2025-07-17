@@ -63,9 +63,20 @@ export function TripCorrectionModal({
   }>>([])
 
   // Функция для открытия модального окна конфликтного рейса
-  const openConflictTripModal = (driverPhone: string, driverName: string) => {
+  const openConflictTripModal = (conflict: {
+    trip_id: number;
+    driver_phone: string;
+    driver_name: string;
+    trip_identifier: string;
+  }) => {
     onClose(); // Закрываем текущее модальное окно
-    onOpenConflictTrip(driverPhone, driverName); // Вызываем функцию из пропсов
+    
+    // Открываем модальное окно для конфликтного рейса с его собственным trip_id
+    onOpenConflictTrip(
+      conflict.trip_id, // Используем ID поездки из конфликтных данных
+      conflict.driver_phone,
+      conflict.driver_name
+    );
   };
 
   useEffect(() => {

@@ -28,7 +28,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       
       const conflictingTrips = await sql`
         SELECT 
-          tm.trip_identifier, 
+          tm.trip_identifier,
+          tm.trip_id, 
           tm.phone,
           u.first_name,
           u.full_name
@@ -43,7 +44,8 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         const conflictData = conflictingTrips.map(t => ({
           trip_identifier: t.trip_identifier,
           driver_phone: t.phone,
-          driver_name: t.first_name || t.full_name || t.phone
+          driver_name: t.full_name || t.first_name || t.phone,
+          trip_id: t.trip_id // Добавляем ID поездки
         }));
         
         console.log(`Conflict found for trips: ${conflictData.map(c => c.trip_identifier).join(', ')}`);
