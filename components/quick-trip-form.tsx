@@ -134,6 +134,14 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     }
   }
 
+   // === НОВАЯ ФУНКЦИЯ ===
+  const handleOpenConflictTrip = (tripId: number, driverPhone: string) => {
+    onClose();
+    // Здесь можно реализовать навигацию к странице конфликтного рейса
+    console.log(`Opening conflict trip: ${tripId} for driver ${driverPhone}`);
+  };
+  // === КОНЕЦ НОВОЙ ФУНКЦИИ ===
+
   const loadAvailablePoints = async () => {
     try {
       const response = await fetch("/api/points")
