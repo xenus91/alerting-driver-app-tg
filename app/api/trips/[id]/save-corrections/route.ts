@@ -28,12 +28,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(', ')}`)
       
       const conflictingTrips = await sql`
-        SELECT DISTINCT trip_identifier 
-        FROM trip_messages 
-        WHERE trip_identifier IN (${identifiersToCheck})
-          AND phone <> ${phone}
-          AND (response_status IS NULL OR response_status NOT IN ('declined', 'rejected', 'error'))
-      `;
+  SELECT DISTINCT trip_identifier 
+  FROM trip_messages 
+  WHERE trip_identifier IN (${identifiersToCheck})   /* Теперь передаются как строки */
+    AND phone <> ${phone}
+    AND (response_status IS NULL OR response_status NOT IN ('declined', 'rejected', 'error'))
+`;
 
       if (conflictingTrips.length > 0) {
         const conflictIds = conflictingTrips.map(t => t.trip_identifier);
