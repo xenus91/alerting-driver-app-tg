@@ -450,7 +450,7 @@ export function TripCorrectionModal({
               <Button onClick={onClose} variant="outline">
                 Отмена
               </Button>
-              <Button onClick={saveCorrections} disabled={isSaving} variant="secondary">
+             {/* <Button onClick={saveCorrections} disabled={isSaving} variant="secondary">
                 {isSaving ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
@@ -462,7 +462,7 @@ export function TripCorrectionModal({
                     Сохранить
                   </>
                 )}
-              </Button>
+              </Button>*/}
               <Button 
                 onClick={sendCorrection} 
                 disabled={isSending || isSaving || conflictedTrips.length > 0}
