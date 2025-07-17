@@ -117,7 +117,14 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
         const verifiedDrivers = data.users.filter((user: Driver) => user.verified && user.telegram_id)
         setDrivers(verifiedDrivers)
       } else {
-        setError("Ошибка загрузки списка водителей")
+        // === НОВАЯ ОБРАБОТКА КОНФЛИКТОВ ===
+        if (data.error === "trip_already_assigned") {
+          setConflicts(data.conflict_data || []);
+          setShowConflictModal(true);
+        } else {
+          setError(data.error || "Ошибка при отправке рассылки");
+        }
+        // === КОНЕЦ НОВОЙ ОБРАБОТКИ ===
       }
     } catch (error) {
       setError("Ошибка загрузки водителей")
