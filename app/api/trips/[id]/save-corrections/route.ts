@@ -17,53 +17,50 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`Saving corrections for trip ${tripId}, phone ${phone}`)
     console.log("Corrections data:", corrections)
     console.log("Deleted trips:", deletedTrips)
-   * === КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ДОБАВЛЕНА ПРОВЕРКА КОНФЛИКТОВ С ПОЛНЫМИ ДАННЫМИ === */
-// Собираем уникальные идентификаторы рейсов для проверки
-const identifiersToCheck = [
+   /* === КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ДОБАВЛЕНА ПРОВЕРКА КОНФЛИКТОВ === */
+    // Собираем уникальные идентификаторы рейсов для проверки
+    const identifiersToCheck = [
   ...deletedTrips,
-  ...corrections.map((c: any) => String(c.trip_identifier))
+  ...corrections.map((c: any) => String(c.trip_identifier)) // Явное преобразование к строке
 ].filter((value, index, self) => self.indexOf(value) === index);
 
-if (identifiersToCheck.length > 0) {
-  console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(', ')}`)
-  
-  // Получаем полные данные о конфликтах за один запрос
-  const conflictData = await sql`
-    SELECT 
-      tm.trip_identifier,
-      tm.phone AS driver_phone,
-      u.full_name AS driver_name,
-      u.telegram_id,
-      tm.response_status
-    FROM trip_messages tm
-    JOIN users u ON tm.phone = u.phone
-    WHERE tm.trip_identifier = ANY(${identifiersToCheck}::text[])
-      AND tm.phone <> ${phone}
-      AND (tm.response_status IS NULL OR tm.response_status NOT IN ('declined', 'rejected', 'error'))
-  `;
+    if (identifiersToCheck.length > 0) {
+      console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(', ')}`)
+      
+      /* === ИСПРАВЛЕНИЕ: ЗАПРОС ДЛЯ ПОЛУЧЕНИЯ ДОПОЛНИТЕЛЬНЫХ ДАННЫХ === */
+const conflictingTrips = await sql`
+  SELECT 
+    tm.trip_identifier, 
+    tm.phone,
+    u.first_name,
+    u.full_name
+  FROM trip_messages tm
+  LEFT JOIN users u ON u.phone = tm.phone
+  WHERE tm.trip_identifier = ANY(${identifiersToCheck}::text[])
+    AND tm.phone <> ${phone}
+    AND (tm.response_status IS NULL OR tm.response_status NOT IN ('declined', 'rejected', 'error'))
+`;
+/* === КОНЕЦ ИСПРАВЛЕНИЯ === */
 
-  if (conflictData.length > 0) {
-    console.log(`Conflict found for ${conflictData.length} trips`);
-    
-    // Форматируем данные для ответа
-    const conflictDetails = conflictData.map(row => ({
-      trip_identifier: row.trip_identifier,
-      driver_phone: row.driver_phone,
-      driver_name: row.driver_name,
-      telegram_id: row.telegram_id,
-      response_status: row.response_status
-    }));
-    
-    return NextResponse.json({ 
-      success: false, 
-      error: "trip_already_assigned",
-      conflicts: conflictDetails
-    }, { status: 409 });
-  } else {
-    console.log("No trip conflicts found");
-  }
+     /* === ИСПРАВЛЕНИЕ: ВОЗВРАЩАЕМ ДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ О КОНФЛИКТНЫХ РЕЙСАХ === */
+if (conflictingTrips.length > 0) {
+  const conflictData = conflictingTrips.map(t => ({
+    trip_identifier: t.trip_identifier,
+    driver_phone: t.phone, // Добавляем телефон водителя
+    driver_name: t.first_name || t.full_name || t.phone // Добавляем имя водителя
+  }));
+  
+  console.log(`Conflict found for trips: ${conflictData.map(c => c.trip_identifier).join(', ')}`);
+  
+  return NextResponse.json({ 
+    success: false, 
+    error: "trip_already_assigned",
+    trip_identifiers: conflictData.map(c => c.trip_identifier),
+    conflict_data: conflictData // Возвращаем полные данные о конфликте
+  }, { status: 409 });
 }
 /* === КОНЕЦ ИСПРАВЛЕНИЯ === */
+    /* === КОНЕЦ ИСПРАВЛЕНИЯ === */
 
     // Начинаем транзакцию
     await sql`BEGIN`

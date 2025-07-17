@@ -38,12 +38,6 @@ interface TripCorrectionModalProps {
   onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
 }
 
-interface ConflictedTrip {
-  trip_identifier: string;
-  driver_phone: string;
-  driver_name: string;
-}
-
 
 export function TripCorrectionModal({
   isOpen,
@@ -64,7 +58,29 @@ export function TripCorrectionModal({
   const [success, setSuccess] = useState<string | null>(null)
 
   // Состояние для хранения конфликтных рейсов
-  const [conflictedTrips, setConflictedTrips] = useState<string[]>([])
+  // Состояние для хранения данных о конфликтных рейсах
+  const [conflictedTrips, setConflictedTrips] = useState<Array<{
+    trip_identifier: string;
+    driver_phone: string;
+    driver_name: string;
+  }>>([]);
+
+
+   // Функция для открытия модального окна конфликтного рейса
+  const openConflictTripModal = (driverPhone: string, driverName: string) => {
+    // Закрываем текущее модальное окно
+    onClose();
+    
+    // Вызываем функцию открытия модального окна из родительского компонента
+    // (предполагается, что она передается через пропсы или контекст)
+    setCorrectionModal({
+      isOpen: true,
+      tripId,
+      phone: driverPhone,
+      driverName
+    });
+  };
+
 
   useEffect(() => {
     if (isOpen) {
@@ -394,28 +410,25 @@ export function TripCorrectionModal({
           </Alert>
         )}
 
-        {/* === ИСПРАВЛЕНИЕ: Блок для отображения конфликтных рейсов с ссылками === */}
+        {/* Блок для отображения конфликтных рейсов с кнопками */}
         {conflictedTrips.length > 0 && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
               <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
-              <ul className="list-disc pl-5 mt-2 space-y-2">
-                {conflictedTrips.map((trip) => (
-                  <li key={trip.trip_identifier} className="flex items-start">
-                    <span className="font-mono bg-gray-100 px-2 py-1 rounded mr-2">
-                      {trip.trip_identifier}
+              <ul className="list-disc pl-5 mt-2">
+                {conflictedTrips.map((conflict) => (
+                  <li key={conflict.trip_identifier} className="font-mono flex items-center justify-between">
+                    <span>
+                      {conflict.trip_identifier} (Водитель: {conflict.driver_name})
                     </span>
-                    <span className="mr-2">(Водитель: {trip.driver_name})</span>
                     <Button 
-                      variant="link"
-                      className="text-blue-500 p-0 h-auto"
-                      onClick={() => {
-                        onClose();
-                        onOpenDriverCorrection(trip.driver_phone, trip.driver_name);
-                      }}
+                      size="sm"
+                      variant="outline"
+                      className="ml-2"
+                      onClick={() => openConflictTripModal(conflict.driver_phone, conflict.driver_name)}
                     >
-                      Открыть корректировку
+                      Просмотреть рейс
                     </Button>
                   </li>
                 ))}
