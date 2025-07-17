@@ -17,51 +17,48 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`Saving corrections for trip ${tripId}, phone ${phone}`)
     console.log("Corrections data:", corrections)
     console.log("Deleted trips:", deletedTrips)
-   /* === КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ДОБАВЛЕНА ПРОВЕРКА КОНФЛИКТОВ === */
-    // Собираем уникальные идентификаторы рейсов для проверки
+       /* === ПРОВЕРКА КОНФЛИКТУЮЩИХ РЕЙСОВ === */
     const identifiersToCheck = [
-  ...deletedTrips,
-  ...corrections.map((c: any) => String(c.trip_identifier)) // Явное преобразование к строке
-].filter((value, index, self) => self.indexOf(value) === index);
+      ...deletedTrips,
+      ...corrections.map((c: any) => String(c.trip_identifier))
+    ].filter((value, index, self) => self.indexOf(value) === index);
 
     if (identifiersToCheck.length > 0) {
       console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(', ')}`)
       
-      /* === ИСПРАВЛЕНИЕ: ЗАПРОС ДЛЯ ПОЛУЧЕНИЯ ДОПОЛНИТЕЛЬНЫХ ДАННЫХ === */
-const conflictingTrips = await sql`
-  SELECT 
-    tm.trip_identifier, 
-    tm.phone,
-    u.first_name,
-    u.full_name
-  FROM trip_messages tm
-  LEFT JOIN users u ON u.phone = tm.phone
-  WHERE tm.trip_identifier = ANY(${identifiersToCheck}::text[])
-    AND tm.phone <> ${phone}
-    AND (tm.response_status IS NULL OR tm.response_status NOT IN ('declined', 'rejected', 'error'))
-`;
-/* === КОНЕЦ ИСПРАВЛЕНИЯ === */
+      const conflictingTrips = await sql`
+        SELECT 
+          tm.trip_identifier, 
+          tm.phone,
+          u.first_name,
+          u.full_name
+        FROM trip_messages tm
+        LEFT JOIN users u ON u.phone = tm.phone
+        WHERE tm.trip_identifier = ANY(${identifiersToCheck}::text[])
+          AND tm.phone <> ${phone}
+          AND (tm.response_status IS NULL OR tm.response_status NOT IN ('declined', 'rejected', 'error'))
+      `;
 
-     /* === ИСПРАВЛЕНИЕ: ВОЗВРАЩАЕМ ДОПОЛНИТЕЛЬНЫЕ ДАННЫЕ О КОНФЛИКТНЫХ РЕЙСАХ === */
-if (conflictingTrips.length > 0) {
-  const conflictData = conflictingTrips.map(t => ({
-    trip_identifier: t.trip_identifier,
-    driver_phone: t.phone, // Добавляем телефон водителя
-    driver_name: t.first_name || t.full_name || t.phone // Добавляем имя водителя
-  }));
-  
-  console.log(`Conflict found for trips: ${conflictData.map(c => c.trip_identifier).join(', ')}`);
-  
-  return NextResponse.json({ 
-    success: false, 
-    error: "trip_already_assigned",
-    trip_identifiers: conflictData.map(c => c.trip_identifier),
-    conflict_data: conflictData // Возвращаем полные данные о конфликте
-  }, { status: 409 });
-}
-/* === КОНЕЦ ИСПРАВЛЕНИЯ === */
-    /* === КОНЕЦ ИСПРАВЛЕНИЯ === */
-
+      if (conflictingTrips.length > 0) {
+        const conflictData = conflictingTrips.map(t => ({
+          trip_identifier: t.trip_identifier,
+          driver_phone: t.phone,
+          driver_name: t.first_name || t.full_name || t.phone
+        }));
+        
+        console.log(`Conflict found for trips: ${conflictData.map(c => c.trip_identifier).join(', ')}`);
+        
+        return NextResponse.json({ 
+          success: false, 
+          error: "trip_already_assigned",
+          trip_identifiers: conflictData.map(c => c.trip_identifier),
+          conflict_data: conflictData
+        }, { status: 409 });
+      } else {
+        console.log("No trip conflicts found");
+      }
+    }
+    /* === КОНЕЦ ПРОВЕРКИ КОНФЛИКТОВ === */
     // Начинаем транзакцию
     await sql`BEGIN`
 
