@@ -20,9 +20,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
    /* === КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ДОБАВЛЕНА ПРОВЕРКА КОНФЛИКТОВ === */
     // Собираем уникальные идентификаторы рейсов для проверки
     const identifiersToCheck = [
-      ...deletedTrips,
-      ...corrections.map((c: any) => c.trip_identifier)
-    ].filter((value, index, self) => self.indexOf(value) === index); // Убираем дубликаты
+  ...deletedTrips,
+  ...corrections.map((c: any) => String(c.trip_identifier)) // Явное преобразование к строке
+].filter((value, index, self) => self.indexOf(value) === index);
 
     if (identifiersToCheck.length > 0) {
       console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(', ')}`)
