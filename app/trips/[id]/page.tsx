@@ -152,6 +152,11 @@ export default function TripDetailPage() {
     driverName: string
   } | null>(null)
 
+// Добавляем логирование состояния
+  useEffect(() => {
+    console.log("Correction Modal State Changed:", correctionModal);
+  }, [correctionModal]);
+  
 // В начале компонента, рядом с другими состояниями
 const [confirmationModal, setConfirmationModal] = useState<{
   isOpen: boolean
