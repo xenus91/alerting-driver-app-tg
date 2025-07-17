@@ -48,6 +48,7 @@ export function TripCorrectionModal({
   phone,
   driverName,
   onCorrectionSent,
+  onOpenConflictTrip 
 }: TripCorrectionModalProps) {
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
