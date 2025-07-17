@@ -30,7 +30,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const conflictingTrips = await sql`
   SELECT DISTINCT trip_identifier 
   FROM trip_messages 
-  WHERE trip_identifier IN (${identifiersToCheck})   /* Теперь передаются как строки */
+  WHERE trip_identifier IN (${identifiersToCheck})  
     AND phone <> ${phone}
     AND (response_status IS NULL OR response_status NOT IN ('declined', 'rejected', 'error'))
 `;
