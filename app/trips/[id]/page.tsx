@@ -1533,18 +1533,18 @@ const handleDispatcherReject = async (comment: string) => {
         </div>
       )}
       {correctionModal && (
-        <TripCorrectionModal
-          isOpen={correctionModal.isOpen}
-          onClose={() => setCorrectionModal(null)}
-          tripId={tripId}
-          phone={correctionModal.phone}
-          driverName={correctionModal.driverName}
-          onCorrectionSent={() => {
-            fetchMessages()
-            setCorrectionModal(null)
-          }}
-          onOpenConflictTrip={handleOpenConflictTrip} // Передаем исправленную функцию
-        />
+         <TripCorrectionModal
+        isOpen={correctionModal.isOpen}
+        onClose={() => setCorrectionModal({ isOpen: false, tripId: parseInt(params.id) })}
+        tripId={correctionModal.tripId!} // Гарантируем что tripId есть
+        phone={correctionModal.phone || ""}
+        driverName={correctionModal.driverName || ""}
+        onCorrectionSent={(corrections, deletedTrips) => {
+          setCorrectionModal({ isOpen: false, tripId: parseInt(params.id) });
+          loadTripDetails();
+        }}
+        onOpenConflictTrip={handleOpenConflictTrip}
+      />
       )}
       {confirmationModal && (
         <DispatcherConfirmationModal
