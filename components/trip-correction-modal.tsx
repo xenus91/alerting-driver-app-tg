@@ -276,9 +276,10 @@ export function TripCorrectionModal({
     console.log("sendCorrection: Starting saveCorrections")
     const saveSuccess = await saveCorrections()
     if (!saveSuccess) {
-      throw new Error("Failed to save corrections before sending")
-    }
-
+        // Если была ошибка конфликта, не продолжаем отправку
+        if (conflictedTrips.length > 0) return
+        throw new Error("Не удалось сохранить корректировки перед отправкой")
+      }
     const messageIds = [...new Set(corrections.map((c) => c.message_id))]
     
 
