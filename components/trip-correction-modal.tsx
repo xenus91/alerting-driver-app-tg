@@ -78,7 +78,7 @@ export function TripCorrectionModal({
     trip_identifier: string;
   }) => {
     console.log("Opening conflict trip modal for:", conflict);
-   // onClose();
+    onClose();
     onOpenConflictTrip(
       conflict.trip_id,
       conflict.driver_phone,
