@@ -1538,15 +1538,7 @@ const handleDispatcherReject = async (comment: string) => {
             fetchMessages()
             setCorrectionModal(null)
           }}
-          onOpenConflictTrip={(tripId, driverPhone, driverName) => {
-                    // Открываем модальное окно для конфликтного рейса
-                    setCorrectionModal({
-                      isOpen: true,
-                      tripId, // Используем переданный tripId из конфликта
-                      phone: driverPhone,
-                      driverName
-                    });
-                  }}
+          onOpenConflictTrip={handleOpenConflictTrip} // Передаем исправленную функцию
         />
       )}
       {confirmationModal && (
