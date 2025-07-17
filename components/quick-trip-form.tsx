@@ -56,6 +56,11 @@ interface DriverWithTrips {
 }
 
 export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProps) {
+
+// === НОВЫЕ СОСТОЯНИЯ ===
+  const [conflicts, setConflicts] = useState<ConflictData[]>([]);
+  const [showConflictModal, setShowConflictModal] = useState(false);
+  // === КОНЕЦ НОВЫХ СОСТОЯНИЙ ===
   const [driverTrips, setDriverTrips] = useState<DriverWithTrips[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string }>>([])
