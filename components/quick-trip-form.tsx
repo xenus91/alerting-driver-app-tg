@@ -26,6 +26,15 @@ interface TripData {
   }>
 }
 
+// === НОВЫЙ ИНТЕРФЕЙС ===
+interface ConflictData {
+  trip_identifier: string;
+  driver_phone: string;
+  driver_name: string;
+  trip_id: number;
+}
+// === КОНЕЦ НОВОГО ИНТЕРФЕЙСА ===
+
 interface Driver {
   phone: string
   first_name?: string
