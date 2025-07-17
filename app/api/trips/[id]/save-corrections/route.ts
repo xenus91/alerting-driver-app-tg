@@ -17,35 +17,35 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`Saving corrections for trip ${tripId}, phone ${phone}`)
     console.log("Corrections data:", corrections)
     console.log("Deleted trips:", deletedTrips)
-    /* === ИСПРАВЛЕНИЕ: ПРОВЕРКА КОНФЛИКТУЮЩИХ РЕЙСОВ ===
-     * Добавлена проверка перед началом транзакции
-     * Собираем все идентификаторы рейсов, участвующих в операции
-     * Проверяем наличие конфликтов в trip_messages
-     */
+   /* === КРИТИЧЕСКОЕ ИСПРАВЛЕНИЕ: ДОБАВЛЕНА ПРОВЕРКА КОНФЛИКТОВ === */
+    // Собираем уникальные идентификаторы рейсов для проверки
     const identifiersToCheck = [
       ...deletedTrips,
       ...corrections.map((c: any) => c.trip_identifier)
-    ];
+    ].filter((value, index, self) => self.indexOf(value) === index); // Убираем дубликаты
 
     if (identifiersToCheck.length > 0) {
+      console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(', ')}`)
+      
       const conflictingTrips = await sql`
         SELECT DISTINCT trip_identifier 
         FROM trip_messages 
         WHERE trip_identifier IN (${identifiersToCheck})
           AND phone <> ${phone}
-          AND response_status NOT IN ('declined', 'rejected', 'error')
+          AND (response_status IS NULL OR response_status NOT IN ('declined', 'rejected', 'error'))
       `;
 
       if (conflictingTrips.length > 0) {
-        console.log(`Conflict found for trips: ${conflictingTrips.map(t => t.trip_identifier)}`);
-        return NextResponse.json(
-          { 
-            success: false, 
-            error: "trip_already_assigned",
-            trip_identifiers: conflictingTrips.map(t => t.trip_identifier)
-          },
-          { status: 409 } // Conflict status
-        );
+        const conflictIds = conflictingTrips.map(t => t.trip_identifier);
+        console.log(`Conflict found for trips: ${conflictIds.join(', ')}`);
+        
+        return NextResponse.json({ 
+          success: false, 
+          error: "trip_already_assigned",
+          trip_identifiers: conflictIds
+        }, { status: 409 });
+      } else {
+        console.log("No trip conflicts found");
       }
     }
     /* === КОНЕЦ ИСПРАВЛЕНИЯ === */
