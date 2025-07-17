@@ -57,8 +57,13 @@ export function TripCorrectionModal({
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
 
+  // Состояние для хранения конфликтных рейсов
+  const [conflictedTrips, setConflictedTrips] = useState<string[]>([])
+
   useEffect(() => {
     if (isOpen) {
+          // Сбрасываем состояние конфликтных рейсов при открытии модалки
+      setConflictedTrips([])
       loadDriverDetails()
       loadAvailablePoints()
     }
