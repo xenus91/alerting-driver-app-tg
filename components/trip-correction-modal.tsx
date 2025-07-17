@@ -47,6 +47,15 @@ export function TripCorrectionModal({
   onCorrectionSent,
   onOpenConflictTrip
 }: TripCorrectionModalProps) {
+// Логирование пропсов
+  useEffect(() => {
+    console.log("Modal props updated:", {
+      isOpen,
+      tripId,
+      phone,
+      driverName
+    });
+  }, [isOpen, tripId, phone, driverName]);
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>>([])
