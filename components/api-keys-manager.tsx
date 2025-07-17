@@ -31,6 +31,7 @@ import {
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Copy, Key, Plus, Trash2, Eye, EyeOff, Shield, AlertTriangle, CheckCircle } from "lucide-react"
 import { toast } from "sonner"
+import { Checkbox } from "@/components/ui/checkbox" // Добавлен импорт Checkbox
 
 interface ApiKey {
   id: number
@@ -60,6 +61,21 @@ export function ApiKeysManager() {
   // Форма создания ключа
   const [keyName, setKeyName] = useState("")
   const [expiresInDays, setExpiresInDays] = useState("")
+  const [selectedPermissions, setSelectedPermissions] = useState<string[]>(["read_users"]) // Добавлено состояние для разрешений
+
+  // Список доступных разрешений
+  const availablePermissions = [
+    {
+      id: "read_users",
+      label: "Чтение пользователей",
+      description: "Доступ к данным пользователей (/api/users)"
+    },
+    {
+      id: "read_database",
+      label: "Чтение базы данных",
+      description: "Доступ к данным всех таблиц (/api/database/table/*)"
+    }
+  ];
 
   useEffect(() => {
     loadApiKeys()
@@ -104,7 +120,7 @@ export function ApiKeysManager() {
         },
         body: JSON.stringify({
           keyName: keyName.trim(),
-          permissions: ["read_users"],
+          permissions: selectedPermissions, // Использование выбранных разрешений
           expiresInDays: expiresInDays && expiresInDays !== "none" ? Number.parseInt(expiresInDays) : null,
         }),
       })
@@ -116,6 +132,7 @@ export function ApiKeysManager() {
         setShowCreateDialog(false)
         setKeyName("")
         setExpiresInDays("")
+        setSelectedPermissions(["read_users"]) // Сброс разрешений
         loadApiKeys()
         // Автоматически показываем новый ключ
         setTimeout(() => {
@@ -176,6 +193,15 @@ export function ApiKeysManager() {
     return new Date(expiresAt) < new Date()
   }
 
+  // Обработчик изменения разрешений
+  const handlePermissionChange = (permissionId: string) => {
+    setSelectedPermissions(prev => 
+      prev.includes(permissionId)
+        ? prev.filter(p => p !== permissionId)
+        : [...prev, permissionId]
+    )
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-8">
@@ -219,7 +245,7 @@ export function ApiKeysManager() {
               </Badge>
             </CardTitle>
             <CardDescription>
-              Управление API ключами для внешнего доступа к данным пользователей
+              Управление API ключами для внешнего доступа к данным
               {currentUser && (
                 <span className="block mt-1 text-sm text-muted-foreground">
                   Вы вошли как: <strong>{currentUser.name}</strong>
@@ -234,15 +260,14 @@ export function ApiKeysManager() {
                 Создать API ключ
               </Button>
             </DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="sm:max-w-lg"> {/* Увеличена ширина */}
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   <Key className="h-5 w-5" />
                   Создать новый API ключ
                 </DialogTitle>
                 <DialogDescription>
-                  API ключ позволит получать доступ к данным пользователей через внешние приложения (Power BI, Excel,
-                  etc.)
+                  API ключ позволит получать доступ к данным через внешние приложения
                 </DialogDescription>
               </DialogHeader>
               <div className="space-y-4">
@@ -270,10 +295,45 @@ export function ApiKeysManager() {
                     </SelectContent>
                   </Select>
                 </div>
+                
+                {/* Добавлен блок выбора разрешений */}
+                <div>
+                  <Label>Разрешения</Label>
+                  <div className="mt-2 grid grid-cols-1 gap-3">
+                    {availablePermissions.map((perm) => (
+                      <div 
+                        key={perm.id}
+                        className={`border rounded-lg p-3 cursor-pointer ${
+                          selectedPermissions.includes(perm.id)
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200"
+                        }`}
+                        onClick={() => handlePermissionChange(perm.id)}
+                      >
+                        <div className="flex items-center space-x-2">
+                          <Checkbox 
+                            id={`perm-${perm.id}`} 
+                            checked={selectedPermissions.includes(perm.id)}
+                          />
+                          <label 
+                            htmlFor={`perm-${perm.id}`}
+                            className="font-medium"
+                          >
+                            {perm.label}
+                          </label>
+                        </div>
+                        <p className="text-sm text-muted-foreground mt-1 ml-6">
+                          {perm.description}
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+                
                 <Alert>
                   <CheckCircle className="h-4 w-4" />
                   <AlertDescription className="text-sm">
-                    Ключ будет иметь права на чтение данных пользователей с учетом ваших ролевых ограничений.
+                    Ключ будет иметь только выбранные права доступа
                   </AlertDescription>
                 </Alert>
               </div>
@@ -314,6 +374,7 @@ export function ApiKeysManager() {
                 <TableRow>
                   <TableHead>Название</TableHead>
                   <TableHead>API Ключ</TableHead>
+                  <TableHead>Разрешения</TableHead> {/* Добавлена колонка разрешений */}
                   <TableHead>Статус</TableHead>
                   <TableHead>Последнее использование</TableHead>
                   <TableHead>Создан</TableHead>
@@ -338,6 +399,19 @@ export function ApiKeysManager() {
                         <Button variant="ghost" size="sm" onClick={() => copyToClipboard(key.api_key)}>
                           <Copy className="h-4 w-4" />
                         </Button>
+                      </div>
+                    </TableCell>
+                    <TableCell> {/* Колонка с разрешениями */}
+                      <div className="flex flex-wrap gap-1 max-w-[200px]">
+                        {key.permissions.map(perm => (
+                          <Badge 
+                            key={perm} 
+                            variant="outline"
+                            className="text-xs py-0.5 px-2 font-normal"
+                          >
+                            {availablePermissions.find(p => p.id === perm)?.label || perm}
+                          </Badge>
+                        ))}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -412,10 +486,18 @@ export function ApiKeysManager() {
           </h4>
           <div className="space-y-3 text-sm">
             <div>
-              <strong>URL для Power Query/Excel:</strong>
-              <code className="block mt-1 p-2 bg-white rounded border text-xs font-mono">
-                {typeof window !== "undefined" ? window.location.origin : ""}/api/users
-              </code>
+              <strong>Доступные эндпоинты:</strong>
+              <ul className="list-disc pl-5 mt-1 space-y-1">
+                <li>
+                  <code>/api/users</code> - данные пользователей (требует: read_users)
+                </li>
+                <li>
+                  <code>/api/database/table/имя_таблицы</code> - данные любой таблицы (требует: read_database)
+                  <div className="text-xs text-blue-700 mt-1">
+                    Пример: <code>{typeof window !== "undefined" ? window.location.origin : ""}/api/database/table/users</code>
+                  </div>
+                </li>
+              </ul>
             </div>
             <div>
               <strong>Заголовок авторизации (выберите один):</strong>
