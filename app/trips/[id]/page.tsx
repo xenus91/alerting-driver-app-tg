@@ -168,6 +168,16 @@ const [confirmationModal, setConfirmationModal] = useState<{
 
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
 
+  // Функция для открытия модального окна
+const openCorrectionModal = (tripId: number, phone: string, driverName: string) => {
+  setCorrectionModal({
+    isOpen: true,
+    tripId,
+    phone,
+    driverName
+  });
+};
+
    // Функция для обработки отмены
  const handleCancelForDriver = async (comment: string, phone: string) => {
   try {
