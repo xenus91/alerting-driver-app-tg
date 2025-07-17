@@ -207,6 +207,8 @@ export function TripCorrectionModal({
     setIsSaving(true)
     setError(null)
     setSuccess(null)
+        // Сбрасываем конфликтные рейсы перед новой попыткой
+    setConflictedTrips([])
 
     try {
       const flatCorrections = corrections.flatMap((trip) =>
