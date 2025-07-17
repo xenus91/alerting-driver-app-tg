@@ -36,6 +36,8 @@ interface TripCorrectionModalProps {
   phone: string
   driverName: string
   onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
+   // Добавляем новый пропс для открытия модального окна конфликта
+  onOpenConflictTrip: (driverPhone: string, driverName: string) => void
 }
 
 
