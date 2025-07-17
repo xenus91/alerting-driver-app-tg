@@ -247,13 +247,19 @@ export function TripCorrectionModal({
 
       if (data.success) {
         setSuccess("Корректировки сохранены успешно!")
-        return true // === ИЗМЕНЕНИЕ: Возвращаем true при успехе ===
+        return true
       } else {
-        setError(data.error || "Failed to save corrections")
+        /* === ИСПРАВЛЕНИЕ: Обработка новой ошибки конфликта === */
+        if (data.error === "trip_already_assigned") {
+          setConflictedTrips(data.trip_identifiers)
+          setError(`Невозможно сохранить изменения: рейс(ы) ${data.trip_identifiers.join(", ")} уже назначен(ы) другому водителю.`)
+        } else {
+          setError(data.error || "Ошибка при сохранении корректировок")
+        }
         return false
       }
     } catch (error) {
-      setError("Error saving corrections")
+      setError("Ошибка при сохранении корректировок")
       console.error("Error saving corrections:", error)
       return false
     } finally {
