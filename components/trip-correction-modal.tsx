@@ -68,10 +68,6 @@ export function TripCorrectionModal({
   }>>([]);
 
 
-   // Функция для открытия модального окна конфликтного рейса
-  const openConflictTripModal = (driverPhone: string, driverName: string) => {
-    // Закрываем текущее модальное окно
-    onClose();
     
     // Вызываем функцию открытия модального окна из родительского компонента
     // (предполагается, что она передается через пропсы или контекст)
@@ -82,6 +78,13 @@ export function TripCorrectionModal({
       driverName
     });
   };
+
+  // Функция для открытия модального окна конфликтного рейса
+  const openConflictTripModal = (driverPhone: string, driverName: string) => {
+    onClose(); // Закрываем текущее модальное окно
+    onOpenConflictTrip(driverPhone, driverName); // Вызываем функцию из пропсов
+  };
+
 
 
   useEffect(() => {
