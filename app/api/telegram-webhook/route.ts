@@ -237,7 +237,7 @@ async function updateUserRegistrationStep(telegramId: number, step: string, data
           SET carpark = ${data}, 
               first_name = temp_first_name,
               last_name = temp_last_name,
-              full_name = temp_first_name || ' ' || temp_last_name,
+              full_name = temp_last_name || ' ' || temp_first_name,
               registration_state = 'completed',
               temp_first_name = NULL,
               temp_last_name = NULL
