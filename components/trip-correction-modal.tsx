@@ -35,7 +35,7 @@ interface TripCorrectionModalProps {
   phone: string
   driverName: string
   onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
-  onOpenConflictTrip: (driverPhone: string, driverName: string) => void
+  onOpenConflictTrip: (tripId: number, driverPhone: string, driverName: string) => void // Изменено: добавлен tripId
 }
 
 export function TripCorrectionModal({
