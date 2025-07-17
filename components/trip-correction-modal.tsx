@@ -398,7 +398,7 @@ export function TripCorrectionModal({
           </Alert>
         )}
 
-        {conflictedTrips.length > 0 && (
+       {conflictedTrips.length > 0 && (
           <Alert variant="destructive" className="mb-4">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
@@ -413,7 +413,7 @@ export function TripCorrectionModal({
                       size="sm"
                       variant="outline"
                       className="ml-2"
-                      onClick={() => openConflictTripModal(conflict.driver_phone, conflict.driver_name)}
+                      onClick={() => openConflictTripModal(conflict)}
                     >
                       Просмотреть рейс
                     </Button>
