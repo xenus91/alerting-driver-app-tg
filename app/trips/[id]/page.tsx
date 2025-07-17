@@ -1524,6 +1524,10 @@ const handleDispatcherReject = async (comment: string) => {
             fetchMessages()
             setCorrectionModal(null)
           }}
+          onOpenConflictTrip={(driverPhone, driverName) => {
+    // Открываем то же модальное окно для другого водителя
+    openCorrectionModal(correctionModal.tripId!, driverPhone, driverName);
+  }}
         />
       )}
       {confirmationModal && (
