@@ -1539,12 +1539,18 @@ const handleDispatcherReject = async (comment: string) => {
       {correctionModal && (
          <TripCorrectionModal
         isOpen={correctionModal.isOpen}
-        onClose={() => setCorrectionModal({ isOpen: false, tripId: parseInt(params.id) })}
-        tripId={correctionModal.tripId!} // Гарантируем что tripId есть
+        onClose={() => setCorrectionModal({ 
+          isOpen: false, 
+          tripId: parseInt(params.id as string) // Сбрасываем к исходному ID
+        })}
+        tripId={correctionModal.tripId!} // Используем tripId из состояния
         phone={correctionModal.phone || ""}
         driverName={correctionModal.driverName || ""}
         onCorrectionSent={(corrections, deletedTrips) => {
-          setCorrectionModal({ isOpen: false, tripId: parseInt(params.id) });
+          setCorrectionModal({ 
+            isOpen: false, 
+            tripId: parseInt(params.id as string) 
+          });
           loadTripDetails();
         }}
         onOpenConflictTrip={handleOpenConflictTrip}
