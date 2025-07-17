@@ -147,12 +147,12 @@ export default function TripDetailPage() {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
   const [correctionModal, setCorrectionModal] = useState<{
     isOpen: boolean;
-    tripId?: number;
+    tripId?: number; // ID поездки
     phone?: string;
     driverName?: string;
   }>({ 
     isOpen: false,
-    tripId: parseInt(params.id) // Инициализируем текущим ID
+    tripId: parseInt(params.id as string) // Инициализируем текущим ID
   });
 
 // Добавляем логирование состояния
