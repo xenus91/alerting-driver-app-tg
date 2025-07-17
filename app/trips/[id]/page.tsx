@@ -169,6 +169,19 @@ const [confirmationModal, setConfirmationModal] = useState<{
 
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
 
+  const handleOpenConflictTrip = (
+    conflictTripId: number, // Добавлен параметр conflictTripId
+    driverPhone: string, 
+    driverName: string
+  ) => {
+    setCorrectionModal({
+      isOpen: true,
+      tripId: conflictTripId, // Используем ID поездки из конфликта
+      phone: driverPhone,
+      driverName,
+    });
+  };
+
   // Функция для открытия модального окна
 const openCorrectionModal = (tripId: number, phone: string, driverName: string) => {
   setCorrectionModal({
