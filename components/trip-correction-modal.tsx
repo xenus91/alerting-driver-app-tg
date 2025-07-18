@@ -366,6 +366,87 @@ export function TripCorrectionModal({
     }
   }
 
+    // === ИЗМЕНЕННАЯ ФУНКЦИЯ ОТПРАВКИ ===
+  const sendData = async () => {
+    setIsSending(true)
+    setError(null)
+    setSuccess(null)
+    setConflictedTrips([])
+
+    try {
+      let success = false;
+      let result: any = null;
+      
+      if (mode === 'edit') {
+        // Режим редактирования
+        success = await saveCorrections();
+        if (!success && conflictedTrips.length > 0) return;
+        
+        const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+        const response = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone,
+            driver_phone: phone,
+            messageIds,
+            isCorrection: true,
+            deletedTrips,
+          }),
+        })
+
+        result = await response.json();
+        if (result.success) {
+          setSuccess("Корректировка отправлена водителю!")
+          onCorrectionSent?.(corrections, deletedTrips)
+        } else {
+          setError(result.error || "Ошибка при отправке корректировки")
+        }
+      } else {
+        // Режим создания
+        const tripData = corrections.flatMap(trip => 
+          trip.points.map(point => ({
+            phone: driver?.phone || "",
+            trip_identifier: trip.trip_identifier,
+            vehicle_number: trip.vehicle_number,
+            planned_loading_time: trip.planned_loading_time,
+            driver_comment: trip.driver_comment,
+            point_type: point.point_type,
+            point_num: point.point_num,
+            point_id: point.point_id,
+          }))
+        )
+
+        const response = await fetch("/api/send-messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ tripData }),
+        });
+
+        result = await response.json();
+        if (result.success) {
+          setSuccess("Рассылка создана успешно!")
+          onAssignmentSent?.(result)
+        } else if (result.error === "trip_already_assigned") {
+          setConflictedTrips(result.conflict_data || []);
+          setError(`Конфликт рейсов: ${result.trip_identifiers.join(", ")}`);
+        } else {
+          setError(result.error || "Ошибка при создании рассылки")
+        }
+      }
+
+      if (result.success) {
+        setTimeout(() => onClose(), 3000);
+      }
+    } catch (error) {
+      setError("Ошибка при отправке данных")
+      console.error("Error sending data:", error)
+    } finally {
+      setIsSending(false)
+    }
+  }
+  // === КОНЕЦ ИЗМЕНЕННОЙ ФУНКЦИИ ОТПРАВКИ ===
+
   const sendCorrection = async () => {
     setIsSending(true)
     setError(null)
