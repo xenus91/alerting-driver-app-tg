@@ -545,16 +545,21 @@ export function TripCorrectionModal({
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>Корректировка рейсов для {driverName}</DialogTitle>
+          <DialogTitle>
+            {mode === 'edit' 
+              ? `Корректировка рейсов для ${driverName}` 
+              : "Создание новых рейсов"}
+          </DialogTitle>
         </DialogHeader>
 
-        <Alert className="border-orange-200 bg-orange-50">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <AlertDescription className="text-orange-800">
-            <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен. Водителю
-            потребуется заново подтвердить скорректированные рейсы.
-          </AlertDescription>
-        </Alert>
+        {mode === 'edit' && (
+          <Alert className="border-orange-200 bg-orange-50">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {error && (
           <Alert variant="destructive">
