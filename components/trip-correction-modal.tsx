@@ -192,24 +192,28 @@ export function TripCorrectionModal({
     points: [createEmptyPoint()],
   })
 
-   // Функции перемещения точек
-  const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
-    if (pointIndex === 0) return;
+  // Функции перемещения точек
+const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
+  if (pointIndex === 0) return;
+  
+  setCorrections(prev => {
+    const updated = [...prev];
+    const points = [...updated[tripIndex].points];
     
-    setCorrections(prev => {
-      const updated = [...prev];
-      const points = [...updated[tripIndex].points];
-      
-      // Меняем точки местами
-      [points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]];
-      
-      // Пересчитываем порядковые номера
-      recalculatePointOrder(points);
-      
-      updated[tripIndex].points = points;
-      return updated;
+    // Меняем точки местами
+    const temp = points[pointIndex - 1];
+    points[pointIndex - 1] = points[pointIndex];
+    points[pointIndex] = temp;
+    
+    // Обновляем point_num в соответствии с новым порядком
+    points.forEach((point, idx) => {
+      point.point_num = idx + 1;
     });
-  }, []);
+    
+    updated[tripIndex].points = points;
+    return updated;
+  });
+}, []);
 
   const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
     setCorrections(prev => {
