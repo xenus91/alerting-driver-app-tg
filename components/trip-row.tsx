@@ -18,6 +18,7 @@ interface PointData {
   longitude?: string
 }
 
+
 interface CorrectionData {
   phone: string
   trip_identifier: string
