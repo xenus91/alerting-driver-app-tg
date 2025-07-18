@@ -191,10 +191,10 @@ const [confirmationModal, setConfirmationModal] = useState<{
     });
   };
 
-  // Функция для открытия модального окна
-const openCorrectionModal = (tripId: number, phone: string, driverName: string) => {
+openCorrectionModal = (tripId: number, phone: string, driverName: string) => {
   setCorrectionModal({
     isOpen: true,
+    mode: 'edit', // Явно указываем режим
     tripId,
     phone,
     driverName
