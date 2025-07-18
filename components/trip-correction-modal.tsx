@@ -166,7 +166,10 @@ export function TripCorrectionModal({
   // === КОНЕЦ НОВЫХ ВСПОМОГАТЕЛЬНЫХ ФУНКЦИЙ ===
 
 
+  // === ИЗМЕНЕННАЯ ФУНКЦИЯ ЗАГРУЗКИ ДАННЫХ ВОДИТЕЛЯ ===
   const loadDriverDetails = async () => {
+    if (!phone || !tripId) return;
+    
     setIsLoading(true)
     setError(null)
     try {
@@ -210,6 +213,7 @@ export function TripCorrectionModal({
       setDeletedTrips([])
     }
   }
+  // === КОНЕЦ ИЗМЕНЕННОЙ ФУНКЦИИ ===
 
   const loadAvailablePoints = async () => {
     try {
