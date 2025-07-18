@@ -435,20 +435,25 @@ export function TripCorrectionModal({
     }
   }
 
-  // Обработка конфликтов
   const openConflictTripModal = (conflict: {
-    trip_id: number
-    driver_phone: string
-    driver_name: string
-    trip_identifier: string
-  }) => {
-    onClose()
-    onOpenConflictTrip(
-      conflict.trip_id,
-      conflict.driver_phone,
-      conflict.driver_name
-    )
-  }
+  trip_id: number
+  driver_phone: string
+  driver_name: string
+  trip_identifier: string
+}) => {
+  // Не закрываем текущую модалку сразу
+  // onClose() - УБИРАЕМ эту строку
+  
+  // Открываем модалку редактирования конфликтного рейса
+  onOpenConflictTrip(
+    conflict.trip_id, // передаём ID конфликтного рейса
+    conflict.driver_phone,
+    conflict.driver_name
+  )
+  
+  // Теперь можно закрыть текущую модалку
+  onClose()
+}
 
   // Форматирование данных
   const formatDateTime = (dateString: string) => {
