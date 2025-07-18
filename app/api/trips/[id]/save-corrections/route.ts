@@ -1,5 +1,3 @@
-//app/api/trips/[id]/save-corrections/route.ts
-
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
 /* === ИСПРАВЛЕНИЕ ===

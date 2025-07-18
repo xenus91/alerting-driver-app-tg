@@ -1,4 +1,3 @@
-//app/trips/[id]/page.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -191,15 +190,7 @@ const [confirmationModal, setConfirmationModal] = useState<{
     });
   };
 
-openCorrectionModal = (tripId: number, phone: string, driverName: string) => {
-  setCorrectionModal({
-    isOpen: true,
-    mode: 'edit', // Явно указываем режим
-    tripId,
-    phone,
-    driverName
-  });
-};
+
 
    // Функция для обработки отмены
  const handleCancelForDriver = async (comment: string, phone: string) => {
@@ -1538,26 +1529,25 @@ const handleDispatcherReject = async (comment: string) => {
         </div>
       )}
       {correctionModal && (
-  <TripCorrectionModal
-    isOpen={correctionModal.isOpen}
-    onClose={() => setCorrectionModal({ 
-      isOpen: false, 
-      tripId: parseInt(params.id as string)
-    })}
-    mode={correctionModal.mode || 'edit'} // По умолчанию edit
-    tripId={correctionModal.tripId}
-    phone={correctionModal.phone}
-    driverName={correctionModal.driverName}
-    onCorrectionSent={(corrections, deletedTrips) => {
-      setCorrectionModal({ 
-        isOpen: false, 
-        tripId: parseInt(params.id as string) 
-      });
-      loadTripDetails();
-    }}
-    onOpenConflictTrip={handleOpenConflictTrip}
-  />
-)}
+         <TripCorrectionModal
+        isOpen={correctionModal.isOpen}
+        onClose={() => setCorrectionModal({ 
+          isOpen: false, 
+          tripId: parseInt(params.id as string) // Сбрасываем к исходному ID
+        })}
+        tripId={correctionModal.tripId!} // Используем tripId из состояния
+        phone={correctionModal.phone || ""}
+        driverName={correctionModal.driverName || ""}
+        onCorrectionSent={(corrections, deletedTrips) => {
+          setCorrectionModal({ 
+            isOpen: false, 
+            tripId: parseInt(params.id as string) 
+          });
+          loadTripDetails();
+        }}
+        onOpenConflictTrip={handleOpenConflictTrip}
+      />
+      )}
       {confirmationModal && (
         <DispatcherConfirmationModal
           isOpen={confirmationModal.isOpen}
