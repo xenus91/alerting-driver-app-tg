@@ -276,7 +276,7 @@ export const TripRow = memo(
           </TableHeader>
           <TableBody>
             {sortedPoints.map((point, pointIndex) => {
-              //const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
+              const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
               return (
                 <TableRow key={getPointKey(point)}>
                   <TableCell>
