@@ -372,7 +372,7 @@ export function TripCorrectionModal({
     }
     setCorrections([...corrections, newTrip])
   }
-
+{/*
   const removePoint = (tripIndex: number, pointIndex: number) => {
     setCorrections(prev => {
       const updated = [...prev]
@@ -380,7 +380,7 @@ export function TripCorrectionModal({
       return updated
     })
   }
-
+*/}
   const removeTrip = (tripIndex: number) => {
     const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
     setCorrections(prev => prev.filter((_, i) => i !== tripIndex))
