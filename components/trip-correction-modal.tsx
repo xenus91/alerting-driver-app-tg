@@ -136,6 +136,36 @@ export function TripCorrectionModal({
   }, [isOpen, tripId, phone, mode, initialDriver, initialTrips])
   // === КОНЕЦ ИЗМЕНЕННОЙ ФУНКЦИИ ЗАГРУЗКИ ===
 
+
+  // === НОВЫЕ ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ===
+  const createEmptyDriver = (): Driver => ({
+    phone: "",
+    name: "",
+    telegram_id: 0,
+    verified: true,
+  });
+
+  const createEmptyPoint = (): PointData => ({
+    point_type: "P",
+    point_num: 1,
+    point_id: "",
+    point_name: "",
+    latitude: "",
+    longitude: "",
+  })
+
+  const createEmptyTrip = (): CorrectionData => ({
+    phone: driver?.phone || "",
+    trip_identifier: "",
+    vehicle_number: "",
+    planned_loading_time: new Date().toISOString(),
+    driver_comment: "",
+    message_id: 0,
+    points: [createEmptyPoint()],
+  })
+  // === КОНЕЦ НОВЫХ ВСПОМОГАТЕЛЬНЫХ ФУНКЦИЙ ===
+
+
   const loadDriverDetails = async () => {
     setIsLoading(true)
     setError(null)
