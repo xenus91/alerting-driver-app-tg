@@ -90,12 +90,12 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
         />
       )}
 
-      {/* Модалка для редактирования конфликтного рейса */}
-      {conflictData && (
+            {conflictData && (
         <TripCorrectionModal
+          key={`edit-${conflictData.tripId}-${conflictData.phone}`} // Добавляем ключ для принудительного ререндера
           isOpen={true}
           onClose={() => {
-            console.log("Closing conflict modal, returning to create modal");
+            console.log("Closing conflict modal");
             setConflictData(null);
             setCorrectionModalOpen(true);
           }}
@@ -104,7 +104,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
           phone={conflictData.phone}
           driverName={conflictData.driverName}
           onCorrectionSent={() => {
-            console.log("Conflict resolved, returning to create modal");
+            console.log("Correction sent successfully");
             setConflictData(null);
             setCorrectionModalOpen(true);
           }}
