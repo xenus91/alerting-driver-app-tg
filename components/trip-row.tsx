@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { Plus, Trash2, Check, ChevronsUpDown, X , Search } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { ChevronUp, ChevronDown } from "lucide-react"; // Добавляем иконки
 
 interface PointData {
   point_type: "P" | "D"
@@ -147,6 +148,8 @@ export const TripRow = memo(
     handleSearchStateChange,
     updateTrip,
     updatePoint,
+    movePointUp,       // Новый пропс - переместить точку вверх
+    movePointDown,     // Новый пропс - переместить точку вниз
     addNewPoint,
     removePoint,
     removeTrip,
@@ -161,6 +164,8 @@ export const TripRow = memo(
     handleSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
     updateTrip: (tripIndex: number, field: keyof CorrectionData, value: any) => void
     updatePoint: (tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => void
+    movePointUp?: (tripIndex: number, pointIndex: number) => void;
+    movePointDown?: (tripIndex: number, pointIndex: number) => void;
     addNewPoint: (tripIndex: number) => void
     removePoint: (tripIndex: number, pointIndex: number) => void
     removeTrip: (tripIndex: number) => void
@@ -301,14 +306,14 @@ export const TripRow = memo(
                       </SelectContent>
                     </Select>
                   </TableCell>
-                  <TableCell>
+                 {/* <TableCell>
                     <Input
                       type="number"
                       value={point.point_num}
                       onChange={(e) => updatePoint(tripIndex, originalIndex, "point_num", Number.parseInt(e.target.value))}
                       className="w-16"
                     />
-                  </TableCell>
+                  </TableCell>*/}
                   <TableCell>
                     <PointSelector
                       value={point.point_id}
@@ -323,6 +328,40 @@ export const TripRow = memo(
                       searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
                       onSearchStateChange={handleSearchStateChange}
                     />
+                  </TableCell>
+                      <TableCell>
+                    <div className="flex flex-col gap-1">
+                      {index > 0 && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => movePointUp?.(tripIndex, index)}
+                          title="Переместить вверх"
+                        >
+                          <ChevronUp className="h-4 w-4" />
+                        </Button>
+                      )}
+                      {index < trip.points.length - 1 && (
+                        <Button
+                          variant="outline"
+                          size="icon"
+                          onClick={() => movePointDown?.(tripIndex, index)}
+                          title="Переместить вниз"
+                        >
+                          <ChevronDown className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <Button
+                      onClick={() => removePoint(tripIndex, index)}
+                      variant="outline"
+                      size="sm"
+                      className="text-red-600"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </TableCell>
                   <TableCell>
                     <Button

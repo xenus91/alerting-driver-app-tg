@@ -8,6 +8,7 @@ import { RefreshCw, Save, Send, Plus, AlertTriangle, User, ChevronsUpDown } from
 import { TripRow } from "./trip-row"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { ChevronUp, ChevronDown } from "lucide-react"; // Добавляем иконки
 
 interface PointData {
   point_type: "P" | "D"
@@ -190,6 +191,63 @@ export function TripCorrectionModal({
     message_id: 0,
     points: [createEmptyPoint()],
   })
+
+   // Функции перемещения точек
+  const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
+    if (pointIndex === 0) return;
+    
+    setCorrections(prev => {
+      const updated = [...prev];
+      const points = [...updated[tripIndex].points];
+      
+      // Меняем точки местами
+      [points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]];
+      
+      // Пересчитываем порядковые номера
+      recalculatePointOrder(points);
+      
+      updated[tripIndex].points = points;
+      return updated;
+    });
+  }, []);
+
+  const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
+    setCorrections(prev => {
+      const updated = [...prev];
+      const points = [...updated[tripIndex].points];
+      
+      if (pointIndex >= points.length - 1) return prev;
+      
+      // Меняем точки местами
+      [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
+      
+      // Пересчитываем порядковые номера
+      recalculatePointOrder(points);
+      
+      updated[tripIndex].points = points;
+      return updated;
+    });
+  }, []);
+
+  // Пересчет порядковых номеров
+  const recalculatePointOrder = (points: PointData[]) => {
+    points.forEach((point, index) => {
+      point.point_num = index + 1;
+    });
+  };
+
+  // Обновленная функция удаления точки с пересчетом
+  const removePoint = useCallback((tripIndex: number, pointIndex: number) => {
+    setCorrections(prev => {
+      const updated = [...prev];
+      updated[tripIndex].points = updated[tripIndex].points.filter((_, i) => i !== pointIndex);
+      
+      // Пересчитываем порядковые номера
+      recalculatePointOrder(updated[tripIndex].points);
+      
+      return updated;
+    });
+  }, []);
 
   const loadDriverDetails = async () => {
   if (!phone || !tripId) {
@@ -722,6 +780,8 @@ export function TripCorrectionModal({
                 pointSearchStates={pointSearchStates}
                 handleSearchStateChange={handleSearchStateChange}
                 updateTrip={updateTrip}
+                movePointUp={movePointUp}
+                movePointDown={movePointDown}
                 updatePoint={updatePoint}
                 addNewPoint={addNewPoint}
                 removePoint={removePoint}
