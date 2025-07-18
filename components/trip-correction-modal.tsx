@@ -192,50 +192,46 @@ export function TripCorrectionModal({
     points: [createEmptyPoint()],
   })
 
-  // Функции перемещения точек
-const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
-  if (pointIndex === 0) return;
-  
-  setCorrections(prev => {
-    const updated = [...prev];
-    const points = [...updated[tripIndex].points];
+ // Функции перемещения точек (новые)
+  const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
+    if (pointIndex === 0) return;
     
-    // Меняем точки местами
-    const temp = points[pointIndex - 1];
-    points[pointIndex - 1] = points[pointIndex];
-    points[pointIndex] = temp;
-    
-    // Обновляем point_num в соответствии с новым порядком
-    points.forEach((point, idx) => {
-      point.point_num = idx + 1;
+    setCorrections(prev => {
+      const updated = [...prev];
+      const points = [...updated[tripIndex].points];
+      
+      // Меняем точки местами
+      [points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]];
+      
+      // Пересчитываем порядковые номера
+      points.forEach((point, idx) => {
+        point.point_num = idx + 1;
+      });
+      
+      updated[tripIndex].points = points;
+      return updated;
     });
-    
-    updated[tripIndex].points = points;
-    return updated;
-  });
-}, []);
+  }, []);
 
   const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
-  setCorrections(prev => {
-    const updated = [...prev];
-    const points = [...updated[tripIndex].points];
-    
-    if (pointIndex >= points.length - 1) return prev;
-    
-    // Меняем точки местами
-    const temp = points[pointIndex];
-    points[pointIndex] = points[pointIndex + 1];
-    points[pointIndex + 1] = temp;
-    
-    // Обновляем point_num в соответствии с новым порядком
-    points.forEach((point, idx) => {
-      point.point_num = idx + 1;
+    setCorrections(prev => {
+      const updated = [...prev];
+      const points = [...updated[tripIndex].points];
+      
+      if (pointIndex >= points.length - 1) return prev;
+      
+      // Меняем точки местами
+      [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
+      
+      // Пересчитываем порядковые номера
+      points.forEach((point, idx) => {
+        point.point_num = idx + 1;
+      });
+      
+      updated[tripIndex].points = points;
+      return updated;
     });
-    
-    updated[tripIndex].points = points;
-    return updated;
-  });
-}, []);
+  }, []);
 
 
   // Пересчет порядковых номеров
