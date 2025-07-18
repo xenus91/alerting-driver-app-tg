@@ -95,13 +95,46 @@ export function TripCorrectionModal({
     );
   };
 
+  // === ИЗМЕНЕННАЯ ФУНКЦИЯ ЗАГРУЗКИ ===
   useEffect(() => {
     if (isOpen) {
       setConflictedTrips([])
-      loadDriverDetails()
+      setError(null)
+      setSuccess(null)
+      
+      if (mode === 'edit') {
+        // Режим редактирования
+        setDriver({ phone: phone!, name: driverName! })
+        loadDriverDetails()
+      } else {
+        // Режим создания
+        if (initialDriver) {
+          setDriver(initialDriver)
+        } else {
+          setDriver({
+            phone: "",
+            name: "",
+            telegram_id: 0,
+            verified: true,
+          })
+        }
+        
+        if (initialTrips && initialTrips.length > 0) {
+          setCorrections(initialTrips.map(trip => ({
+            ...trip,
+            message_id: 0, // Для новых рейсов
+            points: trip.points || [createEmptyPoint()],
+            original_trip_identifier: trip.trip_identifier
+          })))
+        } else {
+          setCorrections([createEmptyTrip()])
+        }
+      }
+      
       loadAvailablePoints()
     }
-  }, [isOpen, tripId, phone])
+  }, [isOpen, tripId, phone, mode, initialDriver, initialTrips])
+  // === КОНЕЦ ИЗМЕНЕННОЙ ФУНКЦИИ ЗАГРУЗКИ ===
 
   const loadDriverDetails = async () => {
     setIsLoading(true)
