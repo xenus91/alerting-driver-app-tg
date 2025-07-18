@@ -20,19 +20,27 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
     driverName: string;
   } | null>(null);
   
+  console.log("QuickTripForm render:", {
+    isOpen,
+    correctionModalOpen,
+    conflictData
+  });
+
   const handleClose = () => {
+    console.log("Closing all modals");
     onClose();
     setCorrectionModalOpen(false);
     setConflictData(null);
   };
 
   const handleConflictTrip = (tripId: number, driverPhone: string, driverName: string) => {
+    console.log("Handling conflict trip:", { tripId, driverPhone, driverName });
     setConflictData({
       tripId,
       phone: driverPhone,
       driverName
     });
-    setCorrectionModalOpen(false); // Закрываем модалку создания
+    setCorrectionModalOpen(false);
   };
 
   return (
@@ -46,7 +54,10 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
           <div className="text-center p-6">
             <Button 
               size="lg"
-              onClick={() => setCorrectionModalOpen(true)}
+              onClick={() => {
+                console.log("Opening create modal");
+                setCorrectionModalOpen(true);
+              }}
             >
               <Plus className="mr-2" />
               Создать новые рейсы
@@ -56,29 +67,40 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
       </Dialog>
 
       {/* Модалка для создания новых рейсов */}
-      <TripCorrectionModal
-        isOpen={correctionModalOpen && !conflictData}
-        onClose={() => setCorrectionModalOpen(false)}
-        mode="create"
-        onAssignmentSent={() => {
-          onTripSent();
-          handleClose();
-        }}
-        onOpenConflictTrip={handleConflictTrip}
-      />
+      {correctionModalOpen && !conflictData && (
+        <TripCorrectionModal
+          isOpen={true}
+          onClose={() => {
+            console.log("Closing create modal");
+            setCorrectionModalOpen(false);
+          }}
+          mode="create"
+          onAssignmentSent={() => {
+            console.log("Assignment sent successfully");
+            onTripSent();
+            handleClose();
+          }}
+          onOpenConflictTrip={handleConflictTrip}
+        />
+      )}
 
       {/* Модалка для редактирования конфликтного рейса */}
       {conflictData && (
         <TripCorrectionModal
           isOpen={true}
-          onClose={() => setConflictData(null)}
+          onClose={() => {
+            console.log("Closing conflict modal, returning to create modal");
+            setConflictData(null);
+            setCorrectionModalOpen(true);
+          }}
           mode="edit"
           tripId={conflictData.tripId}
           phone={conflictData.phone}
           driverName={conflictData.driverName}
           onCorrectionSent={() => {
+            console.log("Conflict resolved, returning to create modal");
             setConflictData(null);
-            setCorrectionModalOpen(true); // Возвращаемся к созданию рейсов
+            setCorrectionModalOpen(true);
           }}
           onOpenConflictTrip={handleConflictTrip}
         />
