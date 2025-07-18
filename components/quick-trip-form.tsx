@@ -1,4 +1,3 @@
-//components/quick-trip-form.tsx
 "use client"
 
 import { useState, useEffect } from "react"
@@ -26,15 +25,6 @@ interface TripData {
   }>
 }
 
-// === НОВЫЙ ИНТЕРФЕЙС ===
-interface ConflictData {
-  trip_identifier: string;
-  driver_phone: string;
-  driver_name: string;
-  trip_id: number;
-}
-// === КОНЕЦ НОВОГО ИНТЕРФЕЙСА ===
-
 interface Driver {
   phone: string
   first_name?: string
@@ -56,11 +46,6 @@ interface DriverWithTrips {
 }
 
 export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProps) {
-
-// === НОВЫЕ СОСТОЯНИЯ ===
-  const [conflicts, setConflicts] = useState<ConflictData[]>([]);
-  const [showConflictModal, setShowConflictModal] = useState(false);
-  // === КОНЕЦ НОВЫХ СОСТОЯНИЙ ===
   const [driverTrips, setDriverTrips] = useState<DriverWithTrips[]>([]);
   const [drivers, setDrivers] = useState<Driver[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string }>>([])
@@ -117,14 +102,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
         const verifiedDrivers = data.users.filter((user: Driver) => user.verified && user.telegram_id)
         setDrivers(verifiedDrivers)
       } else {
-        // === НОВАЯ ОБРАБОТКА КОНФЛИКТОВ ===
-        if (data.error === "trip_already_assigned") {
-          setConflicts(data.conflict_data || []);
-          setShowConflictModal(true);
-        } else {
-          setError(data.error || "Ошибка при отправке рассылки");
-        }
-        // === КОНЕЦ НОВОЙ ОБРАБОТКИ ===
+        setError("Ошибка загрузки списка водителей")
       }
     } catch (error) {
       setError("Ошибка загрузки водителей")
@@ -133,14 +111,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
       setIsLoading(false)
     }
   }
-
-   // === НОВАЯ ФУНКЦИЯ ===
-  const handleOpenConflictTrip = (tripId: number, driverPhone: string) => {
-    onClose();
-    // Здесь можно реализовать навигацию к странице конфликтного рейса
-    console.log(`Opening conflict trip: ${tripId} for driver ${driverPhone}`);
-  };
-  // === КОНЕЦ НОВОЙ ФУНКЦИИ ===
 
   const loadAvailablePoints = async () => {
     try {
@@ -470,53 +440,6 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
 
   return (
     <Dialog open={isOpen} onOpenChange={onClose}>
-            {/* === НОВОЕ МОДАЛЬНОЕ ОКНО КОНФЛИКТОВ === */}
-      {showConflictModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white p-6 rounded-lg max-w-2xl w-full mx-4">
-            <h3 className="text-lg font-semibold mb-4">Конфликт назначения рейсов</h3>
-            
-            <Alert variant="destructive" className="mb-4">
-              <AlertTriangle className="h-4 w-4" />
-              <AlertDescription>
-                <strong>Невозможно отправить рейсы:</strong> Следующие рейсы уже назначены другим водителям:
-              </AlertDescription>
-            </Alert>
-            
-            <ul className="list-disc pl-5 mb-4 max-h-60 overflow-y-auto">
-              {conflicts.map((conflict) => (
-                <li key={conflict.trip_identifier} className="mb-2">
-                  <div className="font-medium">Рейс: {conflict.trip_identifier}</div>
-                  <div>Водитель: {conflict.driver_name} ({conflict.driver_phone})</div>
-                  <Button 
-                    variant="link"
-                    className="pl-0 mt-1"
-                    onClick={() => handleOpenConflictTrip(conflict.trip_id, conflict.driver_phone)}
-                  >
-                    Просмотреть рейс
-                  </Button>
-                </li>
-              ))}
-            </ul>
-            
-            <div className="flex justify-end gap-3">
-              <Button variant="outline" onClick={() => setShowConflictModal(false)}>
-                Закрыть
-              </Button>
-              <Button 
-                variant="destructive"
-                onClick={() => {
-                  setShowConflictModal(false);
-                  onClose();
-                }}
-              >
-                Отменить рассылку
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-      {/* === КОНЕЦ НОВОГО МОДАЛЬНОГО ОКНА === */}
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
