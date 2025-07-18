@@ -315,7 +315,7 @@ export const TripRow = memo(
                         updatePoint(tripIndex, pointIndex, "latitude", selectedPoint.latitude)
                         updatePoint(tripIndex, pointIndex, "longitude", selectedPoint.longitude)
                       }}
-                      pointKey={getPointKey(point)}
+                      pointKey={pointKey}
                       availablePoints={availablePoints}
                       searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
                       onSearchStateChange={handleSearchStateChange}
