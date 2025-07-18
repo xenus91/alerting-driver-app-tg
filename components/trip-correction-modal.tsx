@@ -29,15 +29,23 @@ interface PointData {
   longitude?: string
 }
 
+// === ИЗМЕНЕННЫЙ ИНТЕРФЕЙС ПРОПСОВ ===
 interface TripCorrectionModalProps {
   isOpen: boolean
   onClose: () => void
-  tripId: number
-  phone: string
-  driverName: string
-  onCorrectionSent: (corrections: CorrectionData[], deletedTrips: string[]) => void
-  onOpenConflictTrip: (tripId: number, driverPhone: string, driverName: string) => void // Изменено: добавлен tripId
+  mode: 'edit' | 'create'; // Новый пропс: режим работы
+  // Для режима редактирования:
+  tripId?: number
+  phone?: string
+  driverName?: string
+  // Для режима создания:
+  initialDriver?: Driver; // Начальные данные водителя
+  initialTrips?: TripData[]; // Начальные данные рейсов
+  onCorrectionSent?: (corrections: CorrectionData[], deletedTrips: string[]) => void
+  onAssignmentSent?: (results: any) => void; // Новый колбэк для создания
+  onOpenConflictTrip: (tripId: number, driverPhone: string, driverName: string) => void
 }
+// === КОНЕЦ ИЗМЕНЕННОГО ИНТЕРФЕЙСА ===
 
 export function TripCorrectionModal({
   isOpen,
