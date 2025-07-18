@@ -324,7 +324,7 @@ export const TripRow = memo(
                     />
                   </TableCell>
                   <TableCell>
-                    <div className="flex flex-col gap-1">
+                    <div className="flex flex-col gap-1 items-center">
                       {pointIndex > 0 && (
                         <Button
                           variant="outline"
