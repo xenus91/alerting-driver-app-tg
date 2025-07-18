@@ -190,6 +190,7 @@ export const TripRow = memo(
 
         // Создаем отсортированную версию точек для отображения
     const sortedPoints = sortPoints(trip.points);
+    
 
     useEffect(() => {
       if (inputRef.current && document.activeElement === inputRef.current) {
