@@ -473,19 +473,24 @@ export function TripCorrectionModal({
   driver_name: string
   trip_identifier: string
 }) => {
-  // Не закрываем текущую модалку сразу
-  // onClose() - УБИРАЕМ эту строку
+  console.log("Opening conflict trip modal with:", conflict);
   
-  // Открываем модалку редактирования конфликтного рейса
-  onOpenConflictTrip(
-    conflict.trip_id, // передаём ID конфликтного рейса
-    conflict.driver_phone,
-    conflict.driver_name
-  )
+  // Сохраняем текущее состояние
+  const currentCorrections = [...corrections];
+  const currentDeletedTrips = [...deletedTrips];
   
-  // Теперь можно закрыть текущую модалку
-  onClose()
-}
+  // Закрываем текущую модалку
+  onClose();
+  
+  // После закрытия открываем модалку редактирования
+  setTimeout(() => {
+    onOpenConflictTrip(
+      conflict.trip_id,
+      conflict.driver_phone,
+      conflict.driver_name
+    );
+  }, 100);
+};
 
   // Форматирование данных
   const formatDateTime = (dateString: string) => {
