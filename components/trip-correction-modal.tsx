@@ -191,54 +191,65 @@ export function TripCorrectionModal({
     points: [createEmptyPoint()],
   })
 
-  // Загрузка данных
   const loadDriverDetails = async () => {
-    if (!phone || !tripId) return
-    
-    setIsLoading(true)
-    setError(null)
-    try {
-      const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`)
-      const data = await response.json()
-
-      if (data.success) {
-        const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
-          const key = item.trip_identifier
-          if (!acc[key]) {
-            acc[key] = {
-              phone: item.phone,
-              trip_identifier: item.trip_identifier,
-              original_trip_identifier: item.trip_identifier,
-              vehicle_number: item.vehicle_number,
-              planned_loading_time: item.planned_loading_time,
-              driver_comment: item.driver_comment,
-              message_id: item.message_id,
-              points: [],
-            }
-          }
-          acc[key].points.push({
-            point_type: item.point_type,
-            point_num: item.point_num,
-            point_id: item.point_id,
-            point_name: item.point_name,
-            latitude: item.latitude,
-            longitude: item.longitude,
-          })
-          return acc
-        }, {})
-        setCorrections(Object.values(grouped))
-      } else {
-        setError(data.error || "Не удалось загрузить данные водителя")
-      }
-    } catch (error) {
-      setError("Ошибка при загрузке данных водителя")
-      console.error("Error loading driver details:", error)
-    } finally {
-      setIsLoading(false)
-      setDeletedTrips([])
-    }
+  if (!phone || !tripId) {
+    console.error("Cannot load driver details - phone or tripId missing");
+    return;
   }
+  
+  console.log(`Loading driver details for trip ${tripId}, phone ${phone}`);
+  
+  setIsLoading(true);
+  setError(null);
+  try {
+    const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`);
+    console.log("API response status:", response.status);
+    
+    const data = await response.json();
+    console.log("API response data:", data);
 
+    if (data.success) {
+      console.log("Successfully loaded driver details");
+      const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
+        const key = item.trip_identifier;
+        if (!acc[key]) {
+          acc[key] = {
+            phone: item.phone,
+            trip_identifier: item.trip_identifier,
+            original_trip_identifier: item.trip_identifier,
+            vehicle_number: item.vehicle_number,
+            planned_loading_time: item.planned_loading_time,
+            driver_comment: item.driver_comment,
+            message_id: item.message_id,
+            points: [],
+          }
+        }
+        acc[key].points.push({
+          point_type: item.point_type,
+          point_num: item.point_num,
+          point_id: item.point_id,
+          point_name: item.point_name,
+          latitude: item.latitude,
+          longitude: item.longitude,
+        });
+        return acc;
+      }, {});
+      
+      console.log("Grouped driver data:", grouped);
+      setCorrections(Object.values(grouped));
+    } else {
+      console.error("API error:", data.error);
+      setError(data.error || "Не удалось загрузить данные водителя");
+    }
+  } catch (error) {
+    console.error("Error loading driver details:", error);
+    setError("Ошибка при загрузке данных водителя");
+  } finally {
+    console.log("Finished loading driver details");
+    setIsLoading(false);
+    setDeletedTrips([]);
+  }
+}
   const loadAvailablePoints = async () => {
     try {
       const response = await fetch("/api/points")
