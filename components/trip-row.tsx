@@ -220,7 +220,7 @@ export const TripRow = memo(
                 size="sm"
                 className="text-red-600"
               >
-                <X className="h-4 w-4 mr-2" />
+                <Trash2 className="h-4 w-4 mr-2" />
                 Удалить рейс
               </Button>
             )}
@@ -234,7 +234,6 @@ export const TripRow = memo(
               ref={inputRef}
               value={trip.trip_identifier || ""}
               onChange={(e) => {
-                console.log("Updating trip_identifier:", e.target.value)
                 updateTrip(tripIndex, "trip_identifier", e.target.value)
               }}
             />
@@ -269,25 +268,19 @@ export const TripRow = memo(
               <TableHead>Тип</TableHead>
               <TableHead>№</TableHead>
               <TableHead>Точка</TableHead>
+              <TableHead>Порядок</TableHead>
               <TableHead>Действия</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {/* Используем отсортированный массив для отображения */}
-            {sortedPoints.map((point) => {
-              // Находим индекс точки в оригинальном массиве
-              const originalIndex = trip.points.findIndex(
-                p => p.point_type === point.point_type && 
-                     p.point_num === point.point_num && 
-                     p.point_id === point.point_id
-              );
+            {trip.points.map((point, pointIndex) => {
               const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
               return (
-                <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}`}>
+                <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${pointIndex}`}>
                   <TableCell>
                     <Select
                       value={point.point_type}
-                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, originalIndex, "point_type", value)}
+                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, pointIndex, "point_type", value)}
                     >
                       <SelectTrigger className="w-20">
                         <SelectValue />
@@ -306,22 +299,22 @@ export const TripRow = memo(
                       </SelectContent>
                     </Select>
                   </TableCell>
-                 {/* <TableCell>
+                  <TableCell>
                     <Input
                       type="number"
                       value={point.point_num}
-                      onChange={(e) => updatePoint(tripIndex, originalIndex, "point_num", Number.parseInt(e.target.value))}
+                      onChange={(e) => updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))}
                       className="w-16"
                     />
-                  </TableCell>*/}
+                  </TableCell>
                   <TableCell>
                     <PointSelector
                       value={point.point_id}
                       onChange={(selectedPoint) => {
-                        updatePoint(tripIndex, originalIndex, "point_id", selectedPoint.point_id)
-                        updatePoint(tripIndex, originalIndex, "point_name", selectedPoint.point_name)
-                        updatePoint(tripIndex, originalIndex, "latitude", selectedPoint.latitude)
-                        updatePoint(tripIndex, originalIndex, "longitude", selectedPoint.longitude)
+                        updatePoint(tripIndex, pointIndex, "point_id", selectedPoint.point_id)
+                        updatePoint(tripIndex, pointIndex, "point_name", selectedPoint.point_name)
+                        updatePoint(tripIndex, pointIndex, "latitude", selectedPoint.latitude)
+                        updatePoint(tripIndex, pointIndex, "longitude", selectedPoint.longitude)
                       }}
                       pointKey={pointKey}
                       availablePoints={availablePoints}
@@ -329,23 +322,23 @@ export const TripRow = memo(
                       onSearchStateChange={handleSearchStateChange}
                     />
                   </TableCell>
-                      <TableCell>
-                    <div className="flex flex-col gap-1">
-                      {index > 0 && (
+                  <TableCell>
+                    <div className="flex gap-1">
+                      {pointIndex > 0 && (
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => movePointUp?.(tripIndex, index)}
+                          onClick={() => movePointUp?.(tripIndex, pointIndex)}
                           title="Переместить вверх"
                         >
                           <ChevronUp className="h-4 w-4" />
                         </Button>
                       )}
-                      {index < trip.points.length - 1 && (
+                      {pointIndex < trip.points.length - 1 && (
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => movePointDown?.(tripIndex, index)}
+                          onClick={() => movePointDown?.(tripIndex, pointIndex)}
                           title="Переместить вниз"
                         >
                           <ChevronDown className="h-4 w-4" />
@@ -355,17 +348,7 @@ export const TripRow = memo(
                   </TableCell>
                   <TableCell>
                     <Button
-                      onClick={() => removePoint(tripIndex, index)}
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      onClick={() => removePoint(tripIndex, originalIndex)}
+                      onClick={() => removePoint(tripIndex, pointIndex)}
                       variant="outline"
                       size="sm"
                       className="text-red-600"
