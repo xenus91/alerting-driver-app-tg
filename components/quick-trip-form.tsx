@@ -34,14 +34,20 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
   };
 
   const handleConflictTrip = (tripId: number, driverPhone: string, driverName: string) => {
-    console.log("Handling conflict trip:", { tripId, driverPhone, driverName });
+  console.log("Handling conflict trip:", { tripId, driverPhone, driverName });
+  
+  // Закрываем текущую модалку
+  setCorrectionModalOpen(false);
+  
+  // После небольшой задержки открываем модалку редактирования
+  setTimeout(() => {
     setConflictData({
       tripId,
       phone: driverPhone,
       driverName
     });
-    setCorrectionModalOpen(false);
-  };
+  }, 100);
+};
 
   return (
     <>
