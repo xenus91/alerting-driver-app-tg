@@ -337,7 +337,7 @@ export const TripRow = memo(
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => movePointDown?.(tripIndex, pointIndex)}
+                          onClick={() => movePointDown(tripIndex, pointIndex)}
                           title="Переместить вниз"
                         >
                           <ChevronDown className="h-4 w-4" />
