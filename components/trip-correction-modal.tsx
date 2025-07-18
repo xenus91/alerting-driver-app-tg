@@ -216,22 +216,27 @@ const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
 }, []);
 
   const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
-    setCorrections(prev => {
-      const updated = [...prev];
-      const points = [...updated[tripIndex].points];
-      
-      if (pointIndex >= points.length - 1) return prev;
-      
-      // Меняем точки местами
-      [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
-      
-      // Пересчитываем порядковые номера
-      recalculatePointOrder(points);
-      
-      updated[tripIndex].points = points;
-      return updated;
+  setCorrections(prev => {
+    const updated = [...prev];
+    const points = [...updated[tripIndex].points];
+    
+    if (pointIndex >= points.length - 1) return prev;
+    
+    // Меняем точки местами
+    const temp = points[pointIndex];
+    points[pointIndex] = points[pointIndex + 1];
+    points[pointIndex + 1] = temp;
+    
+    // Обновляем point_num в соответствии с новым порядком
+    points.forEach((point, idx) => {
+      point.point_num = idx + 1;
     });
-  }, []);
+    
+    updated[tripIndex].points = points;
+    return updated;
+  });
+}, []);
+
 
   // Пересчет порядковых номеров
   const recalculatePointOrder = (points: PointData[]) => {
