@@ -11,6 +11,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 import { RefreshCw, Send, Plus, Trash2, User, Zap, Check, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react"
+import { TripCorrectionModal } from "@/components/trip-correction-modal"
 import { cn } from "@/lib/utils"
 
 interface TripData {
