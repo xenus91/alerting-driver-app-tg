@@ -14,16 +14,24 @@ interface QuickTripFormProps {
 
 export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProps) {
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
-  const [conflictTripId, setConflictTripId] = useState<number | null>(null);
+  const [conflictData, setConflictData] = useState<{
+    tripId: number;
+    phone: string;
+    driverName: string;
+  } | null>(null);
   
   const handleClose = () => {
     onClose();
     setCorrectionModalOpen(false);
-    setConflictTripId(null);
+    setConflictData(null);
   };
 
-  const handleConflictTrip = (tripId: number) => {
-    setConflictTripId(tripId);
+  const handleConflictTrip = (tripId: number, driverPhone: string, driverName: string) => {
+    setConflictData({
+      tripId,
+      phone: driverPhone,
+      driverName
+    });
     setCorrectionModalOpen(false); // Закрываем модалку создания
   };
 
@@ -49,7 +57,7 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
 
       {/* Модалка для создания новых рейсов */}
       <TripCorrectionModal
-        isOpen={correctionModalOpen}
+        isOpen={correctionModalOpen && !conflictData}
         onClose={() => setCorrectionModalOpen(false)}
         mode="create"
         onAssignmentSent={() => {
@@ -60,14 +68,16 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
       />
 
       {/* Модалка для редактирования конфликтного рейса */}
-      {conflictTripId && (
+      {conflictData && (
         <TripCorrectionModal
           isOpen={true}
-          onClose={() => setConflictTripId(null)}
+          onClose={() => setConflictData(null)}
           mode="edit"
-          tripId={conflictTripId}
+          tripId={conflictData.tripId}
+          phone={conflictData.phone}
+          driverName={conflictData.driverName}
           onCorrectionSent={() => {
-            setConflictTripId(null);
+            setConflictData(null);
             setCorrectionModalOpen(true); // Возвращаемся к созданию рейсов
           }}
           onOpenConflictTrip={handleConflictTrip}
