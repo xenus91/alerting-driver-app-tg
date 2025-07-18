@@ -458,7 +458,7 @@ async function sendFromUploadedData(tripData: any[], currentUser: any, sql: any)
       FROM trip_messages tm
       LEFT JOIN users u ON u.phone = tm.phone
       WHERE tm.trip_identifier = ANY(${uniqueTripIdentifiers}::text[])
-        AND tm.phone <> ${currentUser.phone}  // Исключаем текущего пользователя
+        AND tm.phone <> ${currentUser.phone}  
         AND (tm.response_status IS NULL OR tm.response_status NOT IN ('declined', 'rejected', 'error'))
     `;
 
