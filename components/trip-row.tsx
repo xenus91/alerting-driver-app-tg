@@ -301,12 +301,9 @@ export const TripRow = memo(
                     </Select>
                   </TableCell>
                   <TableCell>
-                    <Input
-                      type="number"
-                      value={point.point_num}
-                      onChange={(e) => updatePoint(tripIndex, pointIndex, "point_num", Number.parseInt(e.target.value))}
-                      className="w-16"
-                    />
+                     <div className="flex items-center justify-center h-full">
+                      <span className="font-medium">{point.point_num}</span>
+                    </div>
                   </TableCell>
                   <TableCell>
                     <PointSelector
