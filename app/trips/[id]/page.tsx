@@ -179,27 +179,32 @@ const [confirmationModal, setConfirmationModal] = useState<{
   const [confirmingPhone, setConfirmingPhone] = useState<string | null>(null)
 
   const handleOpenConflictTrip = (
-    conflictTripId: number, // Добавлен параметр conflictTripId
-    driverPhone: string, 
-    driverName: string
-  ) => {
-    setCorrectionModal({
-      isOpen: true,
-      tripId: conflictTripId, // Используем ID поездки из конфликта
-      phone: driverPhone,
-      driverName,
-    });
-  };
-{/*
-openCorrectionModal = (tripId: number, phone: string, driverName: string) => {
-  setCorrectionModal({
-    isOpen: true,
-    mode: 'edit', // Явно указываем режим
-    tripId,
-    phone,
+  conflictTripId: number,
+  driverPhone: string, 
+  driverName: string
+) => {
+  console.log("Opening conflict trip modal with:", {
+    conflictTripId,
+    driverPhone,
     driverName
   });
-};*/}
+  
+  // Закрываем текущую модалку
+  setCorrectionModal({ 
+    isOpen: false,
+    tripId: parseInt(params.id as string)
+  });
+  
+  // Открываем новую модалку с параметрами конфликтного рейса
+  setTimeout(() => {
+    setCorrectionModal({
+      isOpen: true,
+      tripId: conflictTripId,
+      phone: driverPhone,
+      driverName: driverName
+    });
+  }, 100);
+};
 
    // Функция для обработки отмены
  const handleCancelForDriver = async (comment: string, phone: string) => {
