@@ -1,39 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
-import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { RefreshCw, Send, Plus, Trash2, User, Zap, Check, ChevronsUpDown, ChevronUp, ChevronDown } from "lucide-react"
 import { TripCorrectionModal } from "@/components/trip-correction-modal"
-import { cn } from "@/lib/utils"
-
-interface TripData {
-  trip_identifier: string
-  vehicle_number: string
-  planned_loading_time: string
-  driver_comment: string
-  points: Array<{
-    point_type: "P" | "D"
-    point_num: number
-    point_id: string
-  }>
-}
-
-interface Driver {
-  phone: string
-  first_name?: string
-  full_name?: string
-  name: string
-  telegram_id: number
-  verified: boolean
-}
+import { Plus } from "lucide-react"
 
 interface QuickTripFormProps {
   isOpen: boolean
@@ -41,18 +12,19 @@ interface QuickTripFormProps {
   onTripSent: () => void
 }
 
-interface DriverWithTrips {
-  driver: Driver;
-  trips: TripData[];
-}
-
 export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProps) {
   const [correctionModalOpen, setCorrectionModalOpen] = useState(false);
+  const [conflictTripId, setConflictTripId] = useState<number | null>(null);
   
-  // Закрытие обеих модалок
   const handleClose = () => {
     onClose();
     setCorrectionModalOpen(false);
+    setConflictTripId(null);
+  };
+
+  const handleConflictTrip = (tripId: number) => {
+    setConflictTripId(tripId);
+    setCorrectionModalOpen(false); // Закрываем модалку создания
   };
 
   return (
@@ -75,19 +47,32 @@ export function QuickTripForm({ isOpen, onClose, onTripSent }: QuickTripFormProp
         </DialogContent>
       </Dialog>
 
+      {/* Модалка для создания новых рейсов */}
       <TripCorrectionModal
         isOpen={correctionModalOpen}
         onClose={() => setCorrectionModalOpen(false)}
         mode="create"
-        onAssignmentSent={(results) => {
+        onAssignmentSent={() => {
           onTripSent();
           handleClose();
         }}
-        onOpenConflictTrip={(tripId, driverPhone, driverName) => {
-          // Реализация просмотра конфликтного рейса
-          console.log("Opening conflict trip:", tripId);
-        }}
+        onOpenConflictTrip={handleConflictTrip}
       />
+
+      {/* Модалка для редактирования конфликтного рейса */}
+      {conflictTripId && (
+        <TripCorrectionModal
+          isOpen={true}
+          onClose={() => setConflictTripId(null)}
+          mode="edit"
+          tripId={conflictTripId}
+          onCorrectionSent={() => {
+            setConflictTripId(null);
+            setCorrectionModalOpen(true); // Возвращаемся к созданию рейсов
+          }}
+          onOpenConflictTrip={handleConflictTrip}
+        />
+      )}
     </>
   );
 }
