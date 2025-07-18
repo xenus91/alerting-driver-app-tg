@@ -50,21 +50,19 @@ interface TripCorrectionModalProps {
 export function TripCorrectionModal({
   isOpen,
   onClose,
+  mode = 'edit', // По умолчанию режим редактирования
   tripId,
   phone,
   driverName,
+  initialDriver,
+  initialTrips,
   onCorrectionSent,
+  onAssignmentSent,
   onOpenConflictTrip
 }: TripCorrectionModalProps) {
-// Логирование пропсов
-  useEffect(() => {
-    console.log("Modal props updated:", {
-      isOpen,
-      tripId,
-      phone,
-      driverName
-    });
-  }, [isOpen, tripId, phone, driverName]);
+
+  // === ИЗМЕНЕННЫЕ СОСТОЯНИЯ ===
+  const [driver, setDriver] = useState<Driver | null>(null);
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>>([])
@@ -78,7 +76,9 @@ export function TripCorrectionModal({
     trip_identifier: string;
     driver_phone: string;
     driver_name: string;
+    trip_id: number;
   }>>([])
+  // === КОНЕЦ ИЗМЕНЕННЫХ СОСТОЯНИЙ ===
 
  const openConflictTripModal = (conflict: {
     trip_id: number;
