@@ -192,14 +192,14 @@ export const TripRow = memo(
     const sortedPoints = sortPoints(trip.points);
     
 
-    useEffect(() => {
+  useEffect(() => {
       if (inputRef.current && document.activeElement === inputRef.current) {
         inputRef.current.focus()
       }
     }, [trip.trip_identifier])
 
-    const getPointKey = (tripIdentifier: string, pointType: string, pointNum: number) =>
-      `${trip.original_trip_identifier || `trip-${tripIndex}`}-${pointType}-${pointNum}`
+    const getPointKey = (point: PointData) => 
+      `${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}`
 
     return (
       <div key={trip.original_trip_identifier || `trip-${tripIndex}`} className="border rounded-lg p-4">
