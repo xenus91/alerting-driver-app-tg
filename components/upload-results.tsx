@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from "lucide-react"
+import { useRouter } from "next/navigation" // Импортируем useRouter
 
 interface UploadResult {
   success: boolean
@@ -69,6 +70,7 @@ interface UploadResultsProps {
 export default function UploadResults({ result, onSendMessages }: UploadResultsProps) {
   const [isSending, setIsSending] = useState(false)
   const [sendResult, setSendResult] = useState<SendResult | null>(null)
+  const router = useRouter() // Инициализируем useRouter
 
   const handleSendMessages = async () => {
     if (!result.tripData || result.tripData.length === 0) {
@@ -176,8 +178,16 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                               <strong>Водитель:</strong> {conflict.driver_name} ({formatPhone(conflict.driver_phone)})
                             </p>
                             {conflict.trip_id && (
-                              <p>
+                              <p className="flex items-center justify-between">
                                 <strong>Номер рассылки:</strong> {conflict.trip_id}
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => router.push(`/trips/${conflict.trip_id}`)}
+                                  className="ml-2"
+                                >
+                                  Просмотреть рейс
+                                </Button>
                               </p>
                             )}
                           </div>
