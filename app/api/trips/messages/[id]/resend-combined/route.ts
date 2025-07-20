@@ -23,7 +23,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         u.first_name,
         u.full_name,
         tm.telegram_message_id,
-        tp.point_id,
+        p.point_id,
         p.point_name,
         p.adress,
         tp.point_type,
