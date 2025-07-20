@@ -6,159 +6,224 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   const messageId = Number.parseInt(params.id)
+  const { phone, messageIds, isCorrection = false, deletedTrips = [] } = await request.json()
 
   try {
-    console.log(`Resending combined message for message ID: ${messageId}`)
+    console.log(`Resending combined message for messageId: ${messageId}, phone: ${phone}`)
+    console.log(`Is correction: ${isCorrection}, deleted trips:`, deletedTrips)
 
-    // Получаем все сообщения для этого водителя и рейса
-    const messages = await sql`
-      SELECT 
+    // Получаем информацию о пользователе
+    const userResult = await sql`
+      SELECT telegram_id, first_name, full_name, name
+      FROM users 
+      WHERE phone = ${phone}
+      LIMIT 1
+    `
+
+    if (userResult.length === 0) {
+      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 })
+    }
+
+    const user = userResult[0]
+    const driverName = user.first_name || user.full_name || user.name || "Неизвестный водитель"
+
+    // Получаем trip_id из первого сообщения
+    const tripResult = await sql`
+      SELECT trip_id FROM trip_messages WHERE id = ${messageId}
+    `
+
+    if (tripResult.length === 0) {
+      return NextResponse.json({ success: false, error: "Trip message not found" }, { status: 404 })
+    }
+
+    const tripId = tripResult[0].trip_id
+
+    // Получаем старый telegram_message_id для удаления
+    const previousMessageResult = await sql`
+      SELECT telegram_message_id
+      FROM trip_messages
+      WHERE trip_id = ${tripId} 
+        AND phone = ${phone}
+        AND telegram_message_id IS NOT NULL
+      LIMIT 1
+    `
+
+    let previousTelegramMessageId = null
+    if (previousMessageResult.length > 0) {
+      previousTelegramMessageId = previousMessageResult[0].telegram_message_id
+    }
+
+    // Получаем ВСЕ активные сообщения для этого пользователя и рейса
+    const messagesResult = await sql`
+      SELECT DISTINCT
         tm.id,
         tm.trip_identifier,
         tm.vehicle_number,
         tm.planned_loading_time,
-        tm.driver_comment,
-        tm.telegram_id,
-        tm.phone,
-        u.first_name,
-        u.full_name,
-        tm.telegram_message_id,
-        p.point_id,
-        p.point_name,
-        p.adress,
-        tp.point_type,
-        tp.point_num,
-        p.latitude,
-        p.longitude,
-        p.door_open_1,
-        p.door_open_2,
-        p.door_open_3
+        tm.driver_comment
       FROM trip_messages tm
-      LEFT JOIN (
-        SELECT * FROM trip_points 
-        WHERE driver_phone = (
-          SELECT phone FROM trip_messages WHERE id = ${messageId}
-        )
-      ) tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
-      LEFT JOIN points p ON tp.point_id = p.id
-      LEFT JOIN users u ON tm.telegram_id = u.telegram_id
-      WHERE tm.trip_id = (SELECT trip_id FROM trip_messages WHERE id = ${messageId})
-        AND tm.phone = (SELECT phone FROM trip_messages WHERE id = ${messageId})
-      ORDER BY tm.planned_loading_time, tp.point_num
+      WHERE tm.trip_id = ${tripId} 
+        AND tm.phone = ${phone}
+        AND tm.status = 'sent'
+        AND tm.trip_identifier IS NOT NULL
+      ORDER BY tm.trip_identifier
     `
 
-    if (messages.length === 0) {
-      return NextResponse.json({ success: false, error: "Messages not found" }, { status: 404 })
+    console.log(
+      `Found ${messagesResult.length} messages to resend:`,
+      messagesResult.map((m) => m.trip_identifier),
+    )
+
+    if (messagesResult.length === 0) {
+      return NextResponse.json({ success: false, error: "No messages found to resend" }, { status: 404 })
     }
 
-    // Группируем точки по trip_identifier
-    const tripsMap = new Map<string, any>()
-    for (const row of messages) {
-      if (!tripsMap.has(row.trip_identifier)) {
-        tripsMap.set(row.trip_identifier, {
-          trip_identifier: row.trip_identifier,
-          vehicle_number: row.vehicle_number,
-          planned_loading_time: row.planned_loading_time,
-          driver_comment: row.driver_comment || "",
-          loading_points: [],
-          unloading_points: [],
-          all_points: [], // Добавляем массив для всех точек в порядке point_num
-        })
-      }
+    // Собираем данные о рейсах для новой функции
+    const trips = []
 
-      if (row.point_id) {
-        const point = {
-          point_id: row.point_id,
-          point_name: row.point_name,
-          adress: row.adress,
-          door_open_1: row.door_open_1,
-          door_open_2: row.door_open_2,
-          door_open_3: row.door_open_3,
-          latitude: row.latitude,
-          longitude: row.longitude,
-          point_type: row.point_type,
-          point_num: row.point_num,
-        }
+    for (const message of messagesResult) {
+      console.log(`Processing trip: ${message.trip_identifier}`)
 
-        const trip = tripsMap.get(row.trip_identifier)!
-        trip.all_points.push(point)
-      }
-    }
+      // Получаем точки для каждого рейса
+      const pointsResult = await sql`
+        SELECT DISTINCT
+          tp.point_type,
+          tp.point_num,
+          p.point_id,
+          p.point_name,
+          p.door_open_1,
+          p.door_open_2,
+          p.door_open_3,
+          p.latitude,
+          p.longitude,
+          p.adress
+        FROM (
+          SELECT * FROM trip_points 
+          WHERE driver_phone = ${phone}  
+        ) tp
+        JOIN points p ON tp.point_id = p.id
+        WHERE tp.trip_id = ${tripId} 
+          AND tp.trip_identifier = ${message.trip_identifier}
+        ORDER BY tp.point_num
+      `
 
-    // Сортируем точки по point_num и разделяем по типам, сохраняя порядок
-    for (const [tripIdentifier, tripData] of tripsMap) {
-      // Сортируем все точки по point_num
-      tripData.all_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+      console.log(`Found ${pointsResult.length} points for trip ${message.trip_identifier}`)
 
-      // Разделяем на loading и unloading, сохраняя порядок
-      for (const point of tripData.all_points) {
+      const loading_points = []
+      const unloading_points = []
+      const all_points = [] // Временный массив для сортировки
+
+      // Собираем все точки
+      for (const point of pointsResult) {
         const pointInfo = {
           point_id: point.point_id,
           point_name: point.point_name,
-          adress: point.adress,
           door_open_1: point.door_open_1,
           door_open_2: point.door_open_2,
           door_open_3: point.door_open_3,
           latitude: point.latitude,
           longitude: point.longitude,
+          adress: point.adress,
+          point_type: point.point_type,
+          point_num: point.point_num,
+        }
+
+        all_points.push(pointInfo)
+      }
+
+      // Сортируем по point_num
+      all_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+
+      // Разделяем по типам, сохраняя порядок
+      for (const point of all_points) {
+        const pointInfo = {
+          point_id: point.point_id,
+          point_name: point.point_name,
+          door_open_1: point.door_open_1,
+          door_open_2: point.door_open_2,
+          door_open_3: point.door_open_3,
+          latitude: point.latitude,
+          longitude: point.longitude,
+          adress: point.adress,
           point_num: point.point_num,
         }
 
         if (point.point_type === "P") {
-          tripData.loading_points.push(pointInfo)
+          loading_points.push(pointInfo)
         } else if (point.point_type === "D") {
-          tripData.unloading_points.push(pointInfo)
+          unloading_points.push(pointInfo)
         }
       }
 
-      // Удаляем временный массив
-      delete tripData.all_points
+      trips.push({
+        trip_identifier: message.trip_identifier,
+        vehicle_number: message.vehicle_number,
+        planned_loading_time: message.planned_loading_time,
+        driver_comment: message.driver_comment || "",
+        loading_points,
+        unloading_points,
+      })
     }
 
-    const trips = Array.from(tripsMap.values())
-    trips.sort((a, b) => new Date(a.planned_loading_time).getTime() - new Date(b.planned_loading_time).getTime())
+    console.log(`Prepared ${trips.length} trips for sending`)
 
-    const telegramId = messages[0].telegram_id
-    const driverName = messages[0].first_name || messages[0].full_name || "Водитель"
-    const previousTelegramMessageId = messages[0].telegram_message_id
-    const messageIds = messages.map((m) => m.id)
-
-    // Отправляем повторное сообщение
+    // Отправляем сообщение через новую функцию
     const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
-      Number(telegramId),
+      Number(user.telegram_id),
       trips,
       driverName,
-      messageIds[0], // Используем первый messageId для callback_data
-      false, // isCorrection = false
-      true, // isResend = true
+      messageId,
+      isCorrection, // Используем переданный isCorrection
+      true, // isResend = true для повторной отправки
       previousTelegramMessageId,
     )
 
-    // Обновляем все сообщения водителя с новым telegram_message_id и текстом
-    await sql`
-      UPDATE trip_messages
-      SET 
-        telegram_message_id = ${message_id},
-        status = 'sent',
-        sent_at = NOW(),
-        message = ${messageText}
-      WHERE id = ANY(${messageIds})
-    `
+    // Обновляем статусы всех сообщений
+    const messageIdsToUpdate = messagesResult.map((m) => m.id)
 
-    console.log(`Combined message resent successfully for ${trips.length} trips`)
+    for (const msgId of messageIdsToUpdate) {
+      await sql`
+        UPDATE trip_messages 
+        SET telegram_message_id = ${message_id},
+            response_status = 'pending',
+            response_comment = NULL,
+            response_at = NULL,
+            sent_at = CURRENT_TIMESTAMP,
+            message = ${messageText}
+        WHERE id = ${msgId}
+      `
+    }
+
+    console.log(`Successfully sent message to ${user.telegram_id}, updated ${messageIdsToUpdate.length} messages`)
 
     return NextResponse.json({
       success: true,
-      message: "Combined message resent successfully",
-      trips: trips.length,
+      message: "Message sent successfully",
       telegram_message_id: message_id,
+      trips_count: trips.length,
+      updated_messages: messageIdsToUpdate.length,
     })
   } catch (error) {
     console.error("Error resending combined message:", error)
+
+    // Обновляем статус сообщений при ошибке
+    try {
+      for (const msgId of messageIds) {
+        await sql`
+          UPDATE trip_messages 
+          SET status = 'error', 
+              error_message = ${error instanceof Error ? error.message : "Unknown error"}
+          WHERE id = ${msgId}
+        `
+      }
+    } catch (updateError) {
+      console.error("Error updating message status:", updateError)
+    }
+
     return NextResponse.json(
       {
         success: false,
-        error: "Failed to resend combined message",
+        error: "Failed to resend message",
         details: error instanceof Error ? error.message : "Unknown error",
       },
       { status: 500 },
