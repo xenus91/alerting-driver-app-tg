@@ -1,29 +1,13 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { RefreshCw, CheckCircle, Clock, Plus } from "lucide-react"
-import { useToast } from "@/hooks/use-toast"
+import { RefreshCw, CheckCircle, Clock } from "lucide-react"
+import { toast } from "@/components/ui/use-toast"
 import { TripCorrectionModal } from "@/components/trip-correction-modal" // Импортируем модалку
 import { TripTable } from "@/components/trip-table"
-
-interface TripData {
-  id: number
-  created_at: string
-  status: string
-  total_messages: string | number
-  sent_messages: string | number
-  error_messages: string | number
-  confirmed_responses: string | number
-  rejected_responses: string | number
-  declined_responses: string | number
-  pending_responses: string | number
-  first_sent_at?: string
-  last_sent_at?: string
-  carpark?: string
-}
+import type { Trip } from "@/lib/database"
 
 interface TripError {
   id: number
@@ -34,58 +18,41 @@ interface TripError {
 }
 
 export default function TripsPage() {
-  const { toast } = useToast()
-  const [trips, setTrips] = useState<TripData[]>([])
+  const [trips, setTrips] = useState<Trip[]>([])
   const [isLoading, setIsLoading] = useState(true)
-  const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false)
-  const [modalMode, setModalMode] = useState<"edit" | "create">("create")
-  const [selectedTripForEdit, setSelectedTripForEdit] = useState<{
-    tripId: number
-    phone: string
-    driverName: string
-  } | null>(null)
-  const [currentUser, setCurrentUser] = useState<{ telegram_id?: number } | null>(null)
-
-  // Состояния для диалога ошибок
-  const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
-  const [tripErrors, setTripErrors] = useState<TripError[]>([])
-  const [loadingErrors, setLoadingErrors] = useState(false)
+  const [selectedTrip, setSelectedTrip] = useState<Trip | null>(null)
+  const [modalMode, setModalMode] = useState<"create" | "edit">("create")
 
   const fetchTrips = async () => {
     setIsLoading(true)
+    setError(null)
     try {
       const response = await fetch("/api/trips")
-      const data = await response.json()
-      if (data.success) {
-        setTrips(data.trips)
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
-    } catch (error) {
-      console.error("Error fetching trips:", error)
+      const data = await response.json()
+      setTrips(data)
+    } catch (e: any) {
+      setError(e.message)
+      toast({
+        title: "Ошибка загрузки рейсов",
+        description: e.message,
+        variant: "destructive",
+      })
     } finally {
       setIsLoading(false)
     }
   }
 
   const fetchTripErrors = async (tripId: number) => {
-    setLoadingErrors(true)
-    try {
-      const response = await fetch(`/api/trips/${tripId}/errors`)
-      const data = await response.json()
-      if (data.success) {
-        setTripErrors(data.errors)
-      }
-    } catch (error) {
-      console.error("Error fetching trip errors:", error)
-    } finally {
-      setLoadingErrors(false)
-    }
+    // Placeholder for fetching trip errors if needed in the future
   }
 
   const handleShowErrors = (tripId: number) => {
-    setShowErrorsDialog(tripId)
-    fetchTripErrors(tripId)
+    // Placeholder for showing errors if needed in the future
   }
 
   const formatPhone = (phone: string) => {
@@ -156,22 +123,6 @@ export default function TripsPage() {
     fetchTrips()
   }, [])
 
-  useEffect(() => {
-    const getCurrentUser = async () => {
-      try {
-        const response = await fetch("/api/auth/me")
-        const data = await response.json()
-        if (data.success) {
-          setCurrentUser(data.user)
-        }
-      } catch (error) {
-        console.error("Error getting current user:", error)
-      }
-    }
-
-    getCurrentUser()
-  }, [])
-
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleString("ru-RU")
   }
@@ -213,7 +164,7 @@ export default function TripsPage() {
     return "bg-gradient-to-r from-green-500 to-green-400"
   }
 
-  const getTripStatus = (trip: TripData) => {
+  const getTripStatus = (trip: Trip) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
     const declinedNum = Number(trip.declined_responses)
@@ -228,7 +179,7 @@ export default function TripsPage() {
     return "Активна"
   }
 
-  const getTripStatusBadge = (trip: TripData) => {
+  const getTripStatusBadge = (trip: Trip) => {
     const status = getTripStatus(trip)
 
     switch (status) {
@@ -270,7 +221,7 @@ export default function TripsPage() {
     }
   }
 
-  const getCardBackgroundColor = (trip: TripData) => {
+  const getCardBackgroundColor = (trip: Trip) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
     const declinedNum = Number(trip.declined_responses)
@@ -296,7 +247,7 @@ export default function TripsPage() {
     return "bg-white border-gray-200"
   }
 
-  const getTimeSinceSent = (trip: TripData, sentAt?: string) => {
+  const getTimeSinceSent = (trip: Trip, sentAt?: string) => {
     if (!sentAt) return "Не отправлено"
 
     const confirmedNum = Number(trip.confirmed_responses)
@@ -333,7 +284,7 @@ export default function TripsPage() {
   }
 
   // Проверяем можно ли удалить рассылку
-  const canDeleteTrip = (trip: TripData) => {
+  const canDeleteTrip = (trip: Trip) => {
     const confirmedNum = Number(trip.confirmed_responses)
     const rejectedNum = Number(trip.rejected_responses)
     const declinedNum = Number(trip.declined_responses)
@@ -344,76 +295,72 @@ export default function TripsPage() {
     return sentNum > 0 && (totalResponses === sentNum || trip.status === "completed" || errorNum > 0)
   }
 
-  const handleDeleteTrip = async (tripId: number) => {
-    setDeletingTripId(tripId)
+  const handleDeleteTrip = async (tripId: string) => {
+    if (!window.confirm("Вы уверены, что хотите удалить этот рейс?")) {
+      return
+    }
     try {
       const response = await fetch(`/api/trips/${tripId}`, {
         method: "DELETE",
       })
-
-      const data = await response.json()
-      if (!data.success) {
-        throw new Error(data.error || "Failed to delete trip")
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`)
       }
-
-      // Обновляем список рассылок
-      await fetchTrips()
-    } catch (error) {
-      console.error("Error deleting trip:", error)
-      alert("Ошибка при удалении рассылки")
-    } finally {
-      setDeletingTripId(null)
-      setShowDeleteConfirm(null)
+      toast({
+        title: "Рейс удален",
+        description: `Рейс с ID ${tripId} успешно удален.`,
+      })
+      fetchTrips() // Refresh the list
+    } catch (e: any) {
+      toast({
+        title: "Ошибка удаления рейса",
+        description: e.message,
+        variant: "destructive",
+      })
     }
   }
 
-  const handleOpenCorrectionModal = (tripId: number, phone: string, driverName: string) => {
+  const handleEditTrip = (trip: Trip) => {
+    setSelectedTrip(trip)
     setModalMode("edit")
-    setSelectedTripForEdit({ tripId, phone, driverName })
     setIsCorrectionModalOpen(true)
   }
 
-  const handleOpenCreateModal = () => {
-    setModalMode("create")
-    setSelectedTripForEdit(null)
-    setIsCorrectionModalOpen(true)
-  }
-
-  const handleCloseCorrectionModal = () => {
+  const handleCorrectionSent = () => {
     setIsCorrectionModalOpen(false)
-    setSelectedTripForEdit(null)
+    setSelectedTrip(null)
+    fetchTrips() // Refresh the list after correction/creation
   }
+
+  if (isLoading) return <div>Загрузка рейсов...</div>
+  if (error) return <div>Ошибка: {error}</div>
 
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="flex-1 p-4 md:p-6">
-        <div className="flex items-center justify-between mb-4">
-          <h1 className="text-2xl font-bold">Управление рассылками</h1>
-          <Button onClick={handleOpenCreateModal}>
-            <Plus className="mr-2 h-4 w-4" />
-            Быстрая рассылка
-          </Button>
-        </div>
-        <Card>
-          <CardHeader>
-            <CardTitle>Список рассылок</CardTitle>
-            <CardDescription>Просмотр и управление всеми созданными рассылками.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <TripTable onOpenCorrectionModal={handleOpenCorrectionModal} />
-          </CardContent>
-        </Card>
+    <div className="container mx-auto py-10">
+      <h1 className="text-3xl font-bold mb-6">Управление Рейсами</h1>
+      <div className="flex justify-end mb-4">
+        <Button
+          onClick={() => {
+            setSelectedTrip(null)
+            setModalMode("create")
+            setIsCorrectionModalOpen(true)
+          }}
+        >
+          Быстрая рассылка
+        </Button>
+      </div>
+      <TripTable trips={trips} onEdit={handleEditTrip} onDelete={handleDeleteTrip} />
 
-        <TripCorrectionModal
-          isOpen={isCorrectionModalOpen}
-          onClose={handleCloseCorrectionModal}
-          mode={modalMode}
-          tripId={selectedTripForEdit?.tripId}
-          phone={selectedTripForEdit?.phone}
-          driverName={selectedTripForEdit?.driverName}
-          onOpenConflictTrip={handleOpenCorrectionModal} // Передаем эту же функцию для открытия конфликта
-        />
-      </main>
+      <TripCorrectionModal
+        isOpen={isCorrectionModalOpen}
+        onClose={() => {
+          setIsCorrectionModalOpen(false)
+          setSelectedTrip(null)
+        }}
+        mode={modalMode}
+        initialTrip={selectedTrip}
+        onCorrectionSent={handleCorrectionSent}
+      />
     </div>
   )
 }
