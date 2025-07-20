@@ -7,7 +7,6 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export async function GET() {
   try {
-    // Получаем session_token из cookies
     const cookieStore = await cookies()
     const sessionToken = cookieStore.get("session_token")?.value
 
@@ -15,7 +14,6 @@ export async function GET() {
       return NextResponse.json({ success: false, error: "Не авторизован" }, { status: 401 })
     }
 
-    // Получаем данные текущего пользователя через сессию
     const sessions = await sql`
       SELECT s.*, u.id, u.telegram_id, u.name, u.full_name, u.role, u.carpark
       FROM user_sessions s
@@ -29,27 +27,22 @@ export async function GET() {
 
     const currentUser = sessions[0]
 
-    // Получаем поездки с учетом роли пользователя
     let trips
 
     if (currentUser.role === "operator" && currentUser.carpark) {
-      // Операторы видят только поездки из своего автопарка
       trips = await getTrips(currentUser.carpark)
     } else {
-      // Администраторы видят все поездки
       trips = await getTrips()
     }
 
-    // Проверяем и обновляем статусы завершенных рассылок
     for (const trip of trips) {
       const totalResponses = Number(trip.confirmed_responses) + Number(trip.rejected_responses)
       const sentMessages = Number(trip.sent_messages)
 
-      // Если все отправленные сообщения получили ответы и статус не "completed"
       if (sentMessages > 0 && totalResponses === sentMessages && trip.status !== "completed") {
         console.log(`Updating trip ${trip.id} status to completed`)
         await updateTripStatus(trip.id, "completed")
-        trip.status = "completed" // Обновляем в текущем результате
+        trip.status = "completed"
       }
     }
 
