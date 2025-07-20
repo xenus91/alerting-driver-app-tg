@@ -28,7 +28,7 @@ interface UploadResult {
   errors?: string[]
   error?: string
   details?: string
-  // Добавляем поля для конфликтов
+  // Добавляем поля для ошибки trip_already_assigned
   trip_identifiers?: string[]
   conflict_data?: Array<{
     trip_identifier: string
@@ -128,24 +128,48 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {result.error || "Неизвестная ошибка"}
-              {result.details && (
-                <div className="mt-2">
-                  <strong>Детали:</strong> {result.details}
-                </div>
-              )}
-              {result.error === "trip_already_assigned" && result.conflict_data && result.conflict_data.length > 0 && (
-                <div className="mt-4">
-                  <h4 className="font-medium mb-2">Конфликт рейсов:</h4>
-                  <ul className="list-disc list-inside space-y-1 text-sm">
-                    {result.conflict_data.map((conflict, index) => (
-                      <li key={index} className="text-red-600">
-                        Рейс {conflict.trip_identifier} уже назначен водителю {conflict.driver_name} (
-                        {formatPhone(conflict.driver_phone)})
-                      </li>
-                    ))}
-                  </ul>
-                </div>
+              {result.error === "trip_already_assigned" ? (
+                <>
+                  <strong>Ошибка: Рейс уже назначен!</strong>
+                  <p className="mt-2">
+                    Рейс(ы) со следующими идентификаторами уже существуют в системе и назначены водителям:
+                  </p>
+                  {result.trip_identifiers && result.trip_identifiers.length > 0 && (
+                    <ul className="list-disc list-inside mt-2">
+                      {result.trip_identifiers.map((id, index) => (
+                        <li key={index}>
+                          <strong>{id}</strong>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                  {result.conflict_data && result.conflict_data.length > 0 && (
+                    <div className="mt-4">
+                      <h5 className="font-medium mb-2">Детали конфликта:</h5>
+                      <div className="space-y-2">
+                        {result.conflict_data.map((conflict, index) => (
+                          <div key={index} className="p-2 bg-red-50 border border-red-200 rounded text-sm">
+                            <p>
+                              <strong>Идентификатор рейса:</strong> {conflict.trip_identifier}
+                            </p>
+                            <p>
+                              <strong>Водитель:</strong> {conflict.driver_name} ({formatPhone(conflict.driver_phone)})
+                            </p>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : (
+                <>
+                  {result.error || "Неизвестная ошибка"}
+                  {result.details && (
+                    <div className="mt-2">
+                      <strong>Детали:</strong> {result.details}
+                    </div>
+                  )}
+                </>
               )}
             </AlertDescription>
           </Alert>

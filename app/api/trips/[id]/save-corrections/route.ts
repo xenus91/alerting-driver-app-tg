@@ -1,170 +1,356 @@
 //app/api/trips/[id]/save-corrections/route.ts
 
 import { type NextRequest, NextResponse } from "next/server"
-import { sql } from "@vercel/postgres"
+import { neon } from "@neondatabase/serverless"
+import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
 
-export async function POST(request: NextRequest) {
+const sql = neon(process.env.DATABASE_URL!)
+
+export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+  const tripId = Number.parseInt(params.id)
+  const { phone, corrections, deletedTrips = [] } = await request.json()
+
   try {
-    const { phone, corrections, deletedTrips = [] } = await request.json()
+    console.log(`Saving corrections for trip ${tripId}, phone ${phone}`)
+    console.log("Corrections data:", corrections)
+    console.log("Deleted trips:", deletedTrips)
 
-    if (!phone || !corrections || !Array.isArray(corrections)) {
-      return NextResponse.json({ success: false, error: "Invalid request data" }, { status: 400 })
+    /* === ПРОВЕРКА КОНФЛИКТУЮЩИХ РЕЙСОВ === */
+    const identifiersToCheck = [...deletedTrips, ...corrections.map((c: any) => String(c.trip_identifier))].filter(
+      (value, index, self) => self.indexOf(value) === index,
+    )
+
+    if (identifiersToCheck.length > 0) {
+      console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(", ")}`)
+
+      const conflictingTrips = await sql`
+        SELECT 
+          tm.trip_identifier,
+          tm.trip_id, 
+          tm.phone,
+          u.first_name,
+          u.full_name
+        FROM trip_messages tm
+        LEFT JOIN users u ON u.phone = tm.phone
+        WHERE tm.trip_identifier = ANY(${identifiersToCheck}::text[])
+          AND tm.phone <> ${phone}
+          AND (tm.response_status IS NULL OR tm.response_status NOT IN ('declined', 'rejected', 'error'))
+      `
+
+      if (conflictingTrips.length > 0) {
+        const conflictData = conflictingTrips.map((t) => ({
+          trip_identifier: t.trip_identifier,
+          driver_phone: t.phone,
+          driver_name: t.full_name || t.first_name || t.phone,
+          trip_id: t.trip_id,
+        }))
+
+        console.log(`Conflict found for trips: ${conflictData.map((c) => c.trip_identifier).join(", ")}`)
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "trip_already_assigned",
+            trip_identifiers: conflictData.map((c) => c.trip_identifier),
+            conflict_data: conflictData,
+          },
+          { status: 409 },
+        )
+      } else {
+        console.log("No trip conflicts found")
+      }
     }
+    /* === КОНЕЦ ПРОВЕРКИ КОНФЛИКТОВ === */
 
-    const client = await sql.connect()
+    // Начинаем транзакцию
+    await sql`BEGIN`
+
+    // Сначала удаляем рейсы, которые были помечены для удаления
+    if (deletedTrips.length > 0) {
+      console.log(`Deleting trips: ${deletedTrips.join(", ")} for phone ${phone}`)
+
+      for (const tripIdentifier of deletedTrips) {
+        // Удаляем из trip_messages
+        await sql`
+          DELETE FROM trip_messages 
+          WHERE trip_id = ${tripId} 
+            AND phone = ${phone} 
+            AND trip_identifier = ${tripIdentifier}
+        `
+
+        // Удаляем из trip_points
+        await sql`
+          DELETE FROM trip_points 
+          WHERE trip_id = ${tripId}
+            AND driver_phone = ${phone} 
+            AND trip_identifier = ${tripIdentifier}
+        `
+
+        console.log(`Deleted trip ${tripIdentifier} for phone ${phone}`)
+      }
+    }
 
     try {
-      await client.query("BEGIN")
+      // Группируем корректировки по original_trip_identifier для обновления
+      const originalTripGroups = new Map()
 
-      // Handle deleted trips first
-      if (deletedTrips.length > 0) {
-        for (const tripIdentifier of deletedTrips) {
-          // Delete trip_points associated with the trip_identifier
-          await client.query(
-            `DELETE FROM trip_points WHERE trip_id IN (SELECT id FROM trips WHERE trip_identifier = $1 AND driver_phone = $2)`,
-            [tripIdentifier, phone],
-          )
+      for (const correction of corrections) {
+        const originalKey = correction.original_trip_identifier || correction.trip_identifier
+        if (!originalTripGroups.has(originalKey)) {
+          originalTripGroups.set(originalKey, {
+            original_trip_identifier: originalKey,
+            new_trip_identifier: correction.trip_identifier,
+            vehicle_number: correction.vehicle_number,
+            planned_loading_time: correction.planned_loading_time,
+            driver_comment: correction.driver_comment,
+            points: [],
+            is_new_trip: !correction.original_trip_identifier, // Новый рейс если нет original
+          })
+        }
 
-          // Delete trip_messages associated with the trip_identifier
-          await client.query(
-            `DELETE FROM trip_messages WHERE trip_id IN (SELECT id FROM trips WHERE trip_identifier = $1 AND driver_phone = $2)`,
-            [tripIdentifier, phone],
-          )
-
-          // Delete the trip itself
-          await client.query(`DELETE FROM trips WHERE trip_identifier = $1 AND driver_phone = $2`, [
-            tripIdentifier,
-            phone,
-          ])
+        if (correction.point_id) {
+          originalTripGroups.get(originalKey).points.push({
+            point_type: correction.point_type,
+            point_num: correction.point_num,
+            point_id: correction.point_id,
+          })
         }
       }
 
-      const tripIdentifiersToProcess = [...new Set(corrections.map((c: any) => c.trip_identifier))]
+      // Обрабатываем каждый рейс
+      for (const [originalTripIdentifier, tripData] of originalTripGroups) {
+        if (tripData.is_new_trip) {
+          console.log(`Creating new trip message for trip: ${tripData.new_trip_identifier}`)
 
-      for (const tripIdentifier of tripIdentifiersToProcess) {
-        const tripsForThisIdentifier = corrections.filter((c: any) => c.trip_identifier === tripIdentifier)
-        const originalTripIdentifier = tripsForThisIdentifier[0].original_trip_identifier || tripIdentifier
+          // Создаем новое сообщение для нового рейса со статусом 'sent'
+          // чтобы оно было включено в отправку корректировки
+          await sql`
+            INSERT INTO trip_messages (
+              trip_id, phone, message, telegram_id, status, response_status,
+              trip_identifier, vehicle_number, planned_loading_time, driver_comment,
+              sent_at
+            )
+            SELECT 
+              ${tripId}, 
+              ${phone}, 
+              'Новый рейс (добавлен при корректировке)', 
+              telegram_id, 
+              'sent',
+              'pending',
+              ${tripData.new_trip_identifier},
+              ${tripData.vehicle_number},
+              ${tripData.planned_loading_time},
+              ${tripData.driver_comment || null},
+              CURRENT_TIMESTAMP
+            FROM users 
+            WHERE phone = ${phone}
+            LIMIT 1
+          `
 
-        // Check if the trip_identifier is already assigned to another driver
-        const conflictCheck = await client.query(
-          `SELECT t.trip_identifier, u.phone AS driver_phone, u.full_name AS driver_name, t.id AS trip_id
-           FROM trips t
-           JOIN users u ON t.driver_phone = u.phone
-           WHERE t.trip_identifier = $1 AND t.driver_phone != $2`,
-          [tripIdentifier, phone],
-        )
-
-        if (conflictCheck.rows.length > 0) {
-          await client.query("ROLLBACK")
-          return NextResponse.json(
-            {
-              success: false,
-              error: "trip_already_assigned",
-              trip_identifiers: conflictCheck.rows.map((row) => row.trip_identifier),
-              conflict_data: conflictCheck.rows,
-            },
-            { status: 409 },
-          )
-        }
-
-        // Find existing trip_id for this trip_identifier and driver_phone
-        const existingTripResult = await client.query(
-          `SELECT id, message_id FROM trips WHERE trip_identifier = $1 AND driver_phone = $2`,
-          [originalTripIdentifier, phone],
-        )
-        let tripId: number | null = null
-        let messageId: number | null = null
-
-        if (existingTripResult.rows.length > 0) {
-          tripId = existingTripResult.rows[0].id
-          messageId = existingTripResult.rows[0].message_id
-          // Update existing trip details
-          await client.query(
-            `UPDATE trips SET
-             trip_identifier = $1,
-             vehicle_number = $2,
-             planned_loading_time = $3,
-             driver_comment = $4,
-             updated_at = NOW()
-             WHERE id = $5`,
-            [
-              tripIdentifier,
-              tripsForThisIdentifier[0].vehicle_number,
-              tripsForThisIdentifier[0].planned_loading_time,
-              tripsForThisIdentifier[0].driver_comment,
-              tripId,
-            ],
-          )
-          // Delete existing points for this trip
-          await client.query(`DELETE FROM trip_points WHERE trip_id = $1`, [tripId])
+          console.log(`Created new trip message for ${tripData.new_trip_identifier}`)
         } else {
-          // Insert new trip
-          const insertTripResult = await client.query(
-            `INSERT INTO trips (trip_identifier, driver_phone, vehicle_number, planned_loading_time, driver_comment, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
-             RETURNING id`,
-            [
-              tripIdentifier,
-              phone,
-              tripsForThisIdentifier[0].vehicle_number,
-              tripsForThisIdentifier[0].planned_loading_time,
-              tripsForThisIdentifier[0].driver_comment,
-            ],
-          )
-          tripId = insertTripResult.rows[0].id
+          // Обновляем существующее сообщение и сбрасываем статус подтверждения
+          await sql`
+            UPDATE trip_messages 
+            SET trip_identifier = ${tripData.new_trip_identifier},
+                vehicle_number = ${tripData.vehicle_number},
+                planned_loading_time = ${tripData.planned_loading_time},
+                driver_comment = ${tripData.driver_comment || null},
+                response_status = 'pending',
+                response_comment = NULL,
+                response_at = NULL
+            WHERE trip_id = ${tripId} 
+              AND phone = ${phone} 
+              AND trip_identifier = ${originalTripIdentifier}
+          `
+
+          console.log(`Updated existing trip message for ${originalTripIdentifier} -> ${tripData.new_trip_identifier}`)
         }
 
-        // Insert new points for the trip
-        for (const correction of tripsForThisIdentifier) {
-          await client.query(
-            `INSERT INTO trip_points (trip_id, point_type, point_num, point_id, point_name, latitude, longitude, created_at, updated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
-            [
-              tripId,
-              correction.point_type,
-              correction.point_num,
-              correction.point_id,
-              correction.point_name,
-              correction.latitude,
-              correction.longitude,
-            ],
-          )
-        }
+        // Удаляем старые точки для этого рейса (используем original_trip_identifier)
+        await sql`
+          DELETE FROM trip_points 
+          WHERE trip_id = ${tripId} 
+            AND driver_phone = ${phone} 
+            AND trip_identifier = ${originalTripIdentifier}
+        `
 
-        // Update or insert trip_messages entry
-        if (messageId) {
-          await client.query(
-            `UPDATE trip_messages SET
-             trip_id = $1,
-             driver_phone = $2,
-             message_type = 'trip_details',
-             updated_at = NOW()
-             WHERE message_id = $3`,
-            [tripId, phone, messageId],
-          )
-        } else {
-          // If no message_id, it's a new trip or a trip without a message yet.
-          // We don't create a message here, it's handled by send-messages or resend-combined
-          // For now, we just ensure the trip is saved.
+        // Добавляем новые точки с новым trip_identifier
+        for (const point of tripData.points) {
+          // Получаем ID точки из таблицы points
+          const pointResult = await sql`
+            SELECT id FROM points WHERE point_id = ${point.point_id}
+          `
+
+          if (pointResult.length > 0) {
+            await sql`
+              INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier, driver_phone )
+              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${tripData.new_trip_identifier}, ${phone} )
+            `
+
+            console.log(`Added point ${point.point_id} to trip ${tripData.new_trip_identifier}`)
+          }
         }
       }
 
-      await client.query("COMMIT")
-      return NextResponse.json({ success: true })
-    } catch (dbError: any) {
-      await client.query("ROLLBACK")
-      console.error("Database transaction error:", dbError)
-      return NextResponse.json(
-        { success: false, error: "Failed to save corrections", details: dbError.message },
-        { status: 500 },
+      // Получаем данные о рейсах для отправки сообщения
+      const messages = await sql`
+        SELECT 
+          tm.id,
+          tm.trip_identifier,
+          tm.vehicle_number,
+          tm.planned_loading_time,
+          tm.driver_comment,
+          tm.telegram_id,
+          u.first_name,
+          u.full_name,
+          tm.telegram_message_id,
+          p.point_id,
+          p.point_name,
+          p.adress,
+          tp.point_type,
+          tp.point_num,
+          p.latitude,
+          p.longitude,
+          p.door_open_1,
+          p.door_open_2,
+          p.door_open_3
+        FROM trip_messages tm
+        LEFT JOIN (
+          SELECT * FROM trip_points 
+          WHERE driver_phone = ${phone}  
+        ) tp ON tm.trip_id = tp.trip_id AND tm.trip_identifier = tp.trip_identifier
+        LEFT JOIN points p ON tp.point_id = p.id
+        LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+        WHERE tm.trip_id = ${tripId}
+          AND tm.phone = ${phone}
+        ORDER BY tm.planned_loading_time, tp.point_num
+      `
+
+      if (messages.length === 0) {
+        await sql`ROLLBACK`
+        return NextResponse.json({ success: false, error: "Messages not found" }, { status: 404 })
+      }
+
+      // Группируем точки по trip_identifier
+      const tripsMap = new Map<string, any>()
+      for (const row of messages) {
+        if (!tripsMap.has(row.trip_identifier)) {
+          tripsMap.set(row.trip_identifier, {
+            trip_identifier: row.trip_identifier,
+            vehicle_number: row.vehicle_number,
+            planned_loading_time: row.planned_loading_time,
+            driver_comment: row.driver_comment || "",
+            loading_points: [],
+            unloading_points: [],
+            all_points: [], // Добавляем массив для всех точек в порядке point_num
+          })
+        }
+
+        if (row.point_id) {
+          const point = {
+            point_id: row.point_id,
+            point_name: row.point_name,
+            adress: row.adress,
+            door_open_1: row.door_open_1,
+            door_open_2: row.door_open_2,
+            door_open_3: row.door_open_3,
+            latitude: row.latitude,
+            longitude: row.longitude,
+            point_type: row.point_type,
+            point_num: row.point_num,
+          }
+
+          const trip = tripsMap.get(row.trip_identifier)!
+          trip.all_points.push(point)
+        }
+      }
+
+      // Сортируем точки по point_num и разделяем по типам, сохраняя порядок
+      for (const [tripIdentifier, tripData] of tripsMap) {
+        // Сортируем все точки по point_num
+        tripData.all_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+
+        // Разделяем на loading и unloading, сохраняя порядок
+        for (const point of tripData.all_points) {
+          const pointInfo = {
+            point_id: point.point_id,
+            point_name: point.point_name,
+            adress: point.adress,
+            door_open_1: point.door_open_1,
+            door_open_2: point.door_open_2,
+            door_open_3: point.door_open_3,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            point_num: point.point_num,
+          }
+
+          if (point.point_type === "P") {
+            tripData.loading_points.push(pointInfo)
+          } else if (point.point_type === "D") {
+            tripData.unloading_points.push(pointInfo)
+          }
+        }
+
+        // Удаляем временный массив
+        delete tripData.all_points
+      }
+
+      const trips = Array.from(tripsMap.values())
+      trips.sort((a, b) => new Date(a.planned_loading_time).getTime() - new Date(b.planned_loading_time).getTime())
+
+      const telegramId = messages[0].telegram_id
+      const driverName = messages[0].first_name || messages[0].full_name || "Водитель"
+      const previousTelegramMessageId = messages[0].telegram_message_id
+      const messageIds = messages.map((m) => m.id)
+
+      // Отправляем сообщение с корректировкой
+      const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
+        Number(telegramId),
+        trips,
+        driverName,
+        messageIds[0], // Используем первый messageId для callback_data
+        true, // isCorrection = true
+        false, // isResend = false
+        previousTelegramMessageId,
       )
-    } finally {
-      client.release()
+
+      // Обновляем все сообщения водителя с новым telegram_message_id и текстом
+      await sql`
+        UPDATE trip_messages
+        SET 
+          telegram_message_id = ${message_id},
+          status = 'sent',
+          sent_at = NOW(),
+          message = ${messageText}
+        WHERE id = ANY(${messageIds})
+        AND phone = ${phone}
+      `
+
+      await sql`COMMIT`
+
+      console.log(
+        `Corrections saved successfully for ${originalTripGroups.size} trips, deleted ${deletedTrips.length} trips`,
+      )
+
+      return NextResponse.json({
+        success: true,
+        message: "Corrections saved successfully",
+        updatedTrips: originalTripGroups.size,
+        deletedTrips: deletedTrips.length,
+      })
+    } catch (error) {
+      await sql`ROLLBACK`
+      throw error
     }
-  } catch (error: any) {
-    console.error("Error in save-corrections route:", error)
+  } catch (error) {
+    console.error("Error saving corrections:", error)
     return NextResponse.json(
-      { success: false, error: "Internal server error", details: error.message },
+      {
+        success: false,
+        error: "Failed to save corrections",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
       { status: 500 },
     )
   }
