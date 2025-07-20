@@ -1,112 +1,125 @@
-import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { NextResponse } from "next/server"
+import { sql } from "@vercel/postgres"
 import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
-import { getSession } from "@/lib/database"
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const messageId = params.id // This is the ID of one of the messages in the batch
-  const sql = neon(process.env.DATABASE_URL!)
-
+export async function POST(request: Request) {
   try {
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    const { phone, driver_phone, messageIds, isCorrection, deletedTrips } = await request.json()
+
+    if (!driver_phone || !Array.isArray(messageIds) || messageIds.length === 0) {
+      return NextResponse.json({ success: false, error: "Invalid request data" }, { status: 400 })
     }
 
-    const { phone, driver_phone, messageIds, isCorrection, deletedTrips } = await req.json()
+    const client = await sql.connect()
 
-    if (!driver_phone || !messageIds || !Array.isArray(messageIds) || messageIds.length === 0) {
-      return NextResponse.json({ success: false, error: "Missing driver_phone or messageIds" }, { status: 400 })
-    }
+    try {
+      await client.query("BEGIN")
 
-    // Fetch all trip messages and their points for the given messageIds and driver_phone
-    const tripData = await sql`
-      SELECT
-        tm.id AS trip_message_id,
-        tm.trip_identifier,
-        tm.vehicle_number,
-        tm.planned_loading_time,
-        tm.driver_comment,
-        tm.driver_phone,
-        tp.point_type,
-        tp.point_num,
-        p.point_id,
-        p.point_name,
-        p.latitude,
-        p.longitude,
-        p.address,
-        p.reception_windows
-      FROM trip_messages tm
-      JOIN trip_points tp ON tm.id = tp.trip_message_id
-      JOIN points p ON tp.point_id = p.point_id
-      WHERE tm.id IN (${sql(messageIds)})
-      AND tm.driver_phone = ${driver_phone}
-      ORDER BY tm.planned_loading_time, tp.point_num
-    `
-
-    if (tripData.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "No trip data found for the given message IDs" },
-        { status: 404 },
+      // Fetch all relevant trip data for the driver, ordered by planned_loading_time
+      const tripsResult = await client.query(
+        `SELECT
+           t.id AS trip_id,
+           t.trip_identifier,
+           t.vehicle_number,
+           t.planned_loading_time,
+           t.driver_comment,
+           tm.message_id,
+           tp.point_type,
+           tp.point_num,
+           tp.point_id,
+           p.point_name,
+           p.latitude,
+           p.longitude,
+           p.reception_windows
+         FROM trips t
+         JOIN trip_messages tm ON t.id = tm.trip_id
+         JOIN trip_points tp ON t.id = tp.trip_id
+         JOIN points p ON tp.point_id = p.point_id
+         WHERE t.driver_phone = $1
+         ORDER BY t.planned_loading_time, tp.point_num`, // Sort by trip loading time, then point number
+        [driver_phone],
       )
-    }
 
-    // Group points by trip_identifier
-    const groupedTrips = tripData.reduce((acc: any, row: any) => {
-      const tripIdentifier = row.trip_identifier
-      if (!acc[tripIdentifier]) {
-        acc[tripIdentifier] = {
-          trip_identifier: row.trip_identifier,
-          vehicle_number: row.vehicle_number,
-          planned_loading_time: row.planned_loading_time,
-          driver_comment: row.driver_comment,
-          driver_phone: row.driver_phone,
-          points: [],
+      const tripsData: any[] = []
+      const groupedTrips: { [key: string]: any } = {}
+
+      for (const row of tripsResult.rows) {
+        if (!groupedTrips[row.trip_id]) {
+          groupedTrips[row.trip_id] = {
+            trip_id: row.trip_id,
+            trip_identifier: row.trip_identifier,
+            vehicle_number: row.vehicle_number,
+            planned_loading_time: row.planned_loading_time,
+            driver_comment: row.driver_comment,
+            message_id: row.message_id,
+            points: [], // All points in one array
+          }
         }
+        groupedTrips[row.trip_id].points.push({
+          point_type: row.point_type,
+          point_num: row.point_num,
+          point_id: row.point_id,
+          point_name: row.point_name,
+          latitude: row.latitude,
+          longitude: row.longitude,
+          reception_windows: row.reception_windows,
+        })
       }
-      acc[tripIdentifier].points.push({
-        point_type: row.point_type,
-        point_num: row.point_num,
-        point_id: row.point_id,
-        point_name: row.point_name,
-        latitude: row.latitude,
-        longitude: row.longitude,
-        address: row.address,
-        reception_windows: row.reception_windows,
-      })
-      return acc
-    }, {})
 
-    const tripsToSend = Object.values(groupedTrips).map((trip: any) => {
-      // Sort points by point_num for each trip
-      trip.points.sort((a: any, b: any) => a.point_num - b.point_num)
-      return trip
-    })
+      // Convert grouped object to array and sort points within each trip
+      for (const tripId in groupedTrips) {
+        groupedTrips[tripId].points.sort((a: any, b: any) => a.point_num - b.point_num)
+        tripsData.push(groupedTrips[tripId])
+      }
 
-    // Send the combined message
-    const telegramResponse = await sendMultipleTripMessageWithButtons(
-      driver_phone,
-      tripsToSend,
-      isCorrection, // Pass isCorrection flag
-      true, // isResend
-      deletedTrips,
-    )
+      // Fetch user's Telegram ID
+      const userResult = await client.query(`SELECT telegram_id FROM users WHERE phone = $1`, [driver_phone])
+      const telegramId = userResult.rows[0]?.telegram_id
 
-    if (telegramResponse.success) {
-      // Update status of sent messages to 'sent' or 'pending' if it was 'cancelled'
-      await sql`
-        UPDATE trip_messages
-        SET status = 'pending'
-        WHERE id IN (${sql(messageIds)})
-      `
-      return NextResponse.json({ success: true, results: telegramResponse.results })
-    } else {
-      return NextResponse.json({ success: false, error: telegramResponse.error }, { status: 500 })
+      if (!telegramId) {
+        await client.query("ROLLBACK")
+        return NextResponse.json({ success: false, error: "Telegram ID not found for driver" }, { status: 404 })
+      }
+
+      // Send the combined message
+      const sendResult = await sendMultipleTripMessageWithButtons(
+        telegramId,
+        tripsData,
+        isCorrection, // Pass isCorrection
+        true, // isResend is true for this route
+        deletedTrips,
+      )
+
+      if (sendResult.success) {
+        // Update message_id in trip_messages if it was a new message or changed
+        for (const trip of tripsData) {
+          if (trip.message_id !== sendResult.messageId) {
+            await client.query(`UPDATE trip_messages SET message_id = $1, updated_at = NOW() WHERE trip_id = $2`, [
+              sendResult.messageId,
+              trip.trip_id,
+            ])
+          }
+        }
+        await client.query("COMMIT")
+        return NextResponse.json({ success: true, messageId: sendResult.messageId })
+      } else {
+        await client.query("ROLLBACK")
+        return NextResponse.json({ success: false, error: sendResult.error }, { status: 500 })
+      }
+    } catch (dbError: any) {
+      await client.query("ROLLBACK")
+      console.error("Database transaction error:", dbError)
+      return NextResponse.json(
+        { success: false, error: "Failed to resend combined message", details: dbError.message },
+        { status: 500 },
+      )
+    } finally {
+      client.release()
     }
   } catch (error: any) {
     console.error("Error in resend-combined route:", error)
     return NextResponse.json(
-      { success: false, error: "Failed to resend combined message", details: error.message },
+      { success: false, error: "Internal server error", details: error.message },
       { status: 500 },
     )
   }

@@ -40,6 +40,7 @@
     "@radix-ui/react-toggle-group": "latest",
     "@radix-ui/react-tooltip": "latest",
     "@tanstack/react-table": "latest",
+    "@vercel/postgres": "latest",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "cmdk": "latest",
@@ -60,6 +61,7 @@
     "sonner": "latest",
     "tailwind-merge": "^2.5.5",
     "tailwindcss-animate": "^1.0.7",
+    "telegram": "latest",
     "vaul": "latest",
     "xlsx": "latest"
   },

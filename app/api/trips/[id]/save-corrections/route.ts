@@ -1,169 +1,170 @@
+//app/api/trips/[id]/save-corrections/route.ts
+
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
-import { getSession } from "@/lib/database"
+import { sql } from "@vercel/postgres"
 
-export async function POST(req: NextRequest, { params }: { params: { id: string } }) {
-  const tripId = params.id
-  const sql = neon(process.env.DATABASE_URL!)
-
+export async function POST(request: NextRequest) {
   try {
-    const session = await getSession()
-    if (!session) {
-      return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 })
+    const { phone, corrections, deletedTrips = [] } = await request.json()
+
+    if (!phone || !corrections || !Array.isArray(corrections)) {
+      return NextResponse.json({ success: false, error: "Invalid request data" }, { status: 400 })
     }
 
-    const { phone, driver_phone, corrections, deletedTrips } = await req.json()
+    const client = await sql.connect()
 
-    if (!phone || !corrections) {
-      return NextResponse.json({ success: false, error: "Missing phone or corrections data" }, { status: 400 })
-    }
+    try {
+      await client.query("BEGIN")
 
-    await sql.transaction(async (tx) => {
-      // 1. Проверяем конфликты для новых или измененных trip_identifier
-      const newOrChangedTripIdentifiers = corrections
-        .filter((c: any) => c.original_trip_identifier !== c.trip_identifier)
-        .map((c: any) => c.trip_identifier)
-        .concat(
-          corrections
-            .filter((c: any) => !c.original_trip_identifier) // Newly created trips
-            .map((c: any) => c.trip_identifier),
+      // Handle deleted trips first
+      if (deletedTrips.length > 0) {
+        for (const tripIdentifier of deletedTrips) {
+          // Delete trip_points associated with the trip_identifier
+          await client.query(
+            `DELETE FROM trip_points WHERE trip_id IN (SELECT id FROM trips WHERE trip_identifier = $1 AND driver_phone = $2)`,
+            [tripIdentifier, phone],
+          )
+
+          // Delete trip_messages associated with the trip_identifier
+          await client.query(
+            `DELETE FROM trip_messages WHERE trip_id IN (SELECT id FROM trips WHERE trip_identifier = $1 AND driver_phone = $2)`,
+            [tripIdentifier, phone],
+          )
+
+          // Delete the trip itself
+          await client.query(`DELETE FROM trips WHERE trip_identifier = $1 AND driver_phone = $2`, [
+            tripIdentifier,
+            phone,
+          ])
+        }
+      }
+
+      const tripIdentifiersToProcess = [...new Set(corrections.map((c: any) => c.trip_identifier))]
+
+      for (const tripIdentifier of tripIdentifiersToProcess) {
+        const tripsForThisIdentifier = corrections.filter((c: any) => c.trip_identifier === tripIdentifier)
+        const originalTripIdentifier = tripsForThisIdentifier[0].original_trip_identifier || tripIdentifier
+
+        // Check if the trip_identifier is already assigned to another driver
+        const conflictCheck = await client.query(
+          `SELECT t.trip_identifier, u.phone AS driver_phone, u.full_name AS driver_name, t.id AS trip_id
+           FROM trips t
+           JOIN users u ON t.driver_phone = u.phone
+           WHERE t.trip_identifier = $1 AND t.driver_phone != $2`,
+          [tripIdentifier, phone],
         )
 
-      if (newOrChangedTripIdentifiers.length > 0) {
-        const conflictCheck = await tx`
-          SELECT
-            tm.trip_identifier,
-            u.phone AS driver_phone,
-            u.first_name || ' ' || u.last_name AS driver_name,
-            tm.id AS trip_id
-          FROM trip_messages tm
-          JOIN users u ON tm.driver_phone = u.phone
-          WHERE tm.trip_identifier IN (${sql(newOrChangedTripIdentifiers)})
-          AND tm.driver_phone != ${driver_phone}
-          AND tm.status != 'cancelled'
-        `
-
-        if (conflictCheck.length > 0) {
+        if (conflictCheck.rows.length > 0) {
+          await client.query("ROLLBACK")
           return NextResponse.json(
             {
               success: false,
               error: "trip_already_assigned",
-              trip_identifiers: conflictCheck.map((c: any) => c.trip_identifier),
-              conflict_data: conflictCheck,
+              trip_identifiers: conflictCheck.rows.map((row) => row.trip_identifier),
+              conflict_data: conflictCheck.rows,
             },
             { status: 409 },
           )
         }
-      }
 
-      // 2. Удаляем старые точки для измененных или удаленных рейсов
-      if (deletedTrips && deletedTrips.length > 0) {
-        await tx`
-          DELETE FROM trip_points
-          WHERE trip_message_id IN (
-            SELECT id FROM trip_messages WHERE trip_identifier IN (${sql(deletedTrips)}) AND driver_phone = ${driver_phone}
+        // Find existing trip_id for this trip_identifier and driver_phone
+        const existingTripResult = await client.query(
+          `SELECT id, message_id FROM trips WHERE trip_identifier = $1 AND driver_phone = $2`,
+          [originalTripIdentifier, phone],
+        )
+        let tripId: number | null = null
+        let messageId: number | null = null
+
+        if (existingTripResult.rows.length > 0) {
+          tripId = existingTripResult.rows[0].id
+          messageId = existingTripResult.rows[0].message_id
+          // Update existing trip details
+          await client.query(
+            `UPDATE trips SET
+             trip_identifier = $1,
+             vehicle_number = $2,
+             planned_loading_time = $3,
+             driver_comment = $4,
+             updated_at = NOW()
+             WHERE id = $5`,
+            [
+              tripIdentifier,
+              tripsForThisIdentifier[0].vehicle_number,
+              tripsForThisIdentifier[0].planned_loading_time,
+              tripsForThisIdentifier[0].driver_comment,
+              tripId,
+            ],
           )
-        `
-        await tx`
-          DELETE FROM trip_messages
-          WHERE trip_identifier IN (${sql(deletedTrips)}) AND driver_phone = ${driver_phone}
-        `
-      }
-
-      // Группируем коррекции по trip_identifier для удобства обработки
-      const groupedCorrections = corrections.reduce((acc: any, item: any) => {
-        const key = item.original_trip_identifier || item.trip_identifier // Use original for existing, new for new
-        if (!acc[key]) {
-          acc[key] = {
-            phone: item.phone,
-            trip_identifier: item.trip_identifier,
-            original_trip_identifier: item.original_trip_identifier,
-            vehicle_number: item.vehicle_number,
-            planned_loading_time: item.planned_loading_time,
-            driver_comment: item.driver_comment,
-            message_id: item.message_id,
-            points: [],
-          }
-        }
-        acc[key].points.push({
-          point_type: item.point_type,
-          point_num: item.point_num,
-          point_id: item.point_id,
-          point_name: item.point_name,
-          latitude: item.latitude,
-          longitude: item.longitude,
-        })
-        return acc
-      }, {})
-
-      for (const key in groupedCorrections) {
-        const trip = groupedCorrections[key]
-        let currentTripMessageId = trip.message_id
-
-        // Если это существующий рейс, обновляем trip_messages и удаляем старые trip_points
-        if (trip.original_trip_identifier) {
-          const existingTrip = await tx`
-            SELECT id FROM trip_messages
-            WHERE trip_identifier = ${trip.original_trip_identifier} AND driver_phone = ${driver_phone}
-          `
-          if (existingTrip.length > 0) {
-            currentTripMessageId = existingTrip[0].id
-            await tx`
-              UPDATE trip_messages
-              SET
-                trip_identifier = ${trip.trip_identifier},
-                vehicle_number = ${trip.vehicle_number},
-                planned_loading_time = ${trip.planned_loading_time},
-                driver_comment = ${trip.driver_comment},
-                status = 'pending' -- Сбрасываем статус при корректировке
-              WHERE id = ${currentTripMessageId}
-            `
-            await tx`
-              DELETE FROM trip_points WHERE trip_message_id = ${currentTripMessageId}
-            `
-          } else {
-            // Если original_trip_identifier был, но запись не найдена, создаем новую
-            const newTripMessage = await tx`
-              INSERT INTO trip_messages (
-                driver_phone, trip_identifier, vehicle_number, planned_loading_time, driver_comment, status
-              ) VALUES (
-                ${driver_phone}, ${trip.trip_identifier}, ${trip.vehicle_number}, ${trip.planned_loading_time}, ${trip.driver_comment}, 'pending'
-              )
-              RETURNING id
-            `
-            currentTripMessageId = newTripMessage[0].id
-          }
+          // Delete existing points for this trip
+          await client.query(`DELETE FROM trip_points WHERE trip_id = $1`, [tripId])
         } else {
-          // Если это новый рейс, вставляем в trip_messages
-          const newTripMessage = await tx`
-            INSERT INTO trip_messages (
-              driver_phone, trip_identifier, vehicle_number, planned_loading_time, driver_comment, status
-            ) VALUES (
-              ${driver_phone}, ${trip.trip_identifier}, ${trip.vehicle_number}, ${trip.planned_loading_time}, ${trip.driver_comment}, 'pending'
-            )
-            RETURNING id
-          `
-          currentTripMessageId = newTripMessage[0].id
+          // Insert new trip
+          const insertTripResult = await client.query(
+            `INSERT INTO trips (trip_identifier, driver_phone, vehicle_number, planned_loading_time, driver_comment, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, NOW(), NOW())
+             RETURNING id`,
+            [
+              tripIdentifier,
+              phone,
+              tripsForThisIdentifier[0].vehicle_number,
+              tripsForThisIdentifier[0].planned_loading_time,
+              tripsForThisIdentifier[0].driver_comment,
+            ],
+          )
+          tripId = insertTripResult.rows[0].id
         }
 
-        // Вставляем новые trip_points
-        for (const point of trip.points) {
-          await tx`
-            INSERT INTO trip_points (
-              trip_message_id, point_type, point_num, point_id
-            ) VALUES (
-              ${currentTripMessageId}, ${point.point_type}, ${point.point_num}, ${point.point_id}
-            )
-          `
+        // Insert new points for the trip
+        for (const correction of tripsForThisIdentifier) {
+          await client.query(
+            `INSERT INTO trip_points (trip_id, point_type, point_num, point_id, point_name, latitude, longitude, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())`,
+            [
+              tripId,
+              correction.point_type,
+              correction.point_num,
+              correction.point_id,
+              correction.point_name,
+              correction.latitude,
+              correction.longitude,
+            ],
+          )
+        }
+
+        // Update or insert trip_messages entry
+        if (messageId) {
+          await client.query(
+            `UPDATE trip_messages SET
+             trip_id = $1,
+             driver_phone = $2,
+             message_type = 'trip_details',
+             updated_at = NOW()
+             WHERE message_id = $3`,
+            [tripId, phone, messageId],
+          )
+        } else {
+          // If no message_id, it's a new trip or a trip without a message yet.
+          // We don't create a message here, it's handled by send-messages or resend-combined
+          // For now, we just ensure the trip is saved.
         }
       }
-    })
 
-    return NextResponse.json({ success: true })
+      await client.query("COMMIT")
+      return NextResponse.json({ success: true })
+    } catch (dbError: any) {
+      await client.query("ROLLBACK")
+      console.error("Database transaction error:", dbError)
+      return NextResponse.json(
+        { success: false, error: "Failed to save corrections", details: dbError.message },
+        { status: 500 },
+      )
+    } finally {
+      client.release()
+    }
   } catch (error: any) {
-    console.error("Error saving corrections:", error)
+    console.error("Error in save-corrections route:", error)
     return NextResponse.json(
-      { success: false, error: "Failed to save corrections", details: error.message },
+      { success: false, error: "Internal server error", details: error.message },
       { status: 500 },
     )
   }
