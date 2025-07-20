@@ -28,6 +28,14 @@ interface UploadResult {
   errors?: string[]
   error?: string
   details?: string
+  // Добавляем поля для конфликтов
+  trip_identifiers?: string[]
+  conflict_data?: Array<{
+    trip_identifier: string
+    driver_phone: string
+    driver_name: string
+    trip_id: number
+  }>
 }
 
 interface SendResult {
@@ -135,6 +143,19 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                 {result.errors.map((error, index) => (
                   <li key={index} className="text-red-600">
                     {error}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {result.error === "trip_already_assigned" && result.conflict_data && result.conflict_data.length > 0 && (
+            <div className="mt-4">
+              <h4 className="font-medium mb-2 text-red-600">Конфликт рейсов:</h4>
+              <ul className="list-disc list-inside space-y-1 text-sm">
+                {result.conflict_data.map((conflict, index) => (
+                  <li key={index} className="text-red-600">
+                    Рейс "{conflict.trip_identifier}" уже назначен водителю {conflict.driver_name} (
+                    {formatPhone(conflict.driver_phone)})
                   </li>
                 ))}
               </ul>

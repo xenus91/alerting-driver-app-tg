@@ -103,6 +103,15 @@ export function TripCorrectionModal({
   const [driverSearchOpen, setDriverSearchOpen] = useState(false)
   const [driverSearchValue, setDriverSearchValue] = useState("")
 
+  const resetForm = useCallback(() => {
+    setDriver(createEmptyDriver())
+    setCorrections([createEmptyTrip()])
+    setDeletedTrips([])
+    setError(null)
+    setSuccess(null)
+    setConflictedTrips([])
+  }, [])
+
   useEffect(() => {
     console.log("TripCorrectionModal useEffect:", {
       isOpen,
@@ -820,9 +829,15 @@ export function TripCorrectionModal({
           <div className="space-y-6">
             {mode === "create" && (
               <div className="border rounded-lg p-4 bg-blue-50 mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <User className="h-4 w-4 text-blue-600" />
-                  <h3 className="font-medium text-blue-900">Выбор водителя</h3>
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-blue-900">Выбор водителя</h3>
+                  </div>
+                  <Button onClick={resetForm} variant="outline" size="sm" className="bg-transparent">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Новое назначение
+                  </Button>
                 </div>
 
                 <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
