@@ -1,14 +1,13 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback } from "react"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { RefreshCw, Save, Send, Plus, AlertTriangle, User, ChevronsUpDown } from "lucide-react"
+import { RefreshCw, Send, Plus, AlertTriangle, User, ChevronsUpDown } from "lucide-react"
 import { TripRow } from "./trip-row"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { ChevronUp, ChevronDown } from "lucide-react"; // Добавляем иконки
 
 interface PointData {
   point_type: "P" | "D"
@@ -50,7 +49,7 @@ interface TripData {
 interface TripCorrectionModalProps {
   isOpen: boolean
   onClose: () => void
-  mode?: 'edit' | 'create'
+  mode?: "edit" | "create"
   // Для режима редактирования
   tripId?: number
   phone?: string
@@ -66,7 +65,7 @@ interface TripCorrectionModalProps {
 export function TripCorrectionModal({
   isOpen,
   onClose,
-  mode = 'edit',
+  mode = "edit",
   tripId,
   phone,
   driverName,
@@ -74,96 +73,102 @@ export function TripCorrectionModal({
   initialTrips,
   onCorrectionSent,
   onAssignmentSent,
-  onOpenConflictTrip
+  onOpenConflictTrip,
 }: TripCorrectionModalProps) {
   const [driver, setDriver] = useState<Driver | null>(null)
   const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
-  const [availablePoints, setAvailablePoints] = useState<Array<{
-    point_id: string
-    point_name: string
-    latitude?: string
-    longitude?: string
-  }>>([])
+  const [availablePoints, setAvailablePoints] = useState<
+    Array<{
+      point_id: string
+      point_name: string
+      latitude?: string
+      longitude?: string
+    }>
+  >([])
   const [pointSearchStates, setPointSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
   const [isLoading, setIsLoading] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [isSending, setIsSending] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
-  const [conflictedTrips, setConflictedTrips] = useState<Array<{
-    trip_identifier: string
-    driver_phone: string
-    driver_name: string
-    trip_id: number
-  }>>([])
+  const [conflictedTrips, setConflictedTrips] = useState<
+    Array<{
+      trip_identifier: string
+      driver_phone: string
+      driver_name: string
+      trip_id: number
+    }>
+  >([])
   const [driverSearchOpen, setDriverSearchOpen] = useState(false)
   const [driverSearchValue, setDriverSearchValue] = useState("")
 
   useEffect(() => {
-  console.log("TripCorrectionModal useEffect:", {
-    isOpen,
-    mode,
-    tripId,
-    phone,
-    driverName
-  });
+    console.log("TripCorrectionModal useEffect:", {
+      isOpen,
+      mode,
+      tripId,
+      phone,
+      driverName,
+    })
 
-  if (isOpen) {
-    setConflictedTrips([])
-    setError(null)
-    setSuccess(null)
-    
-    if (mode === 'edit') {
-      console.log("Loading driver details for edit mode", {
-        tripId,
-        phone
-      });
-      
-      if (!phone || !tripId) {
-        console.error("Phone or tripId missing for edit mode");
-        return;
+    if (isOpen) {
+      setConflictedTrips([])
+      setError(null)
+      setSuccess(null)
+
+      if (mode === "edit") {
+        console.log("Loading driver details for edit mode", {
+          tripId,
+          phone,
+        })
+
+        if (!phone || !tripId) {
+          console.error("Phone or tripId missing for edit mode")
+          return
+        }
+
+        setDriver({
+          phone: phone,
+          name: driverName || "Неизвестный",
+          first_name: driverName,
+          full_name: driverName,
+        })
+        loadDriverDetails()
+      } else {
+        console.log("Initializing create mode")
+
+        if (initialDriver) {
+          console.log("Using initial driver:", initialDriver)
+          setDriver(initialDriver)
+        } else {
+          console.log("Creating empty driver")
+          setDriver(createEmptyDriver())
+        }
+
+        if (initialTrips && initialTrips.length > 0) {
+          console.log("Using initial trips:", initialTrips)
+          setCorrections(
+            initialTrips.map((trip) => ({
+              phone: initialDriver?.phone || "",
+              trip_identifier: trip.trip_identifier,
+              original_trip_identifier: trip.trip_identifier,
+              vehicle_number: trip.vehicle_number,
+              planned_loading_time: trip.planned_loading_time,
+              driver_comment: trip.driver_comment || "",
+              message_id: 0,
+              points: trip.points || [createEmptyPoint()],
+            })),
+          )
+        } else {
+          console.log("Creating empty trip")
+          setCorrections([createEmptyTrip()])
+        }
       }
 
-      setDriver({ 
-        phone: phone, 
-        name: driverName || "Неизвестный",
-        first_name: driverName,
-        full_name: driverName
-      });
-      loadDriverDetails();
-    } else {
-      console.log("Initializing create mode");
-      
-      if (initialDriver) {
-        console.log("Using initial driver:", initialDriver);
-        setDriver(initialDriver);
-      } else {
-        console.log("Creating empty driver");
-        setDriver(createEmptyDriver());
-      }
-      
-      if (initialTrips && initialTrips.length > 0) {
-        console.log("Using initial trips:", initialTrips);
-        setCorrections(initialTrips.map(trip => ({
-          phone: initialDriver?.phone || "",
-          trip_identifier: trip.trip_identifier,
-          original_trip_identifier: trip.trip_identifier,
-          vehicle_number: trip.vehicle_number,
-          planned_loading_time: trip.planned_loading_time,
-          driver_comment: trip.driver_comment || "",
-          message_id: 0,
-          points: trip.points || [createEmptyPoint()]
-        })));
-      } else {
-        console.log("Creating empty trip");
-        setCorrections([createEmptyTrip()]);
-      }
+      loadAvailablePoints()
     }
-    
-    loadAvailablePoints();
-  }
-}, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips]);
+  }, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
 
   // Вспомогательные функции
   const createEmptyDriver = (): Driver => ({
@@ -192,139 +197,135 @@ export function TripCorrectionModal({
     points: [createEmptyPoint()],
   })
 
- // Функции перемещения точек (новые)
+  // Функции перемещения точек (новые)
   const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
-    if (pointIndex === 0) return;
-    
-    setCorrections(prev => {
-      const updated = [...prev];
-      const points = [...updated[tripIndex].points];
-      
+    if (pointIndex === 0) return
+
+    setCorrections((prev) => {
+      const updated = [...prev]
+      const points = [...updated[tripIndex].points]
+
       // Меняем точки местами
-      [points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]];
-      
-      // Пересчитываем порядковые номера
-      points.forEach((point, idx) => {
-        point.point_num = idx + 1;
-      });
-      
-      updated[tripIndex].points = points;
-      return updated;
-    });
-  }, []);
+      ;[points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]]
+
+      // НЕ пересчитываем порядковые номера - оставляем как есть
+
+      updated[tripIndex].points = points
+      return updated
+    })
+  }, [])
 
   const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
-    setCorrections(prev => {
-      const updated = [...prev];
-      const points = [...updated[tripIndex].points];
-      
-      if (pointIndex >= points.length - 1) return prev;
-      
-      // Меняем точки местами
-      [points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]];
-      
-      // Пересчитываем порядковые номера
-      points.forEach((point, idx) => {
-        point.point_num = idx + 1;
-      });
-      
-      updated[tripIndex].points = points;
-      return updated;
-    });
-  }, []);
+    setCorrections((prev) => {
+      const updated = [...prev]
+      const points = [...updated[tripIndex].points]
 
+      if (pointIndex >= points.length - 1)
+        return prev
+
+        // Меняем точки местами
+      ;[points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]]
+
+      // НЕ пересчитываем порядковые номера - оставляем как есть
+
+      updated[tripIndex].points = points
+      return updated
+    })
+  }, [])
 
   // Пересчет порядковых номеров
   const recalculatePointOrder = (points: PointData[]) => {
     points.forEach((point, index) => {
-      point.point_num = index + 1;
-    });
-  };
+      point.point_num = index + 1
+    })
+  }
 
   // Обновленная функция удаления точки с пересчетом
   const removePoint = useCallback((tripIndex: number, pointIndex: number) => {
-    setCorrections(prev => {
-      const updated = [...prev];
-      updated[tripIndex].points = updated[tripIndex].points.filter((_, i) => i !== pointIndex);
-      
+    setCorrections((prev) => {
+      const updated = [...prev]
+      updated[tripIndex].points = updated[tripIndex].points.filter((_, i) => i !== pointIndex)
+
       // Пересчитываем порядковые номера
-      recalculatePointOrder(updated[tripIndex].points);
-      
-      return updated;
-    });
-  }, []);
+      recalculatePointOrder(updated[tripIndex].points)
+
+      return updated
+    })
+  }, [])
 
   const loadDriverDetails = async () => {
-  if (!phone || !tripId) {
-    console.error("Cannot load driver details - phone or tripId missing");
-    return;
-  }
-  
-  console.log(`Loading driver details for trip ${tripId}, phone ${phone}`);
-  
-  setIsLoading(true);
-  setError(null);
-  try {
-    const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`);
-    console.log("API response status:", response.status);
-    
-    const data = await response.json();
-    console.log("API response data:", data);
-
-    if (data.success) {
-      console.log("Successfully loaded driver details");
-      const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
-        const key = item.trip_identifier;
-        if (!acc[key]) {
-          acc[key] = {
-            phone: item.phone,
-            trip_identifier: item.trip_identifier,
-            original_trip_identifier: item.trip_identifier,
-            vehicle_number: item.vehicle_number,
-            planned_loading_time: item.planned_loading_time,
-            driver_comment: item.driver_comment,
-            message_id: item.message_id,
-            points: [],
-          }
-        }
-        acc[key].points.push({
-          point_type: item.point_type,
-          point_num: item.point_num,
-          point_id: item.point_id,
-          point_name: item.point_name,
-          latitude: item.latitude,
-          longitude: item.longitude,
-        });
-        return acc;
-      }, {});
-      
-      console.log("Grouped driver data:", grouped);
-      setCorrections(Object.values(grouped));
-    } else {
-      console.error("API error:", data.error);
-      setError(data.error || "Не удалось загрузить данные водителя");
+    if (!phone || !tripId) {
+      console.error("Cannot load driver details - phone or tripId missing")
+      return
     }
-  } catch (error) {
-    console.error("Error loading driver details:", error);
-    setError("Ошибка при загрузке данных водителя");
-  } finally {
-    console.log("Finished loading driver details");
-    setIsLoading(false);
-    setDeletedTrips([]);
+
+    console.log(`Loading driver details for trip ${tripId}, phone ${phone}`)
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`)
+      console.log("API response status:", response.status)
+
+      const data = await response.json()
+      console.log("API response data:", data)
+
+      if (data.success) {
+        console.log("Successfully loaded driver details")
+        const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
+          const key = item.trip_identifier
+          if (!acc[key]) {
+            acc[key] = {
+              phone: item.phone,
+              trip_identifier: item.trip_identifier,
+              original_trip_identifier: item.trip_identifier,
+              vehicle_number: item.vehicle_number,
+              planned_loading_time: item.planned_loading_time,
+              driver_comment: item.driver_comment,
+              message_id: item.message_id,
+              points: [],
+            }
+          }
+          acc[key].points.push({
+            point_type: item.point_type,
+            point_num: item.point_num,
+            point_id: item.point_id,
+            point_name: item.point_name,
+            latitude: item.latitude,
+            longitude: item.longitude,
+          })
+          return acc
+        }, {})
+
+        console.log("Grouped driver data:", grouped)
+        setCorrections(Object.values(grouped))
+      } else {
+        console.error("API error:", data.error)
+        setError(data.error || "Не удалось загрузить данные водителя")
+      }
+    } catch (error) {
+      console.error("Error loading driver details:", error)
+      setError("Ошибка при загрузке данных водителя")
+    } finally {
+      console.log("Finished loading driver details")
+      setIsLoading(false)
+      setDeletedTrips([])
+    }
   }
-}
   const loadAvailablePoints = async () => {
     try {
       const response = await fetch("/api/points")
       const data = await response.json()
 
       if (data.success) {
-        setAvailablePoints(data.points.map((p: any) => ({
-          point_id: p.point_id,
-          point_name: p.point_name,
-          latitude: p.latitude,
-          longitude: p.longitude,
-        })))
+        setAvailablePoints(
+          data.points.map((p: any) => ({
+            point_id: p.point_id,
+            point_name: p.point_name,
+            latitude: p.latitude,
+            longitude: p.longitude,
+          })),
+        )
       }
     } catch (error) {
       console.error("Error loading points:", error)
@@ -333,7 +334,7 @@ export function TripCorrectionModal({
 
   // Работа с рейсами и точками
   const updateTrip = useCallback((tripIndex: number, field: keyof CorrectionData, value: any) => {
-    setCorrections(prev => {
+    setCorrections((prev) => {
       const updated = [...prev]
       updated[tripIndex] = { ...updated[tripIndex], [field]: value }
       return updated
@@ -341,7 +342,7 @@ export function TripCorrectionModal({
   }, [])
 
   const updatePoint = useCallback((tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
-    setCorrections(prev => {
+    setCorrections((prev) => {
       const updated = [...prev]
       updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
       return updated
@@ -349,7 +350,9 @@ export function TripCorrectionModal({
   }, [])
 
   const addNewPoint = (tripIndex: number) => {
-    const maxPointNum = Math.max(...corrections[tripIndex].points.map(p => p.point_num || 0), 0)
+    const currentPoints = corrections[tripIndex].points
+    const maxPointNum = currentPoints.length > 0 ? Math.max(...currentPoints.map((p) => p.point_num || 0)) : 0
+
     const newPoint: PointData = {
       point_type: "P",
       point_num: maxPointNum + 1,
@@ -358,7 +361,7 @@ export function TripCorrectionModal({
       latitude: "",
       longitude: "",
     }
-    setCorrections(prev => {
+    setCorrections((prev) => {
       const updated = [...prev]
       updated[tripIndex].points = [...updated[tripIndex].points, newPoint]
       return updated
@@ -380,9 +383,9 @@ export function TripCorrectionModal({
 
   const removeTrip = (tripIndex: number) => {
     const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
-    setCorrections(prev => prev.filter((_, i) => i !== tripIndex))
+    setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
     if (tripIdentifier) {
-      setDeletedTrips(prev => [...prev, tripIdentifier])
+      setDeletedTrips((prev) => [...prev, tripIdentifier])
     }
   }
 
@@ -394,8 +397,8 @@ export function TripCorrectionModal({
     setConflictedTrips([])
 
     try {
-      const flatCorrections = corrections.flatMap(trip =>
-        trip.points.map(point => ({
+      const flatCorrections = corrections.flatMap((trip) =>
+        trip.points.map((point) => ({
           phone: trip.phone,
           driver_phone: phone || driver?.phone || "",
           trip_identifier: trip.trip_identifier,
@@ -410,44 +413,46 @@ export function TripCorrectionModal({
           point_name: point.point_name,
           latitude: point.latitude,
           longitude: point.longitude,
-        }))
+        })),
       )
 
-      const endpoint = mode === 'edit' 
-        ? `/api/trips/${tripId}/save-corrections` 
-        : "/api/send-messages"
+      const endpoint = mode === "edit" ? `/api/trips/${tripId}/save-corrections` : "/api/send-messages"
 
       const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(mode === 'edit' ? {
-          phone,
-          driver_phone: phone,
-          corrections: flatCorrections,
-          deletedTrips,
-        } : {
-          tripData: corrections.map(trip => ({
-            phone: driver?.phone || "",
-            trip_identifier: trip.trip_identifier,
-            vehicle_number: trip.vehicle_number,
-            planned_loading_time: trip.planned_loading_time,
-            driver_comment: trip.driver_comment,
-            loading_points: trip.points
-              .filter(p => p.point_type === "P")
-              .map(p => ({
-                point_id: p.point_id,
-                point_num: p.point_num,
-                driver_phone: driver?.phone || ""
-              })),
-            unloading_points: trip.points
-              .filter(p => p.point_type === "D")
-              .map(p => ({
-                point_id: p.point_id,
-                point_num: p.point_num,
-                driver_phone: driver?.phone || ""
-              })),
-          }))
-        }),
+        body: JSON.stringify(
+          mode === "edit"
+            ? {
+                phone,
+                driver_phone: phone,
+                corrections: flatCorrections,
+                deletedTrips,
+              }
+            : {
+                tripData: corrections.map((trip) => ({
+                  phone: driver?.phone || "",
+                  trip_identifier: trip.trip_identifier,
+                  vehicle_number: trip.vehicle_number,
+                  planned_loading_time: trip.planned_loading_time,
+                  driver_comment: trip.driver_comment,
+                  loading_points: trip.points
+                    .filter((p) => p.point_type === "P")
+                    .map((p) => ({
+                      point_id: p.point_id,
+                      point_num: p.point_num,
+                      driver_phone: driver?.phone || "",
+                    })),
+                  unloading_points: trip.points
+                    .filter((p) => p.point_type === "D")
+                    .map((p) => ({
+                      point_id: p.point_id,
+                      point_num: p.point_num,
+                      driver_phone: driver?.phone || "",
+                    })),
+                })),
+              },
+        ),
       })
 
       const data = await response.json()
@@ -479,14 +484,14 @@ export function TripCorrectionModal({
 
     try {
       const { success, data, conflict } = await saveCorrections()
-      
+
       if (!success) {
         if (conflict) return
         throw new Error("Не удалось сохранить данные")
       }
 
-      if (mode === 'edit') {
-        const messageIds = [...new Set(corrections.map(c => c.message_id))]
+      if (mode === "edit") {
+        const messageIds = [...new Set(corrections.map((c) => c.message_id))]
         const resendResponse = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -523,29 +528,25 @@ export function TripCorrectionModal({
   }
 
   const openConflictTripModal = (conflict: {
-  trip_id: number
-  driver_phone: string
-  driver_name: string
-  trip_identifier: string
-}) => {
-  console.log("Opening conflict trip modal with:", conflict);
-  
-  // Сохраняем текущее состояние
-  const currentCorrections = [...corrections];
-  const currentDeletedTrips = [...deletedTrips];
-  
-  // Закрываем текущую модалку
-  onClose();
-  
-  // После закрытия открываем модалку редактирования
-  setTimeout(() => {
-    onOpenConflictTrip(
-      conflict.trip_id,
-      conflict.driver_phone,
-      conflict.driver_name
-    );
-  }, 100);
-};
+    trip_id: number
+    driver_phone: string
+    driver_name: string
+    trip_identifier: string
+  }) => {
+    console.log("Opening conflict trip modal with:", conflict)
+
+    // Сохраняем текущее состояние
+    const currentCorrections = [...corrections]
+    const currentDeletedTrips = [...deletedTrips]
+
+    // Закрываем текущую модалку
+    onClose()
+
+    // После закрытия открываем модалку редактирования
+    setTimeout(() => {
+      onOpenConflictTrip(conflict.trip_id, conflict.driver_phone, conflict.driver_name)
+    }, 100)
+  }
 
   // Форматирование данных
   const formatDateTime = (dateString: string) => {
@@ -587,7 +588,7 @@ export function TripCorrectionModal({
   }
 
   const handleSearchStateChange = useCallback((key: string, state: { open?: boolean; search?: string }) => {
-    setPointSearchStates(prev => ({
+    setPointSearchStates((prev) => ({
       ...prev,
       [key]: { ...prev[key], ...state },
     }))
@@ -597,7 +598,7 @@ export function TripCorrectionModal({
   const [driversList, setDriversList] = useState<Driver[]>([])
 
   useEffect(() => {
-    if (mode === 'create' && isOpen) {
+    if (mode === "create" && isOpen) {
       const loadDrivers = async () => {
         try {
           const response = await fetch("/api/users")
@@ -613,7 +614,7 @@ export function TripCorrectionModal({
     }
   }, [mode, isOpen])
 
-  const filteredDrivers = driversList.filter(driver => {
+  const filteredDrivers = driversList.filter((driver) => {
     const search = driverSearchValue.toLowerCase()
     return (
       driver.phone.toLowerCase().includes(search) ||
@@ -640,13 +641,11 @@ export function TripCorrectionModal({
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
-            {mode === 'edit' 
-              ? `Корректировка рейсов для ${driverName}` 
-              : "Создание новых рейсов"}
+            {mode === "edit" ? `Корректировка рейсов для ${driverName}` : "Создание новых рейсов"}
           </DialogTitle>
         </DialogHeader>
 
-        {mode === 'edit' && (
+        {mode === "edit" && (
           <Alert className="border-orange-200 bg-orange-50">
             <AlertTriangle className="h-4 w-4 text-orange-600" />
             <AlertDescription className="text-orange-800">
@@ -667,15 +666,15 @@ export function TripCorrectionModal({
             <AlertDescription>
               <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
               <ul className="list-disc pl-5 mt-2">
-                {conflictedTrips.map(conflict => (
+                {conflictedTrips.map((conflict) => (
                   <li key={conflict.trip_identifier} className="font-mono flex items-center justify-between">
                     <span>
                       {conflict.trip_identifier} (Водитель: {conflict.driver_name})
                     </span>
-                    <Button 
+                    <Button
                       size="sm"
                       variant="outline"
-                      className="ml-2"
+                      className="ml-2 bg-transparent"
                       onClick={() => openConflictTripModal(conflict)}
                     >
                       Просмотреть рейс
@@ -700,7 +699,7 @@ export function TripCorrectionModal({
           </div>
         ) : (
           <div className="space-y-6">
-            {mode === 'create' && (
+            {mode === "create" && (
               <div className="border rounded-lg p-4 bg-blue-50 mb-4">
                 <div className="flex items-center gap-2 mb-3">
                   <User className="h-4 w-4 text-blue-600" />
@@ -713,25 +712,25 @@ export function TripCorrectionModal({
                       variant="outline"
                       role="combobox"
                       aria-expanded={driverSearchOpen}
-                      className="w-full justify-between"
+                      className="w-full justify-between bg-transparent"
                     >
-                      {driver?.phone 
-                        ? `${getDriverDisplayName(driver)} (${formatPhone(driver.phone)})` 
+                      {driver?.phone
+                        ? `${getDriverDisplayName(driver)} (${formatPhone(driver.phone)})`
                         : "Выберите водителя"}
                       <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-full p-0" align="start">
                     <Command>
-                      <CommandInput 
-                        placeholder="Поиск по имени или телефону..." 
+                      <CommandInput
+                        placeholder="Поиск по имени или телефону..."
                         value={driverSearchValue}
                         onValueChange={setDriverSearchValue}
                       />
                       <CommandList>
                         <CommandEmpty>Водители не найдены</CommandEmpty>
                         <CommandGroup className="max-h-[300px] overflow-auto">
-                          {filteredDrivers.map(driver => (
+                          {filteredDrivers.map((driver) => (
                             <CommandItem
                               key={driver.phone}
                               value={`${getDriverDisplayName(driver)} ${driver.phone}`}
@@ -739,11 +738,11 @@ export function TripCorrectionModal({
                                 setDriver(driver)
                                 setDriverSearchOpen(false)
                                 // Обновляем phone во всех рейсах
-                                setCorrections(prev => 
-                                  prev.map(trip => ({
+                                setCorrections((prev) =>
+                                  prev.map((trip) => ({
                                     ...trip,
-                                    phone: driver.phone
-                                  }))
+                                    phone: driver.phone,
+                                  })),
                                 )
                               }}
                             >
@@ -762,7 +761,7 @@ export function TripCorrectionModal({
             )}
 
             <div className="flex justify-end">
-              <Button onClick={addNewTrip} variant="outline" className="text-green-600">
+              <Button onClick={addNewTrip} variant="outline" className="text-green-600 bg-transparent">
                 <Plus className="h-4 w-4 mr-2" />
                 Добавить новый рейс
               </Button>
@@ -787,7 +786,7 @@ export function TripCorrectionModal({
                 formatDateTime={formatDateTime}
                 formatDateTimeForSave={formatDateTimeForSave}
                 isConflicted={conflictedTrips.some(
-                  conflict => conflict.trip_identifier === (trip.original_trip_identifier || trip.trip_identifier)
+                  (conflict) => conflict.trip_identifier === (trip.original_trip_identifier || trip.trip_identifier),
                 )}
               />
             ))}
@@ -796,26 +795,26 @@ export function TripCorrectionModal({
               <Button onClick={onClose} variant="outline">
                 Отмена
               </Button>
-              <Button 
-                onClick={sendData} 
-                disabled={isSending || isSaving || conflictedTrips.length > 0 || (mode === 'create' && !driver?.phone)}
+              <Button
+                onClick={sendData}
+                disabled={isSending || isSaving || conflictedTrips.length > 0 || (mode === "create" && !driver?.phone)}
                 title={
-                  conflictedTrips.length > 0 
-                    ? "Сначала разрешите конфликты рейсов" 
-                    : mode === 'create' && !driver?.phone 
-                      ? "Выберите водителя" 
+                  conflictedTrips.length > 0
+                    ? "Сначала разрешите конфликты рейсов"
+                    : mode === "create" && !driver?.phone
+                      ? "Выберите водителя"
                       : ""
                 }
               >
                 {isSending ? (
                   <>
                     <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    {mode === 'edit' ? "Отправка..." : "Создание..."}
+                    {mode === "edit" ? "Отправка..." : "Создание..."}
                   </>
                 ) : (
                   <>
                     <Send className="h-4 w-4 mr-2" />
-                    {mode === 'edit' ? "Отправить корректировку" : "Создать рейсы"}
+                    {mode === "edit" ? "Отправить корректировку" : "Создать рейсы"}
                   </>
                 )}
               </Button>

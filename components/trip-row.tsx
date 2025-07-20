@@ -1,3 +1,7 @@
+"use client"
+
+import type React from "react"
+
 import { memo, useCallback, useEffect, useRef } from "react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -5,9 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Plus, Trash2, Check, ChevronsUpDown, X , Search } from "lucide-react"
+import { Plus, Trash2, Check, ChevronsUpDown, Search } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ChevronUp, ChevronDown } from "lucide-react"; // Добавляем иконки
+import { ChevronUp, ChevronDown } from "lucide-react" // Добавляем иконки
 
 interface PointData {
   point_type: "P" | "D"
@@ -17,7 +21,6 @@ interface PointData {
   latitude?: string
   longitude?: string
 }
-
 
 interface CorrectionData {
   phone: string
@@ -86,7 +89,12 @@ const PointSelector = memo(
     return (
       <Popover open={searchState.open} onOpenChange={handleOpenChange}>
         <PopoverTrigger asChild>
-          <Button variant="outline" role="combobox" aria-expanded={searchState.open} className="w-full justify-between">
+          <Button
+            variant="outline"
+            role="combobox"
+            aria-expanded={searchState.open}
+            className="w-full justify-between bg-transparent"
+          >
             {selectedPoint ? (
               <div className="flex flex-col items-start">
                 <span className="font-medium">{selectedPoint.point_id}</span>
@@ -149,8 +157,8 @@ export const TripRow = memo(
     handleSearchStateChange,
     updateTrip,
     updatePoint,
-    movePointUp,       // Новый пропс - переместить точку вверх
-    movePointDown,     // Новый пропс - переместить точку вниз
+    movePointUp, // Новый пропс - переместить точку вверх
+    movePointDown, // Новый пропс - переместить точку вниз
     addNewPoint,
     removePoint,
     removeTrip,
@@ -165,8 +173,8 @@ export const TripRow = memo(
     handleSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
     updateTrip: (tripIndex: number, field: keyof CorrectionData, value: any) => void
     updatePoint: (tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => void
-    movePointUp?: (tripIndex: number, pointIndex: number) => void;
-    movePointDown?: (tripIndex: number, pointIndex: number) => void;
+    movePointUp?: (tripIndex: number, pointIndex: number) => void
+    movePointDown?: (tripIndex: number, pointIndex: number) => void
     addNewPoint: (tripIndex: number) => void
     removePoint: (tripIndex: number, pointIndex: number) => void
     removeTrip: (tripIndex: number) => void
@@ -176,52 +184,37 @@ export const TripRow = memo(
   }) => {
     const inputRef = useRef<HTMLInputElement>(null)
 
-    // Функция для сортировки точек
+    // Функция для сортировки точек - теперь только по point_num
     const sortPoints = (points: PointData[]): PointData[] => {
       return [...points].sort((a, b) => {
-        // Сначала сортируем по типу: 'P' перед 'D'
-        if (a.point_type !== b.point_type) {
-          return a.point_type === "P" ? -1 : 1;
-        }
-        // Затем сортируем по point_num по возрастанию
-        return a.point_num - b.point_num;
-      });
-    }; 
+        // Сортируем только по point_num по возрастанию
+        return a.point_num - b.point_num
+      })
+    }
 
-        // Создаем отсортированную версию точек для отображения
-    const sortedPoints = sortPoints(trip.points);
-    
+    // Создаем отсортированную версию точек для отображения
+    // const sortedPoints = sortPoints(trip.points);
 
-  useEffect(() => {
+    useEffect(() => {
       if (inputRef.current && document.activeElement === inputRef.current) {
         inputRef.current.focus()
       }
     }, [trip.trip_identifier])
 
-    const getPointKey = (point: PointData) => 
-      `${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}`
+    const getPointKey = (point: PointData) =>
+      `${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}-${point.point_id}`
 
     return (
       <div key={trip.original_trip_identifier || `trip-${tripIndex}`} className="border rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Рейс {trip.trip_identifier || `Новый ${tripIndex + 1}`}</h3>
           <div className="flex gap-2">
-            <Button
-              onClick={() => addNewPoint(tripIndex)}
-              variant="outline"
-              size="sm"
-              className="text-blue-600"
-            >
+            <Button onClick={() => addNewPoint(tripIndex)} variant="outline" size="sm" className="text-blue-600">
               <Plus className="h-4 w-4 mr-2" />
               Добавить точку
             </Button>
             {correctionsLength > 1 && (
-              <Button
-                onClick={() => removeTrip(tripIndex)}
-                variant="outline"
-                size="sm"
-                className="text-red-600"
-              >
+              <Button onClick={() => removeTrip(tripIndex)} variant="outline" size="sm" className="text-red-600">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Удалить рейс
               </Button>
@@ -275,10 +268,12 @@ export const TripRow = memo(
             </TableRow>
           </TableHeader>
           <TableBody>
-            {sortedPoints.map((point, pointIndex) => {
-              const pointKey = getPointKey(trip.trip_identifier, point.point_type, point.point_num)
+            {trip.points.map((point, pointIndex) => {
+              const pointKey = getPointKey(point)
               return (
-                <TableRow key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}`}>
+                <TableRow
+                  key={`${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}-${pointIndex}`}
+                >
                   <TableCell>
                     <Select
                       value={point.point_type}
@@ -302,7 +297,7 @@ export const TripRow = memo(
                     </Select>
                   </TableCell>
                   <TableCell>
-                     <div className="flex items-center justify-center h-full">
+                    <div className="flex items-center justify-center h-full">
                       <span className="font-medium">{point.point_num}</span>
                     </div>
                   </TableCell>
