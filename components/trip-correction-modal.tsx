@@ -6,10 +6,8 @@ import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { RefreshCw, Send, Plus, AlertTriangle, User, ChevronsUpDown } from "lucide-react"
 import { TripRow } from "./trip-row"
-import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
-// Helper for generating unique IDs
 const uuidv4 = () => {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     var r = (Math.random() * 16) | 0,
@@ -18,7 +16,7 @@ const uuidv4 = () => {
   })
 }
 
-export interface PointData {
+interface PointData {
   point_type: "P" | "D"
   point_num: number
   point_id: string
@@ -27,7 +25,7 @@ export interface PointData {
   longitude?: string
 }
 
-export interface CorrectionData {
+interface CorrectionData {
   phone: string
   trip_identifier: string
   original_trip_identifier?: string
@@ -38,7 +36,7 @@ export interface CorrectionData {
   points: PointData[]
 }
 
-export interface Driver {
+interface Driver {
   phone: string
   name: string
   first_name?: string
@@ -47,18 +45,12 @@ export interface Driver {
   verified?: boolean
 }
 
-export interface TripData {
+interface TripData {
   trip_identifier: string
   vehicle_number: string
   planned_loading_time: string
   driver_comment?: string
   points?: PointData[]
-}
-
-interface DriverTripGroup {
-  id: string
-  driver: Driver | null
-  trips: CorrectionData[]
 }
 
 interface TripCorrectionModalProps {
@@ -90,6 +82,12 @@ export function TripCorrectionModal({
   onAssignmentSent,
   onOpenConflictTrip,
 }: TripCorrectionModalProps) {
+  interface DriverTripGroup {
+    id: string
+    driver: Driver | null
+    trips: CorrectionData[]
+  }
+
   const [driverTripGroups, setDriverTripGroups] = useState<DriverTripGroup[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<
@@ -114,6 +112,7 @@ export function TripCorrectionModal({
       trip_id: number
     }>
   >([])
+  const [driverSearchOpen, setDriverSearchOpen] = useState(false)
   const [driverSearchValue, setDriverSearchValue] = useState("")
 
   const createEmptyDriver = (): Driver => ({
@@ -132,80 +131,15 @@ export function TripCorrectionModal({
     longitude: "",
   })
 
-  const createEmptyTrip = (driverPhone: string): CorrectionData => ({
-    phone: driverPhone,
+  const createEmptyTrip = (phone: string): CorrectionData => ({
+    phone: phone, // Use the provided phone
     trip_identifier: "",
     vehicle_number: "",
-    planned_loading_time: new Date().toISOString().slice(0, 16), // YYYY-MM-DDTHH:MM
+    planned_loading_time: new Date().toISOString(),
     driver_comment: "",
     message_id: 0,
     points: [createEmptyPoint()],
   })
-
-  useEffect(() => {
-    console.log("TripCorrectionModal useEffect:", {
-      isOpen,
-      mode,
-      tripId,
-      phone,
-      driverName,
-    })
-
-    if (isOpen) {
-      setConflictedTrips([])
-      setError(null)
-      setSuccess(null)
-
-      if (mode === "edit") {
-        console.log("Loading driver details for edit mode", {
-          tripId,
-          phone,
-        })
-
-        if (!phone || !tripId) {
-          console.error("Phone or tripId missing for edit mode")
-          return
-        }
-
-        loadDriverDetails()
-      } else {
-        console.log("Initializing create mode")
-        if (initialDriver || (initialTrips && initialTrips.length > 0)) {
-          console.log("Using initial driver/trips for create mode")
-          setDriverTripGroups([
-            {
-              id: uuidv4(),
-              driver: initialDriver || createEmptyDriver(),
-              trips:
-                initialTrips && initialTrips.length > 0
-                  ? initialTrips.map((trip) => ({
-                      phone: initialDriver?.phone || "",
-                      trip_identifier: trip.trip_identifier,
-                      original_trip_identifier: trip.trip_identifier,
-                      vehicle_number: trip.vehicle_number,
-                      planned_loading_time: trip.planned_loading_time,
-                      driver_comment: trip.driver_comment || "",
-                      message_id: 0,
-                      points: trip.points || [createEmptyPoint()],
-                    }))
-                  : [createEmptyTrip(initialDriver?.phone || "")],
-            },
-          ])
-        } else {
-          console.log("Creating empty driver group for create mode")
-          setDriverTripGroups([
-            {
-              id: uuidv4(),
-              driver: createEmptyDriver(),
-              trips: [createEmptyTrip("")],
-            },
-          ])
-        }
-      }
-
-      loadAvailablePoints()
-    }
-  }, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
 
   const loadDriverDetails = useCallback(async () => {
     if (!phone || !tripId) {
@@ -256,10 +190,7 @@ export function TripCorrectionModal({
           {
             id: uuidv4(), // Generate a unique ID for this group
             driver: { phone: phone, name: driverName || "Неизвестный", first_name: driverName, full_name: driverName },
-            trips: Object.values(grouped).map((trip) => ({
-              ...trip,
-              planned_loading_time: formatDateTime(trip.planned_loading_time), // Format for input
-            })),
+            trips: Object.values(grouped),
           },
         ])
       } else {
@@ -296,18 +227,83 @@ export function TripCorrectionModal({
     }
   }
 
+  useEffect(() => {
+    console.log("TripCorrectionModal useEffect:", {
+      isOpen,
+      mode,
+      tripId,
+      phone,
+      driverName,
+    })
+
+    if (isOpen) {
+      setConflictedTrips([])
+      setError(null)
+      setSuccess(null)
+
+      if (mode === "edit") {
+        console.log("Loading driver details for edit mode", {
+          tripId,
+          phone,
+        })
+
+        if (!phone || !tripId) {
+          console.error("Phone or tripId missing for edit mode")
+          return
+        }
+
+        loadDriverDetails() // This function will now set driverTripGroups
+      } else {
+        console.log("Initializing create mode")
+        if (initialDriver || (initialTrips && initialTrips.length > 0)) {
+          console.log("Using initial driver/trips for create mode")
+          setDriverTripGroups([
+            {
+              id: uuidv4(),
+              driver: initialDriver || createEmptyDriver(),
+              trips:
+                initialTrips && initialTrips.length > 0
+                  ? initialTrips.map((trip) => ({
+                      phone: initialDriver?.phone || "",
+                      trip_identifier: trip.trip_identifier,
+                      original_trip_identifier: trip.trip_identifier,
+                      vehicle_number: trip.vehicle_number,
+                      planned_loading_time: trip.planned_loading_time,
+                      driver_comment: trip.driver_comment || "",
+                      message_id: 0,
+                      points: trip.points || [createEmptyPoint()],
+                    }))
+                  : [createEmptyTrip(initialDriver?.phone || "")],
+            },
+          ])
+        } else {
+          console.log("Creating empty driver group for create mode")
+          setDriverTripGroups([
+            {
+              id: uuidv4(),
+              driver: createEmptyDriver(),
+              trips: [createEmptyTrip("")],
+            },
+          ])
+        }
+      }
+
+      loadAvailablePoints()
+    }
+  }, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
+
   // Работа с рейсами и точками
   const updateTrip = useCallback((groupId: string, tripIndex: number, field: keyof CorrectionData, value: any) => {
     setDriverTripGroups((prevGroups) => {
       const updatedGroups = prevGroups.map((group) => {
         if (group.id === groupId) {
-          const updatedTrips = [...group.trips] // Creates a new array
-          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], [field]: value } // Creates a new trip object
-          return { ...group, trips: updatedTrips } // Creates a new group object
+          const updatedTrips = [...group.trips]
+          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], [field]: value }
+          return { ...group, trips: updatedTrips }
         }
         return group
       })
-      return updatedGroups // Returns a new array of groups
+      return updatedGroups
     })
   }, [])
 
@@ -320,17 +316,15 @@ export function TripCorrectionModal({
         const updatedGroups = prevGroups.map((group) => {
           if (group.id === groupId) {
             const updatedTrips = [...group.trips]
-            const updatedPoints = [...updatedTrips[tripIndex].points] // Create new points array
-            updatedPoints[pointIndex] = {
-              ...updatedPoints[pointIndex], // Creates a new point object
+            updatedTrips[tripIndex].points[pointIndex] = {
+              ...updatedTrips[tripIndex].points[pointIndex],
               [field]: value,
             }
-            updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: updatedPoints } // Create new trip object with new points
-            return { ...group, trips: updatedTrips } // Creates a new group object
+            return { ...group, trips: updatedTrips }
           }
           return group
         })
-        return updatedGroups // Returns a new array of groups
+        return updatedGroups
       })
     },
     [],
@@ -359,7 +353,7 @@ export function TripCorrectionModal({
 
           console.log("Adding new point:", newPoint)
 
-          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: [...currentPoints, newPoint] }
+          updatedTrips[tripIndex].points = [...currentPoints, newPoint]
           return { ...group, trips: updatedTrips }
         }
         return group
@@ -445,6 +439,7 @@ export function TripCorrectionModal({
       let endpoint: string
       let body: any
       let identifiersToCheck: string[] = []
+      let currentPhone: string | undefined
 
       if (mode === "edit") {
         const currentGroup = driverTripGroups[0] // In edit mode, there's only one group
@@ -452,6 +447,7 @@ export function TripCorrectionModal({
           setError("Водитель не выбран для корректировки.")
           return { success: false }
         }
+        currentPhone = currentGroup.driver.phone
 
         const flatCorrections = currentGroup.trips.flatMap((trip) =>
           trip.points.map((point) => ({
@@ -460,7 +456,7 @@ export function TripCorrectionModal({
             trip_identifier: trip.trip_identifier,
             original_trip_identifier: trip.original_trip_identifier,
             vehicle_number: trip.vehicle_number,
-            planned_loading_time: formatDateTimeForSave(trip.planned_loading_time), // Format for saving
+            planned_loading_time: trip.planned_loading_time,
             driver_comment: trip.driver_comment,
             message_id: trip.message_id,
             point_type: point.point_type,
@@ -495,7 +491,7 @@ export function TripCorrectionModal({
             phone: group.driver!.phone,
             trip_identifier: trip.trip_identifier,
             vehicle_number: trip.vehicle_number,
-            planned_loading_time: formatDateTimeForSave(trip.planned_loading_time), // Format for saving
+            planned_loading_time: trip.planned_loading_time,
             driver_comment: trip.driver_comment,
             loading_points: trip.points
               .filter((p) => p.point_type === "P")
@@ -530,11 +526,12 @@ export function TripCorrectionModal({
       if (identifiersToCheck.length > 0) {
         console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(", ")}`)
         const conflictCheckResponse = await fetch("/api/trips/check-conflicts", {
+          // New API endpoint for conflict check
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             trip_identifiers: identifiersToCheck,
-            exclude_phone: mode === "edit" ? driverTripGroups[0]?.driver?.phone || phone : undefined, // Exclude current driver in edit mode
+            exclude_phone: mode === "edit" ? currentPhone : undefined, // Exclude current driver in edit mode
           }),
         })
         const conflictCheckData = await conflictCheckResponse.json()
@@ -663,24 +660,25 @@ export function TripCorrectionModal({
     if (!dateString) return ""
 
     try {
-      // If it's already in YYYY-MM-DDTHH:MM format, return as is
-      if (dateString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
-        return dateString
+      if (dateString.includes("T")) {
+        const [datePart, timePart] = dateString.split("T")
+        const timeWithoutSeconds = timePart.split(":").slice(0, 2).join(":")
+        return `${datePart}T${timeWithoutSeconds}`
       }
 
-      const date = new Date(dateString)
-      if (isNaN(date.getTime())) {
-        console.warn("Invalid date string for formatting:", dateString)
-        return dateString // Return original if invalid
+      if (dateString.includes("/") || dateString.includes("-")) {
+        const dateMatch = dateString.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
+        const timeMatch = dateString.match(/(\d{1,2}):(\d{2})/)
+
+        if (dateMatch && timeMatch) {
+          const [, day, month, year] = dateMatch
+          const [, hours, minutes] = timeMatch
+
+          return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hours.padStart(2, "0")}:${minutes}`
+        }
       }
 
-      const year = date.getFullYear()
-      const month = (date.getMonth() + 1).toString().padStart(2, "0")
-      const day = date.getDate().toString().padStart(2, "0")
-      const hours = date.getHours().toString().padStart(2, "0")
-      const minutes = date.getMinutes().toString().padStart(2, "0")
-
-      return `${year}-${month}-${day}T${hours}:${minutes}`
+      return ""
     } catch (error) {
       console.error("Error formatting date:", error, "Input:", dateString)
       return ""
@@ -690,12 +688,7 @@ export function TripCorrectionModal({
   const formatDateTimeForSave = (dateString: string) => {
     if (!dateString) return ""
     try {
-      // Ensure it ends with :00.000 for database compatibility
-      if (dateString.length === 16) {
-        // YYYY-MM-DDTHH:MM
-        return dateString + ":00.000"
-      }
-      return dateString
+      return dateString + ":00.000"
     } catch {
       return dateString
     }
@@ -796,7 +789,7 @@ export function TripCorrectionModal({
             points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
           )
 
-          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: points }
+          updatedTrips[tripIndex].points = points
           return { ...group, trips: updatedTrips }
         }
         return group
@@ -850,7 +843,7 @@ export function TripCorrectionModal({
             points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
           )
 
-          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: points }
+          updatedTrips[tripIndex].points = points
           return { ...group, trips: updatedTrips }
         }
         return group
@@ -890,7 +883,7 @@ export function TripCorrectionModal({
             recalculatedPoints.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
           )
 
-          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: recalculatedPoints }
+          updatedTrips[tripIndex].points = recalculatedPoints
           return { ...group, trips: updatedTrips }
         }
         return group
@@ -909,12 +902,14 @@ export function TripCorrectionModal({
         </DialogHeader>
 
         {mode === "edit" && (
-          <Alert className="border-orange-200 bg-orange-50">
-            <AlertTriangle className="h-4 w-4 text-orange-600" />
-            <AlertDescription className="text-orange-800">
-              <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен.
-            </AlertDescription>
-          </Alert>
+          <div className="border rounded-lg p-4 bg-gray-50 shadow-sm mb-4">
+            <Alert className="border-orange-200 bg-orange-50">
+              <AlertTriangle className="h-4 w-4 text-orange-600" />
+              <AlertDescription className="text-orange-800">
+                <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен.
+              </AlertDescription>
+            </Alert>
+          </div>
         )}
 
         {error && (
@@ -1012,43 +1007,31 @@ export function TripCorrectionModal({
                         </Button>
                       </PopoverTrigger>
                       <PopoverContent className="w-full p-0" align="start">
-                        <Command>
-                          <CommandInput
-                            placeholder="Поиск по имени или телефону..."
-                            value={pointSearchStates[`driver-${group.id}`]?.search || ""}
-                            onValueChange={(value) => handleSearchStateChange(`driver-${group.id}`, { search: value })}
-                          />
-                          <CommandList>
-                            <CommandEmpty>Водители не найдены</CommandEmpty>
-                            <CommandGroup className="max-h-[300px] overflow-auto">
-                              {filteredDrivers.map((driverOption) => (
-                                <CommandItem
-                                  key={driverOption.phone}
-                                  value={`${getDriverDisplayName(driverOption)} ${driverOption.phone}`}
-                                  onSelect={() => {
-                                    setDriverTripGroups((prevGroups) =>
-                                      prevGroups.map((g) =>
-                                        g.id === group.id
-                                          ? {
-                                              ...g,
-                                              driver: driverOption,
-                                              trips: g.trips.map((t) => ({ ...t, phone: driverOption.phone })),
-                                            }
-                                          : g,
-                                      ),
-                                    )
-                                    handleSearchStateChange(`driver-${group.id}`, { open: false })
-                                  }}
-                                >
-                                  <div className="flex flex-col">
-                                    <span>{getDriverDisplayName(driverOption)}</span>
-                                    <span className="text-sm text-gray-500">{formatPhone(driverOption.phone)}</span>
-                                  </div>
-                                </CommandItem>
-                              ))}
-                            </CommandGroup>
-                          </CommandList>
-                        </Command>
+                        <div className="max-h-[300px] overflow-auto">
+                          {filteredDrivers.map((driverOption) => (
+                            <div
+                              key={driverOption.phone}
+                              className="flex flex-col p-2 cursor-pointer hover:bg-blue-100"
+                              onClick={() => {
+                                setDriverTripGroups((prevGroups) =>
+                                  prevGroups.map((g) =>
+                                    g.id === group.id
+                                      ? {
+                                          ...g,
+                                          driver: driverOption,
+                                          trips: g.trips.map((t) => ({ ...t, phone: driverOption.phone })),
+                                        }
+                                      : g,
+                                  ),
+                                )
+                                handleSearchStateChange(`driver-${group.id}`, { open: false })
+                              }}
+                            >
+                              <span>{getDriverDisplayName(driverOption)}</span>
+                              <span className="text-sm text-gray-500">{formatPhone(driverOption.phone)}</span>
+                            </div>
+                          ))}
+                        </div>
                       </PopoverContent>
                     </Popover>
                   </div>
