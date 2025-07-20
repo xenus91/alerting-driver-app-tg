@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from "lucide-react"
-import { useRouter } from "next/navigation" // Импортируем useRouter
+import { TripCorrectionModal } from "./trip-correction-modal" // Импортируем TripCorrectionModal
 
 interface UploadResult {
   success: boolean
@@ -70,7 +70,12 @@ interface UploadResultsProps {
 export default function UploadResults({ result, onSendMessages }: UploadResultsProps) {
   const [isSending, setIsSending] = useState(false)
   const [sendResult, setSendResult] = useState<SendResult | null>(null)
-  const router = useRouter() // Инициализируем useRouter
+
+  // Состояния для TripCorrectionModal
+  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false)
+  const [correctionModalTripId, setCorrectionModalTripId] = useState<number | undefined>(undefined)
+  const [correctionModalPhone, setCorrectionModalPhone] = useState<string | undefined>(undefined)
+  const [correctionModalDriverName, setCorrectionModalDriverName] = useState<string | undefined>(undefined)
 
   const handleSendMessages = async () => {
     if (!result.tripData || result.tripData.length === 0) {
@@ -133,95 +138,129 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
     return phone
   }
 
+  const handleOpenCorrectionModal = (tripId: number, driverPhone: string, driverName: string) => {
+    setCorrectionModalTripId(tripId)
+    setCorrectionModalPhone(driverPhone)
+    setCorrectionModalDriverName(driverName)
+    setIsCorrectionModalOpen(true)
+  }
+
+  const handleCloseCorrectionModal = () => {
+    setIsCorrectionModalOpen(false)
+    setCorrectionModalTripId(undefined)
+    setCorrectionModalPhone(undefined)
+    setCorrectionModalDriverName(undefined)
+  }
+
   // Используем sendResult для отображения ошибок после попытки отправки
   const currentErrorState = sendResult || result
   const isTripAlreadyAssignedError = currentErrorState.error?.trim() === "trip_already_assigned"
 
   if (!currentErrorState.success && currentErrorState.error) {
     return (
-      <Card className="border-red-200">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-red-600">
-            <XCircle className="h-5 w-5" />
-            Ошибка обработки файла
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Alert variant="destructive">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              {isTripAlreadyAssignedError ? (
-                <>
-                  <strong>Ошибка: Рейс уже назначен!</strong>
-                  <p className="mt-2">
-                    Рейс(ы) со следующими идентификаторами уже существуют в системе и назначены водителям:
-                  </p>
-                  {currentErrorState.trip_identifiers && currentErrorState.trip_identifiers.length > 0 && (
-                    <ul className="list-disc list-inside mt-2">
-                      {currentErrorState.trip_identifiers.map((id, index) => (
-                        <li key={index}>
-                          <strong>{id}</strong>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                  {currentErrorState.conflict_data && currentErrorState.conflict_data.length > 0 && (
-                    <div className="mt-4">
-                      <h5 className="font-medium mb-2">Детали конфликта:</h5>
-                      <div className="space-y-2">
-                        {currentErrorState.conflict_data.map((conflict, index) => (
-                          <div key={index} className="p-2 bg-red-50 border border-red-200 rounded text-sm">
-                            <p>
-                              <strong>Идентификатор рейса:</strong> {conflict.trip_identifier}
-                            </p>
-                            <p>
-                              <strong>Водитель:</strong> {conflict.driver_name} ({formatPhone(conflict.driver_phone)})
-                            </p>
-                            {conflict.trip_id && (
-                              <p className="flex items-center justify-between">
-                                <strong>Номер рассылки:</strong> {conflict.trip_id}
-                                <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => router.push(`/trips/${conflict.trip_id}`)}
-                                  className="ml-2"
-                                >
-                                  Просмотреть рейс
-                                </Button>
-                              </p>
-                            )}
-                          </div>
+      <>
+        <Card className="border-red-200">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <XCircle className="h-5 w-5" />
+              Ошибка обработки файла
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <Alert variant="destructive">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertDescription>
+                {isTripAlreadyAssignedError ? (
+                  <>
+                    <strong>Ошибка: Рейс уже назначен!</strong>
+                    <p className="mt-2">
+                      Рейс(ы) со следующими идентификаторами уже существуют в системе и назначены водителям:
+                    </p>
+                    {currentErrorState.trip_identifiers && currentErrorState.trip_identifiers.length > 0 && (
+                      <ul className="list-disc list-inside mt-2">
+                        {currentErrorState.trip_identifiers.map((id, index) => (
+                          <li key={index}>
+                            <strong>{id}</strong>
+                          </li>
                         ))}
+                      </ul>
+                    )}
+                    {currentErrorState.conflict_data && currentErrorState.conflict_data.length > 0 && (
+                      <div className="mt-4">
+                        <h5 className="font-medium mb-2">Детали конфликта:</h5>
+                        <div className="space-y-2">
+                          {currentErrorState.conflict_data.map((conflict, index) => (
+                            <div key={index} className="p-2 bg-red-50 border border-red-200 rounded text-sm">
+                              <p>
+                                <strong>Идентификатор рейса:</strong> {conflict.trip_identifier}
+                              </p>
+                              <p>
+                                <strong>Водитель:</strong> {conflict.driver_name} ({formatPhone(conflict.driver_phone)})
+                              </p>
+                              {conflict.trip_id && (
+                                <p className="flex items-center justify-between">
+                                  <strong>Номер рассылки:</strong> {conflict.trip_id}
+                                  <Button
+                                    variant="outline"
+                                    size="sm"
+                                    onClick={() =>
+                                      handleOpenCorrectionModal(
+                                        conflict.trip_id,
+                                        conflict.driver_phone,
+                                        conflict.driver_name,
+                                      )
+                                    }
+                                    className="ml-2"
+                                  >
+                                    Просмотреть рейс
+                                  </Button>
+                                </p>
+                              )}
+                            </div>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </>
-              ) : (
-                <>
-                  {currentErrorState.error || "Неизвестная ошибка"}
-                  {currentErrorState.details && (
-                    <div className="mt-2">
-                      <strong>Детали:</strong> {currentErrorState.details}
-                    </div>
-                  )}
-                </>
-              )}
-            </AlertDescription>
-          </Alert>
-          {currentErrorState.errors && currentErrorState.errors.length > 0 && (
-            <div className="mt-4">
-              <h4 className="font-medium mb-2">Ошибки валидации:</h4>
-              <ul className="list-disc list-inside space-y-1 text-sm">
-                {currentErrorState.errors.map((error, index) => (
-                  <li key={index} className="text-red-600">
-                    {error}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-        </CardContent>
-      </Card>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    {currentErrorState.error || "Неизвестная ошибка"}
+                    {currentErrorState.details && (
+                      <div className="mt-2">
+                        <strong>Детали:</strong> {currentErrorState.details}
+                      </div>
+                    )}
+                  </>
+                )}
+              </AlertDescription>
+            </Alert>
+            {currentErrorState.errors && currentErrorState.errors.length > 0 && (
+              <div className="mt-4">
+                <h4 className="font-medium mb-2">Ошибки валидации:</h4>
+                <ul className="list-disc list-inside space-y-1 text-sm">
+                  {currentErrorState.errors.map((error, index) => (
+                    <li key={index} className="text-red-600">
+                      {error}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {isCorrectionModalOpen && (
+          <TripCorrectionModal
+            isOpen={isCorrectionModalOpen}
+            onClose={handleCloseCorrectionModal}
+            mode="edit"
+            tripId={correctionModalTripId}
+            phone={correctionModalPhone}
+            driverName={correctionModalDriverName}
+            onOpenConflictTrip={() => {}} // Этот пропс не используется при прямом открытии
+          />
+        )}
+      </>
     )
   }
 
