@@ -97,11 +97,11 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       const messageResult = await sql`
         INSERT INTO trip_messages (
           trip_id, trip_identifier, phone, telegram_id, vehicle_number, 
-          planned_loading_time, driver_comment, status, created_at
+          planned_loading_time, driver_comment, status, created_at, message
         ) VALUES (
           ${tripId}, ${tripData.trip_identifier}, ${phone}, ${user.telegram_id}, 
           ${tripData.vehicle_number}, ${tripData.planned_loading_time}, 
-          ${tripData.driver_comment}, 'pending', NOW()
+          ${tripData.driver_comment}, 'pending', NOW(), 'Корректировка рейса'
         ) RETURNING id
       `
 

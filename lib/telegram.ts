@@ -1,14 +1,19 @@
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
-const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+const BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME!
 
-export interface TelegramMessage {
+interface TelegramUser {
+  id: number
+  is_bot: boolean
+  first_name: string
+  last_name?: string
+  username?: string
+  language_code?: string
+}
+
+interface TelegramMessage {
   message_id: number
-  from: {
-    id: number
-    first_name: string
-    last_name?: string
-    username?: string
-  }
+  from?: TelegramUser
+  date: number
   chat: {
     id: number
     type: string
@@ -21,64 +26,51 @@ export interface TelegramMessage {
   }
 }
 
-export interface TelegramCallbackQuery {
-  id: string
-  from: {
-    id: number
-    first_name: string
-    last_name?: string
-    username?: string
-  }
-  message?: TelegramMessage
-  data?: string
-}
-
-export interface TelegramUpdate {
+interface TelegramUpdate {
   update_id: number
   message?: TelegramMessage
-  callback_query?: TelegramCallbackQuery
-}
-
-export async function sendReplyToMessage(chatId: number, replyToMessageId: number, text: string) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
-
-  try {
-    const payload = {
-      chat_id: chatId,
-      text: text,
-      parse_mode: "HTML",
-      reply_to_message_id: replyToMessageId,
-    }
-
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send reply message")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error sending reply message:", error)
-    await sendMessage(chatId, text)
-    throw error
+  callback_query?: {
+    id: string
+    from: TelegramUser
+    message?: TelegramMessage
+    data?: string
   }
 }
 
-export async function sendMessage(chatId: number, text: string) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+interface TelegramWebhookInfo {
+  url: string
+  has_custom_certificate: boolean
+  pending_update_count: number
+  last_error_date?: number
+  last_error_message?: string
+  max_connections?: number
+  allowed_updates?: string[]
+}
 
+interface Point {
+  point_id: string
+  point_name: string
+  door_open_1?: string
+  door_open_2?: string
+  door_open_3?: string
+  latitude?: string
+  longitude?: string
+  adress?: string
+  point_num?: number
+}
+
+interface Trip {
+  trip_identifier: string
+  vehicle_number: string
+  planned_loading_time: string
+  driver_comment?: string
+  loading_points: Point[]
+  unloading_points: Point[]
+}
+
+export async function sendTelegramMessage(chatId: number, text: string, replyMarkup?: any) {
   try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -87,640 +79,62 @@ export async function sendMessage(chatId: number, text: string) {
         chat_id: chatId,
         text: text,
         parse_mode: "HTML",
+        reply_markup: replyMarkup,
       }),
     })
 
     const data = await response.json()
 
     if (!data.ok) {
-      throw new Error(data.description || "Failed to send message")
+      console.error("Telegram API error:", data)
+      throw new Error(`Telegram API error: ${data.description}`)
     }
 
     return data.result
   } catch (error) {
-    console.error("Error sending Telegram message:", error)
+    console.error("Error sending telegram message:", error)
     throw error
   }
 }
 
-export async function editMessageReplyMarkup(chatId: number, messageId: number, replyMarkup?: any) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
-
-  console.log("=== EDITING MESSAGE REPLY MARKUP ===")
-  console.log("Chat ID:", chatId)
-  console.log("Message ID:", messageId)
-  console.log("New reply markup:", JSON.stringify(replyMarkup, null, 2))
-
-  try {
-    const payload = {
-      chat_id: chatId,
-      message_id: messageId,
-      reply_markup: replyMarkup,
-    }
-
-    const response = await fetch(`${TELEGRAM_API_URL}/editMessageReplyMarkup`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-    })
-
-    const data = await response.json()
-    console.log("editMessageReplyMarkup response:", JSON.stringify(data, null, 2))
-
-    if (!data.ok) {
-      console.error("Failed to edit message reply markup:", data.description)
-      return null
-    }
-
-    console.log("=== MESSAGE REPLY MARKUP EDITED SUCCESSFULLY ===")
-    return data.result
-  } catch (error) {
-    console.error("Error editing message reply markup:", error)
-    return null
-  }
-}
-
-// Функция для построения URL маршрута в Яндекс.Картах
-function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: number | string }>) {
-  const validPoints = points.filter((p) => {
-    const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
-    const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
-    return lat && lng && !isNaN(lat) && !isNaN(lng)
-  })
-
-  // ИЗМЕНЕНО: Проверяем, что ВСЕ точки имеют координаты
-  if (validPoints.length !== points.length || validPoints.length < 2) {
-    console.log(`Cannot build route: ${validPoints.length} valid points out of ${points.length} total points`)
-    return null
-  }
-
-  const coordinates = validPoints
-    .map((p) => {
-      const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
-      const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
-      return `${lat},${lng}`
-    })
-    .join("~")
-
-  const url = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
-  console.log(`Built route URL: ${url}`)
-  return url
-}
-
-export async function sendContactRequest(chatId: number) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: "Пожалуйста, поделитесь своим номером телефона для регистрации в системе рассылки.",
-        reply_markup: {
-          keyboard: [
-            [
-              {
-                text: "📱 Поделиться номером",
-                request_contact: true,
-              },
-            ],
-          ],
-          one_time_keyboard: true,
-          resize_keyboard: true,
-        },
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send contact request")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error sending contact request:", error)
-    throw error
-  }
-}
-
-export async function sendMultipleTripMessageWithButtons(
+export async function editTelegramMessage(
   chatId: number,
-  trips: Array<{
-    trip_identifier: string
-    vehicle_number: string
-    planned_loading_time: string
-    driver_comment: string
-    loading_points: Array<{
-      point_id: string
-      point_name: string
-      door_open_1?: string
-      door_open_2?: string
-      door_open_3?: string
-      latitude?: number | string
-      longitude?: number | string
-      adress?: string
-      point_num?: string
-    }>
-    unloading_points: Array<{
-      point_id: string
-      point_name: string
-      door_open_1?: string
-      door_open_2?: string
-      door_open_3?: string
-      latitude?: number | string
-      longitude?: number | string
-      adress?: string // Добавлено поле адреса
-      point_num?: string
-    }>
-  }>,
-  firstName: string,
   messageId: number,
-  isCorrection = false,
-  isResend = false,
-  previousTelegramMessageId?: number,
-): Promise<{ message_id: number; messageText: string }> {
+  text: string,
+  replyMarkup?: any,
+): Promise<any> {
   try {
-    console.log(`=== SENDING MULTIPLE TRIP MESSAGE ===`)
-    console.log(
-      `Chat ID: ${chatId}, Trips count: ${trips.length}, Is correction: ${isCorrection}, Is resend: ${isResend}`,
-    )
-    console.log(`Previous Telegram Message ID: ${previousTelegramMessageId || "None"}`)
-
-    // Генерируем красивое сообщение для нового сообщения
-    let message = ""
-
-    // Обновляем логику выбора шапки сообщения
-    if (isCorrection) {
-      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`
-      console.log("Added correction header")
-    } else if (isResend) {
-      message += `🔄 <b>ПОВТОРНАЯ ОТПРАВКА ЗАЯВОК</b>\n\n`
-      console.log("Added resend header")
-    }
-
-    message += `🌅 <b>Доброго времени суток!</b>\n\n`
-    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
-
-    // Определяем множественное или единственное число
-    const isMultiple = trips.length > 1
-    message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
-
-    // Сортируем рейсы по времени погрузки
-    const sortedTrips = [...trips].sort((a, b) => {
-      const timeA = new Date(a.planned_loading_time || "").getTime()
-      const timeB = new Date(b.planned_loading_time || "").getTime()
-      return timeA - timeB
-    })
-
-    // Перебираем все рейсы
-    sortedTrips.forEach((trip, tripIndex) => {
-      console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
-
-      message += `<b>Рейс ${tripIndex + 1}:</b>\n`
-      message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
-      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
-
-      // Форматируем дату и время БЕЗ смещения часового пояса
-      const formatDateTime = (dateTimeString: string): string => {
-        try {
-          if (!dateTimeString) return "Не указано"
-
-          const date = new Date(dateTimeString)
-          if (isNaN(date.getTime())) return dateTimeString
-
-          const day = date.getDate()
-          const monthNames = [
-            "января",
-            "февраля",
-            "марта",
-            "апреля",
-            "мая",
-            "июня",
-            "июля",
-            "августа",
-            "сентября",
-            "октября",
-            "ноября",
-            "декабря",
-          ]
-          const month = monthNames[date.getMonth()]
-
-          const hours = date.getHours().toString().padStart(2, "0")
-          const minutes = date.getMinutes().toString().padStart(2, "0")
-          const time = `${hours}:${minutes}`
-
-          return `${day} ${month} ${time}`
-        } catch (error) {
-          console.error("Error formatting date:", error)
-          return dateTimeString
-        }
-      }
-
-      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
-
-      // Объединяем все пункты и сортируем по point_num
-      const allPoints = [
-        ...trip.loading_points.map((point) => ({ ...point, type: "loading" })),
-        ...trip.unloading_points.map((point) => ({ ...point, type: "unloading" })),
-      ].sort((a, b) => {
-        const aNum = Number.parseInt(a.point_num || "0")
-        const bNum = Number.parseInt(b.point_num || "0")
-        return aNum - bNum
-      })
-
-      if (allPoints.length > 0) {
-        message += `📍 <b>Маршрут:</b>\n`
-        allPoints.forEach((point, index) => {
-          const typeIcon = point.type === "loading" ? "📦" : "📤"
-          const typeText = point.type === "loading" ? "Погрузка" : "Разгрузка"
-          const pointNum = point.point_num || index + 1
-
-          message += `${pointNum}) ${typeIcon} <b>${point.point_id} ${point.point_name}</b> (${typeText})\n`
-
-          // Добавляем адрес с гиперссылкой
-          if (point.adress) {
-            if (point.latitude && point.longitude) {
-              const lat = typeof point.latitude === "string" ? point.latitude : String(point.latitude)
-              const lng = typeof point.longitude === "string" ? point.longitude : String(point.longitude)
-              const mapUrl = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`
-              message += `   📍 <a href="${mapUrl}">${point.adress}</a>\n`
-            } else {
-              message += `   📍 ${point.adress}\n`
-            }
-          }
-
-          // Окна приемки (только для разгрузки)
-          if (point.type === "unloading") {
-            const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
-            if (windows.length > 0) {
-              message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
-            }
-          }
-        })
-        message += `\n`
-      }
-
-      // Комментарий
-      if (trip.driver_comment && trip.driver_comment.trim()) {
-        message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
-      }
-
-      // Строим маршрут для этого рейса
-      const routePoints = allPoints
-      console.log(
-        `Route points for trip ${trip.trip_identifier}:`,
-        routePoints.map((p) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
-      )
-
-      const routeUrl = buildRouteUrl(routePoints)
-
-      if (routeUrl) {
-        message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
-        console.log(`Added route URL for trip ${trip.trip_identifier}`)
-      } else {
-        console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
-      }
-
-      // Добавляем разделитель между рейсами (кроме последнего)
-      if (tripIndex < sortedTrips.length - 1) {
-        message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
-      }
-    })
-
-    message += `🙏 <b>Просьба подтвердить рейс${isMultiple ? "ы" : ""}</b>`
-
-    console.log(`Final message length: ${message.length}`)
-    console.log(`Message preview: ${message.substring(0, 200)}...`)
-
-    // Если есть previousTelegramMessageId, редактируем старое сообщение
-    if (previousTelegramMessageId) {
-      try {
-        // Получаем текст старого сообщения (можно использовать заглушку, так как мы зачеркиваем)
-        const strikethroughMessage = `<s>Устаревшее сообщение. Пожалуйста, используйте новое сообщение ниже.</s>`
-
-        const editResponse = await fetch(`${TELEGRAM_API_URL}/editMessageText`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            chat_id: chatId,
-            message_id: previousTelegramMessageId,
-            text: strikethroughMessage,
-            parse_mode: "HTML",
-            reply_markup: {}, // Удаляем кнопки, передавая пустой reply_markup
-          }),
-        })
-
-        const editData = await editResponse.json()
-        if (!editData.ok) {
-          console.error(`Failed to edit message ${previousTelegramMessageId}:`, editData.description)
-          // Продолжаем выполнение, даже если редактирование не удалось
-        } else {
-          console.log(`Successfully edited message ${previousTelegramMessageId} to strikethrough and removed buttons`)
-        }
-      } catch (error) {
-        console.error(`Error editing message ${previousTelegramMessageId}:`, error)
-        // Продолжаем выполнение, даже если редактирование не удалось
-      }
-    }
-
-    // Отправляем новое сообщение
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/editMessageText`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
         chat_id: chatId,
-        text: message,
-        parse_mode: "HTML",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "✅ Подтвердить",
-                callback_data: `confirm_${messageId}`,
-              },
-              {
-                text: "❌ Отклонить",
-                callback_data: `reject_${messageId}`,
-              },
-            ],
-          ],
-        },
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send multiple trip message with buttons")
-    }
-
-    console.log(`Message sent successfully, message_id: ${data.result.message_id}`)
-    return { message_id: data.result.message_id, messageText: message }
-  } catch (error) {
-    console.error("Error sending multiple trip message with buttons:", error)
-    throw error
-  }
-}
-
-export async function sendTripMessageWithButtons(
-  chatId: number,
-  tripData: {
-    trip_identifier: string
-    vehicle_number: string
-    planned_loading_time: string
-    driver_comment: string
-  },
-  loadingPoints: Array<{
-    point_name: string
-    door_open_1?: string
-    door_open_2?: string
-    door_open_3?: string
-    latitude?: number | string
-    longitude?: number | string
-  }>,
-  unloadingPoints: Array<{
-    point_name: string
-    door_open_1?: string
-    door_open_2?: string
-    door_open_3?: string
-    latitude?: number | string
-    longitude?: number | string
-  }>,
-  firstName: string,
-  messageId: number,
-) {
-  try {
-    // Генерируем красивое сообщение
-    let message = `🌅 <b>Доброго времени суток!</b>\n\n`
-    message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
-    message += `🚛 На Вас запланирован рейс <b>${tripData.trip_identifier}</b>\n`
-    message += `🚗 Транспорт: <b>${tripData.vehicle_number}</b>\n`
-    message += `⏰ Плановое время погрузки: <b>${tripData.planned_loading_time}</b>\n\n`
-
-    // Пункты погрузки
-    if (loadingPoints.length > 0) {
-      message += `📦 <b>Погрузка:</b>\n`
-      loadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_name}</b>\n`
-      })
-      message += `\n`
-    }
-
-    // Пункты разгрузки
-    if (unloadingPoints.length > 0) {
-      message += `📤 <b>Разгрузка:</b>\n`
-      unloadingPoints.forEach((point, index) => {
-        message += `${index + 1}) <b>${point.point_name}</b>\n`
-
-        // Окна приемки для пункта разгрузки
-        const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
-        if (windows.length > 0) {
-          message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
-        }
-        message += `\n`
-      })
-    }
-
-    // Комментарий
-    if (tripData.driver_comment && tripData.driver_comment.trim()) {
-      message += `💬 <b>Комментарий по рейсу:</b>\n<i>${tripData.driver_comment}</i>\n\n`
-    }
-
-    // Строим маршрут: сначала все точки погрузки, потом все точки разгрузки
-    const routePoints = [...loadingPoints, ...unloadingPoints]
-    const routeUrl = buildRouteUrl(routePoints)
-
-    if (routeUrl) {
-      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
-    }
-
-    message += `🙏 <b>Просьба подтвердить рейс</b>`
-
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: message,
-        parse_mode: "HTML",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "✅ Подтвердить",
-                callback_data: `confirm_${messageId}`,
-              },
-              {
-                text: "❌ Отклонить",
-                callback_data: `reject_${messageId}`,
-              },
-            ],
-          ],
-        },
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send trip message with buttons")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error sending trip message with buttons:", error)
-    throw error
-  }
-}
-
-export async function sendMessageWithButtons(chatId: number, text: string, messageId: number) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
+        message_id: messageId,
         text: text,
         parse_mode: "HTML",
-        reply_markup: {
-          inline_keyboard: [
-            [
-              {
-                text: "✅ Подтвердить",
-                callback_data: `confirm_${messageId}`,
-              },
-              {
-                text: "❌ Отклонить",
-                callback_data: `reject_${messageId}`,
-              },
-            ],
-          ],
-        },
+        reply_markup: replyMarkup,
       }),
     })
 
     const data = await response.json()
 
     if (!data.ok) {
-      throw new Error(data.description || "Failed to send message with buttons")
+      console.error("Telegram API error:", data)
+      throw new Error(`Telegram API error: ${data.description}`)
     }
 
     return data.result
   } catch (error) {
-    console.error("Error sending Telegram message with buttons:", error)
+    console.error("Error editing telegram message:", error)
     throw error
   }
 }
 
-export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
+export async function deleteTelegramMessage(chatId: number, messageId: number): Promise<boolean> {
   try {
-    const response = await fetch(`${TELEGRAM_API_URL}/answerCallbackQuery`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        callback_query_id: callbackQueryId,
-        text: text,
-        show_alert: false,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to answer callback query")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error answering callback query:", error)
-    throw error
-  }
-}
-
-export async function sendTelegramMessage(chatId: number, text: string, messageId?: number) {
-  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
-  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
-
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        chat_id: chatId,
-        text: text,
-        parse_mode: "HTML",
-        reply_markup: messageId
-          ? {
-              inline_keyboard: [
-                [
-                  {
-                    text: "✅ Подтвердить",
-                    callback_data: `confirm_${messageId}`,
-                  },
-                  {
-                    text: "❌ Отклонить",
-                    callback_data: `reject_${messageId}`,
-                  },
-                ],
-              ],
-            }
-          : undefined,
-      }),
-    })
-
-    const data = await response.json()
-
-    if (!data.ok) {
-      throw new Error(data.description || "Failed to send message")
-    }
-
-    return data.result
-  } catch (error) {
-    console.error("Error sending Telegram message:", error)
-    throw error
-  }
-}
-
-export async function setWebhook(webhookUrl: string) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/setWebhook`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        url: webhookUrl,
-      }),
-    })
-
-    const data = await response.json()
-    return data
-  } catch (error) {
-    console.error("Error setting webhook:", error)
-    throw error
-  }
-}
-
-export async function deleteMessage(chatId: number, messageId: number) {
-  try {
-    const response = await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -732,16 +146,321 @@ export async function deleteMessage(chatId: number, messageId: number) {
     })
 
     const data = await response.json()
-
-    if (!data.ok) {
-      console.warn(`Failed to delete message ${messageId} in chat ${chatId}:`, data.description)
-      return false
-    }
-
-    console.log(`Successfully deleted message ${messageId} in chat ${chatId}`)
-    return true
+    return data.ok
   } catch (error) {
-    console.error("Error deleting Telegram message:", error)
+    console.error("Error deleting telegram message:", error)
     return false
   }
 }
+
+export async function answerCallbackQuery(callbackQueryId: string, text?: string, showAlert?: boolean) {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        callback_query_id: callbackQueryId,
+        text: text,
+        show_alert: showAlert,
+      }),
+    })
+
+    const data = await response.json()
+    return data.ok
+  } catch (error) {
+    console.error("Error answering callback query:", error)
+    return false
+  }
+}
+
+export async function setTelegramWebhook(url: string) {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/setWebhook`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        url: url,
+        allowed_updates: ["message", "callback_query"],
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(`Failed to set webhook: ${data.description}`)
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error setting webhook:", error)
+    throw error
+  }
+}
+
+export async function getTelegramWebhookInfo(): Promise<TelegramWebhookInfo> {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getWebhookInfo`)
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(`Failed to get webhook info: ${data.description}`)
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error getting webhook info:", error)
+    throw error
+  }
+}
+
+export async function deleteTelegramWebhook() {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/deleteWebhook`, {
+      method: "POST",
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(`Failed to delete webhook: ${data.description}`)
+    }
+
+    return data
+  } catch (error) {
+    console.error("Error deleting webhook:", error)
+    throw error
+  }
+}
+
+export async function getBotInfo() {
+  try {
+    const response = await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/getMe`)
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(`Failed to get bot info: ${data.description}`)
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error getting bot info:", error)
+    throw error
+  }
+}
+
+export async function testBotConnection() {
+  try {
+    const botInfo = await getBotInfo()
+    const webhookInfo = await getTelegramWebhookInfo()
+
+    return {
+      bot: botInfo,
+      webhook: webhookInfo,
+      status: "connected",
+    }
+  } catch (error) {
+    return {
+      status: "error",
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
+  }
+}
+
+function formatDateTime(dateString: string): string {
+  const date = new Date(dateString)
+  const day = date.getDate().toString().padStart(2, "0")
+  const month = (date.getMonth() + 1).toString().padStart(2, "0")
+  const hours = date.getHours().toString().padStart(2, "0")
+  const minutes = date.getMinutes().toString().padStart(2, "0")
+
+  const monthNames = [
+    "января",
+    "февраля",
+    "марта",
+    "апреля",
+    "мая",
+    "июня",
+    "июля",
+    "августа",
+    "сентября",
+    "октября",
+    "ноября",
+    "декабря",
+  ]
+
+  return `${day} ${monthNames[date.getMonth()]} ${hours}:${minutes}`
+}
+
+function buildRouteUrl(points: Point[]): string | null {
+  // Проверяем, что все точки имеют координаты
+  const validPoints = points.filter((point) => point.latitude && point.longitude)
+
+  if (validPoints.length !== points.length || validPoints.length === 0) {
+    // Если не все точки имеют координаты, не строим маршрут
+    return null
+  }
+
+  const coordinates = validPoints.map((point) => `${point.longitude},${point.latitude}`).join("~")
+
+  return `https://yandex.ru/maps/?rtext=${coordinates}&rtt=auto`
+}
+
+export async function sendMultipleTripMessageWithButtons(
+  telegramId: number,
+  trips: Trip[],
+  driverName: string,
+  messageId: number,
+  isCorrection = false,
+  isResend = false,
+  previousTelegramMessageId?: number | null,
+): Promise<{ message_id: number; messageText: string }> {
+  try {
+    console.log(`=== SENDING MESSAGE ===`)
+    console.log(`Telegram ID: ${telegramId}`)
+    console.log(`Driver Name: ${driverName}`)
+    console.log(`Message ID: ${messageId}`)
+    console.log(`Is Correction: ${isCorrection}`)
+    console.log(`Is Resend: ${isResend}`)
+    console.log(`Previous Message ID: ${previousTelegramMessageId}`)
+    console.log(`Trips count: ${trips.length}`)
+
+    // Удаляем предыдущее сообщение если есть
+    if (previousTelegramMessageId) {
+      console.log(`Deleting previous message: ${previousTelegramMessageId}`)
+      await deleteTelegramMessage(telegramId, previousTelegramMessageId)
+    }
+
+    let message = ""
+
+    // Заголовок в зависимости от типа отправки
+    if (isCorrection) {
+      message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`
+    } else if (isResend) {
+      message += `🔄 <b>ПОВТОРНАЯ ОТПРАВКА ЗАЯВОК</b>\n\n`
+    }
+
+    message += `👋 Привет, <b>${driverName}</b>!\n\n`
+
+    if (trips.length === 1) {
+      message += `📋 У вас <b>1 новый рейс</b>:\n\n`
+    } else {
+      message += `📋 У вас <b>${trips.length} новых рейса</b>:\n\n`
+    }
+
+    // Сортируем рейсы по времени погрузки
+    const sortedTrips = trips.sort(
+      (a, b) => new Date(a.planned_loading_time).getTime() - new Date(b.planned_loading_time).getTime(),
+    )
+
+    // Перебираем все рейсы
+    sortedTrips.forEach((trip, tripIndex) => {
+      message += `<b>Рейс ${tripIndex + 1}:</b>\n`
+      message += `🚛 Транспортировка: <b>${trip.trip_identifier}</b>\n`
+      message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
+      message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n`
+
+      if (trip.driver_comment) {
+        message += `💬 Комментарий: <i>${trip.driver_comment}</i>\n`
+      }
+
+      message += `\n📍 <b>Маршрут:</b>\n`
+
+      // Объединяем все точки и сортируем по point_num
+      const allPoints: (Point & { point_type: string })[] = [
+        ...trip.loading_points.map((p) => ({ ...p, point_type: "P" })),
+        ...trip.unloading_points.map((p) => ({ ...p, point_type: "D" })),
+      ]
+
+      // Сортируем по point_num
+      allPoints.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+
+      // Выводим точки в едином списке
+      allPoints.forEach((point, index) => {
+        const pointType = point.point_type === "P" ? "Погрузка" : "Разгрузка"
+        const pointIcon = point.point_type === "P" ? "📦" : "📤"
+
+        message += `${index + 1}) ${pointIcon} <b>${point.point_id} ${point.point_name}</b> (${pointType})\n`
+
+        if (point.adress) {
+          message += `    📍 ${point.adress}\n`
+        }
+
+        // Окна приемки только для разгрузки
+        if (point.point_type === "D") {
+          const doorTimes = []
+          if (point.door_open_1) doorTimes.push(point.door_open_1)
+          if (point.door_open_2) doorTimes.push(point.door_open_2)
+          if (point.door_open_3) doorTimes.push(point.door_open_3)
+
+          if (doorTimes.length > 0) {
+            message += `    🕐 Окна приемки: ${doorTimes.join(" | ")}\n`
+          }
+        }
+      })
+
+      // Строим маршрут только если все точки имеют координаты
+      const routeUrl = buildRouteUrl(allPoints)
+      if (routeUrl) {
+        message += `\n🗺️ <a href="${routeUrl}">Построить маршрут</a>\n`
+      }
+
+      if (tripIndex < sortedTrips.length - 1) {
+        message += `\n${"─".repeat(30)}\n\n`
+      }
+    })
+
+    message += `\n\n❓ <b>Подтверждаете выполнение рейсов?</b>`
+
+    // Создаем кнопки
+    const keyboard = {
+      inline_keyboard: [
+        [
+          {
+            text: "✅ Подтверждаю",
+            callback_data: `confirm_${messageId}`,
+          },
+          {
+            text: "❌ Отклоняю",
+            callback_data: `reject_${messageId}`,
+          },
+        ],
+        [
+          {
+            text: "🚫 Не могу выполнить",
+            callback_data: `decline_${messageId}`,
+          },
+        ],
+      ],
+    }
+
+    console.log(`Sending message to ${telegramId}`)
+    console.log(`Message length: ${message.length}`)
+
+    const result = await sendTelegramMessage(telegramId, message, keyboard)
+
+    console.log(`Message sent successfully, message_id: ${result.message_id}`)
+
+    return {
+      message_id: result.message_id,
+      messageText: message,
+    }
+  } catch (error) {
+    console.error("Error sending multiple trip message:", error)
+    throw error
+  }
+}
+
+export async function sendTripMessageWithButtons(
+  telegramId: number,
+  trip: Trip,
+  driverName: string,
+  messageId: number,
+): Promise<{ message_id: number; messageText: string }> {
+  return sendMultipleTripMessageWithButtons(telegramId, [trip], driverName, messageId)
+}
+
+export type { TelegramUpdate, TelegramMessage, TelegramUser }
