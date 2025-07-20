@@ -223,6 +223,7 @@ export async function sendMultipleTripMessageWithButtons(
       latitude?: number | string
       longitude?: number | string
       adress?: string
+      point_num?: string
     }>
     unloading_points: Array<{
       point_id: string
@@ -233,6 +234,7 @@ export async function sendMultipleTripMessageWithButtons(
       latitude?: number | string
       longitude?: number | string
       adress?: string // Добавлено поле адреса
+      point_num?: string
     }>
   }>,
   firstName: string,
@@ -323,19 +325,19 @@ export async function sendMultipleTripMessageWithButtons(
 
       // Объединяем все пункты и сортируем по point_num
       const allPoints = [
-        ...trip.loading_points.map((p) => ({ ...p, type: "P" })),
-        ...trip.unloading_points.map((p) => ({ ...p, type: "D" })),
+        ...trip.loading_points.map((point) => ({ ...point, type: "loading" })),
+        ...trip.unloading_points.map((point) => ({ ...point, type: "unloading" })),
       ].sort((a, b) => {
-        const numA = Number.parseInt(a.point_id) || 0
-        const numB = Number.parseInt(b.point_id) || 0
-        return numA - numB
+        const aNum = Number.parseInt(a.point_num || "0")
+        const bNum = Number.parseInt(b.point_num || "0")
+        return aNum - bNum
       })
 
       if (allPoints.length > 0) {
-        message += `📍 <b>Пункты маршрута:</b>\n`
+        message += `📍 <b>Маршрут:</b>\n`
         allPoints.forEach((point, index) => {
-          const typeIcon = point.type === "P" ? "📦" : "📤"
-          const typeText = point.type === "P" ? "Погрузка" : "Разгрузка"
+          const typeIcon = point.type === "loading" ? "📦" : "📤"
+          const typeText = point.type === "loading" ? "Погрузка" : "Разгрузка"
 
           message += `${index + 1}) ${typeIcon} <b>${point.point_id} ${point.point_name}</b> (${typeText})\n`
 
@@ -352,7 +354,7 @@ export async function sendMultipleTripMessageWithButtons(
           }
 
           // Окна приемки (только для разгрузки)
-          if (point.type === "D") {
+          if (point.type === "unloading") {
             const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
             if (windows.length > 0) {
               message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
@@ -362,13 +364,8 @@ export async function sendMultipleTripMessageWithButtons(
         message += `\n`
       }
 
-      // Комментарий
-      if (trip.driver_comment && trip.driver_comment.trim()) {
-        message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
-      }
-
       // Строим маршрут для этого рейса
-      const routePoints = [...trip.loading_points, ...trip.unloading_points]
+      const routePoints = allPoints
       console.log(
         `Route points for trip ${trip.trip_identifier}:`,
         routePoints.map((p) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
