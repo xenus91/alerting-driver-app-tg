@@ -116,6 +116,8 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
   }
 
   if (!result.success) {
+    const isTripAlreadyAssignedError = result.error?.trim() === "trip_already_assigned"
+
     return (
       <Card className="border-red-200">
         <CardHeader>
@@ -128,7 +130,7 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
           <Alert variant="destructive">
             <AlertTriangle className="h-4 w-4" />
             <AlertDescription>
-              {result.error === "trip_already_assigned" ? (
+              {isTripAlreadyAssignedError ? (
                 <>
                   <strong>Ошибка: Рейс уже назначен!</strong>
                   <p className="mt-2">
