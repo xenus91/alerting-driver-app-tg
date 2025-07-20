@@ -197,7 +197,15 @@ export function TripCorrectionModal({
     points: [createEmptyPoint()],
   })
 
-  // Функции перемещения точек (новые)
+  // Функция для пересчета point_num для всех точек в рейсе
+  const recalculatePointNumbers = (points: PointData[]): PointData[] => {
+    return points.map((point, index) => ({
+      ...point,
+      point_num: index + 1,
+    }))
+  }
+
+  // Функции перемещения точек с пересчетом point_num
   const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
     if (pointIndex === 0) return
 
@@ -208,9 +216,9 @@ export function TripCorrectionModal({
       // Меняем точки местами
       ;[points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]]
 
-      // НЕ пересчитываем порядковые номера - оставляем как есть
+      // Пересчитываем point_num для всех точек
+      updated[tripIndex].points = recalculatePointNumbers(points)
 
-      updated[tripIndex].points = points
       return updated
     })
   }, [])
@@ -226,28 +234,21 @@ export function TripCorrectionModal({
         // Меняем точки местами
       ;[points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]]
 
-      // НЕ пересчитываем порядковые номера - оставляем как есть
+      // Пересчитываем point_num для всех точек
+      updated[tripIndex].points = recalculatePointNumbers(points)
 
-      updated[tripIndex].points = points
       return updated
     })
   }, [])
-
-  // Пересчет порядковых номеров
-  const recalculatePointOrder = (points: PointData[]) => {
-    points.forEach((point, index) => {
-      point.point_num = index + 1
-    })
-  }
 
   // Обновленная функция удаления точки с пересчетом
   const removePoint = useCallback((tripIndex: number, pointIndex: number) => {
     setCorrections((prev) => {
       const updated = [...prev]
-      updated[tripIndex].points = updated[tripIndex].points.filter((_, i) => i !== pointIndex)
+      const filteredPoints = updated[tripIndex].points.filter((_, i) => i !== pointIndex)
 
-      // Пересчитываем порядковые номера
-      recalculatePointOrder(updated[tripIndex].points)
+      // Пересчитываем point_num для оставшихся точек
+      updated[tripIndex].points = recalculatePointNumbers(filteredPoints)
 
       return updated
     })
@@ -312,6 +313,7 @@ export function TripCorrectionModal({
       setDeletedTrips([])
     }
   }
+
   const loadAvailablePoints = async () => {
     try {
       const response = await fetch("/api/points")
@@ -785,9 +787,6 @@ export function TripCorrectionModal({
                 correctionsLength={corrections.length}
                 formatDateTime={formatDateTime}
                 formatDateTimeForSave={formatDateTimeForSave}
-                isConflicted={conflictedTrips.some(
-                  (conflict) => conflict.trip_identifier === (trip.original_trip_identifier || trip.trip_identifier),
-                )}
               />
             ))}
 
