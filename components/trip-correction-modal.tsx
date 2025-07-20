@@ -314,11 +314,11 @@ export function TripCorrectionModal({
             if (tIdx === tripIndex) {
               const newPoint: Point = {
                 point_id: "",
-                point_name: "",
+                point_name: null,
                 latitude: null,
                 longitude: null,
-                address: "",
-                comment: "",
+                address: null,
+                comment: null,
                 created_at: new Date().toISOString(),
                 updated_at: new Date().toISOString(),
               }
@@ -378,10 +378,11 @@ export function TripCorrectionModal({
       }
 
       group.trips.forEach((trip) => {
-        if (!trip.trip_id || !trip.trip_identifier || !trip.car_number || !trip.carpark) {
+        // Basic validation for required fields
+        if (!trip.trip_identifier || !trip.car_number || !trip.carpark) {
           toast({
             title: "Ошибка валидации",
-            description: `Заполните все обязательные поля (ID Рейса, Идентификатор, Номер ТС, Автопарк) для рейса ${trip.trip_id || "нового рейса"} водителя ${group.driver?.full_name}.`,
+            description: `Заполните все обязательные поля (Идентификатор, Номер ТС, Автопарк) для рейса ${trip.trip_identifier || "нового рейса"} водителя ${group.driver?.full_name}.`,
             variant: "destructive",
           })
           hasError = true
@@ -395,7 +396,7 @@ export function TripCorrectionModal({
 
     try {
       const endpoint = mode === "edit" ? `/api/trips/${initialTrip?.trip_id}/save-corrections` : "/api/send-messages"
-      const method = mode === "edit" ? "POST" : "POST" // Both are POST for now
+      const method = "POST" // Both are POST for now
 
       const payload = mode === "edit" ? tripsToSave[0] : { trips: tripsToSave }
 

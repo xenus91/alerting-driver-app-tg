@@ -38,6 +38,10 @@ export function TripTable({ trips, onEdit, onDelete }: TripTableProps) {
   })
 
   const filteredTrips = useMemo(() => {
+    if (!Array.isArray(trips)) {
+      console.error("Trips data is not an array:", trips)
+      return []
+    }
     return trips.filter((trip) =>
       Object.values(trip).some((value) => String(value).toLowerCase().includes(searchTerm.toLowerCase())),
     )

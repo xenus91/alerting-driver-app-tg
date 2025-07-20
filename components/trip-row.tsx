@@ -52,17 +52,17 @@ export function TripRow({
 }: TripRowProps) {
   const [pointSearchStates, setPointSearchStates] = useState<Record<string, { search: string; open: boolean }>>({})
 
-  const handlePointSearchChange = useCallback((pointId: string, search: string) => {
+  const handlePointSearchChange = useCallback((pointKey: string, search: string) => {
     setPointSearchStates((prev) => ({
       ...prev,
-      [pointId]: { ...prev[pointId], search },
+      [pointKey]: { ...prev[pointKey], search },
     }))
   }, [])
 
-  const handlePointPopoverOpenChange = useCallback((pointId: string, open: boolean) => {
+  const handlePointPopoverOpenChange = useCallback((pointKey: string, open: boolean) => {
     setPointSearchStates((prev) => ({
       ...prev,
-      [pointId]: { ...prev[pointId], open },
+      [pointKey]: { ...prev[pointKey], open },
     }))
   }, [])
 
@@ -75,14 +75,14 @@ export function TripRow({
       updatePoint(pointIndex, "longitude", selectedPoint.longitude)
       setPointSearchStates((prev) => ({
         ...prev,
-        [selectedPoint.point_id]: {
-          ...prev[selectedPoint.point_id],
+        [`${tripIndex}-${pointIndex}`]: {
+          ...prev[`${tripIndex}-${pointIndex}`],
           open: false,
           search: selectedPoint.point_name || "",
         },
       }))
     },
-    [updatePoint],
+    [updatePoint, tripIndex],
   )
 
   return (
