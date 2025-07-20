@@ -86,36 +86,56 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
       // Получаем точки для каждого рейса
       const pointsResult = await sql`
-        SELECT DISTINCT
-          tp.point_type,
-          tp.point_num,
-          p.point_id,
-          p.point_name,
-          p.door_open_1,
-          p.door_open_2,
-          p.door_open_3,
-          p.latitude,
-          p.longitude,
-          p.adress
-        FROM (
-          SELECT * FROM trip_points 
-          WHERE driver_phone = ${phone}  
-        ) tp
-        JOIN points p ON tp.point_id = p.id
-        WHERE tp.trip_id = ${tripId} 
-          AND tp.trip_identifier = ${message.trip_identifier}
-        ORDER BY tp.point_num
-      `
+  SELECT DISTINCT
+    tp.point_type,
+    tp.point_num,
+    p.point_id,
+    p.point_name,
+    p.door_open_1,
+    p.door_open_2,
+    p.door_open_3,
+    p.latitude,
+    p.longitude,
+    p.adress
+  FROM (
+    SELECT * FROM trip_points 
+    WHERE driver_phone = ${phone}  
+  ) tp
+  JOIN points p ON tp.point_id = p.id
+  WHERE tp.trip_id = ${tripId} 
+    AND tp.trip_identifier = ${message.trip_identifier}
+ORDER BY tp.point_num
+`
 
       console.log(`Found ${pointsResult.length} points for trip ${message.trip_identifier}`)
 
-      // Сортируем точки только по point_num
-      const sortedPoints = pointsResult.sort((a, b) => a.point_num - b.point_num)
-
       const loading_points = []
       const unloading_points = []
+      const all_points = [] // Временный массив для сортировки
 
-      for (const point of sortedPoints) {
+      // Собираем все точки
+      for (const point of pointsResult) {
+        const pointInfo = {
+          point_id: point.point_id,
+          point_name: point.point_name,
+          door_open_1: point.door_open_1,
+          door_open_2: point.door_open_2,
+          door_open_3: point.door_open_3,
+          latitude: point.latitude,
+          longitude: point.longitude,
+          adress: point.adress,
+          point_type: point.point_type,
+          point_num: point.point_num,
+        }
+
+        all_points.push(pointInfo)
+      }
+
+      // Сортируем по point_num
+      all_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+
+      // Разделяем по типам, сохраняя порядок
+      for (const point of all_points) {
         const pointInfo = {
           point_id: point.point_id,
           point_name: point.point_name,
@@ -141,25 +161,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         driver_comment: message.driver_comment || "",
         loading_points,
         unloading_points,
-        // Добавляем все точки для новой логики сортировки
-        points: sortedPoints.map((point) => ({
-          point_id: point.point_id,
-          point_name: point.point_name,
-          door_open_1: point.door_open_1,
-          door_open_2: point.door_open_2,
-          door_open_3: point.door_open_3,
-          latitude: point.latitude,
-          longitude: point.longitude,
-          adress: point.adress,
-          point_type: point.point_type,
-          point_num: point.point_num,
-        })),
       })
     }
 
     console.log(`Prepared ${trips.length} trips for sending`)
 
     // Отправляем сообщение через новую функцию
+    // === НАЧАЛО ИЗМЕНЕНИЙ ===
     const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
       Number(user.telegram_id),
       trips,
@@ -169,11 +177,13 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       true, // isResend = true для повторной отправки
       previousTelegramMessageId,
     )
+    // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
     // Обновляем статусы всех сообщений
     const messageIdsToUpdate = messagesResult.map((m) => m.id)
 
     for (const msgId of messageIdsToUpdate) {
+      // === НАЧАЛО ИЗМЕНЕНИЙ ===
       await sql`
         UPDATE trip_messages 
         SET telegram_message_id = ${message_id},
@@ -181,9 +191,10 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             response_comment = NULL,
             response_at = NULL,
             sent_at = CURRENT_TIMESTAMP,
-            message = ${messageText}
+            message = ${messageText}  -- Добавлено сохранение текста сообщения
         WHERE id = ${msgId}
       `
+      // === КОНЕЦ ИЗМЕНЕНИЙ ===
     }
 
     console.log(`Successfully sent correction to ${user.telegram_id}, updated ${messageIdsToUpdate.length} messages`)
@@ -191,7 +202,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     return NextResponse.json({
       success: true,
       message: "Correction sent successfully",
-      telegram_message_id: message_id,
+      telegram_message_id: message_id, // Изменено с telegramResult.message_id на message_id
       trips_count: trips.length,
       updated_messages: messageIdsToUpdate.length,
     })

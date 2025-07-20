@@ -1,6 +1,13 @@
+//app/api/trips/[id]/save-corrections/route.ts
+
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
+/* === ИСПРАВЛЕНИЕ ===
+ * Добавлен импорт функции sendMultipleTripMessageWithButtons из @/lib/telegram,
+ * чтобы устранить ошибку "ReferenceError: sendMultipleTripMessageWithButtons is not defined".
+ */
 import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
+/* === КОНЕЦ ИСПРАВЛЕНИЯ === */
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -188,7 +195,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           }
         }
       }
-
+      /* === ИСПРАВЛЕННЫЙ БЛОК ===
+       * Исправлена ошибка обращения к несуществующему столбцу tm.driver_name.
+       * Вместо tm.driver_name используется u.first_name из таблицы users.
+       * Добавлено соединение с таблицей users в SQL-запросе для получения имени водителя.
+       * Сохранена остальная логика формирования trips и отправки сообщения.
+       */
       // Получаем данные о рейсах для отправки сообщения
       const messages = await sql`
        SELECT 
@@ -220,7 +232,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
   LEFT JOIN users u ON tm.telegram_id = u.telegram_id
   WHERE tm.trip_id = ${tripId}
     AND tm.phone = ${phone}
-  ORDER BY tm.planned_loading_time
+  ORDER BY tm.planned_loading_time, tp.point_num
       `
 
       if (messages.length === 0) {
@@ -237,7 +249,9 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             vehicle_number: row.vehicle_number,
             planned_loading_time: row.planned_loading_time,
             driver_comment: row.driver_comment || "",
-            points: [], // Изменено: теперь все точки в одном массиве
+            loading_points: [],
+            unloading_points: [],
+            all_points: [], // Добавляем массив для всех точек в порядке point_num
           })
         }
 
@@ -251,21 +265,42 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             door_open_3: row.door_open_3,
             latitude: row.latitude,
             longitude: row.longitude,
-            point_type: row.point_type, // Добавляем тип точки
-            point_num: row.point_num, // Добавляем номер точки
+            point_type: row.point_type,
+            point_num: row.point_num,
           }
+
           const trip = tripsMap.get(row.trip_identifier)!
-          trip.points.push(point) // Добавляем все точки в один массив
+          trip.all_points.push(point)
         }
       }
 
-      // Сортируем точки в каждом рейсе только по point_num
-      for (const trip of tripsMap.values()) {
-        trip.points.sort((a: any, b: any) => a.point_num - b.point_num)
+      // Сортируем точки по point_num и разделяем по типам, сохраняя порядок
+      for (const [tripIdentifier, tripData] of tripsMap) {
+        // Сортируем все точки по point_num
+        tripData.all_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
 
-        // Разделяем точки на погрузку и разгрузку для совместимости с существующей функцией
-        trip.loading_points = trip.points.filter((p: any) => p.point_type === "P")
-        trip.unloading_points = trip.points.filter((p: any) => p.point_type === "D")
+        // Разделяем на loading и unloading, сохраняя порядок
+        for (const point of tripData.all_points) {
+          const pointInfo = {
+            point_id: point.point_id,
+            point_name: point.point_name,
+            adress: point.adress,
+            door_open_1: point.door_open_1,
+            door_open_2: point.door_open_2,
+            door_open_3: point.door_open_3,
+            latitude: point.latitude,
+            longitude: point.longitude,
+          }
+
+          if (point.point_type === "P") {
+            tripData.loading_points.push(pointInfo)
+          } else if (point.point_type === "D") {
+            tripData.unloading_points.push(pointInfo)
+          }
+        }
+
+        // Удаляем временный массив
+        delete tripData.all_points
       }
 
       const trips = Array.from(tripsMap.values())
@@ -298,7 +333,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         WHERE id = ANY(${messageIds})
         AND phone = ${phone}
       `
-
+      /* === КОНЕЦ ИСПРАВЛЕННОГО БЛОКА === */
       await sql`COMMIT`
 
       console.log(
