@@ -1,134 +1,81 @@
 import { type NextRequest, NextResponse } from "next/server"
-import { neon } from "@neondatabase/serverless"
+import { query } from "@/lib/database"
 import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
 
-const sql = neon(process.env.DATABASE_URL!)
-
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
-  const messageId = Number.parseInt(params.id)
-
   try {
-    const { phone, driver_phone, messageIds, isCorrection = false, deletedTrips = [] } = await request.json()
+    const body = await request.json()
+    const { messageIds, isCorrection = false } = body
 
     console.log("=== RESEND COMBINED REQUEST ===")
-    console.log("Message ID:", messageId)
-    console.log("Phone:", phone)
-    console.log("Driver Phone:", driver_phone)
     console.log("Message IDs:", messageIds)
     console.log("Is Correction:", isCorrection)
-    console.log("Deleted Trips:", deletedTrips)
 
     if (!messageIds || messageIds.length === 0) {
-      return NextResponse.json({ success: false, error: "No message IDs provided" }, { status: 400 })
+      return NextResponse.json({ success: false, error: "No message IDs provided" })
     }
 
-    // Получаем информацию о пользователе
-    const userResult = await sql`
-      SELECT telegram_id, first_name, full_name, name
-      FROM users 
-      WHERE phone = ${phone}
-      LIMIT 1
-    `
+    // Получаем данные о рейсах для всех сообщений
+    const placeholders = messageIds.map((_: any, index: number) => `$${index + 1}`).join(",")
 
-    if (userResult.length === 0) {
-      return NextResponse.json({ success: false, error: "User not found" }, { status: 404 })
+    const tripDataResult = await query(
+      `SELECT DISTINCT 
+         tm.message_id,
+         tm.trip_identifier,
+         tm.vehicle_number,
+         tm.planned_loading_time,
+         tm.driver_comment,
+         tm.telegram_message_id,
+         u.first_name,
+         u.telegram_id,
+         u.phone
+       FROM trip_messages tm
+       JOIN users u ON tm.phone = u.phone
+       WHERE tm.message_id IN (${placeholders})
+       ORDER BY tm.planned_loading_time`,
+      messageIds,
+    )
+
+    if (tripDataResult.rows.length === 0) {
+      return NextResponse.json({ success: false, error: "No trips found" })
     }
 
-    const user = userResult[0]
-    const driverName = user.first_name || user.full_name || user.name || "Неизвестный водитель"
+    // Получаем все точки для всех рейсов
+    const pointsResult = await query(
+      `SELECT 
+         tp.trip_identifier,
+         tp.point_type,
+         tp.point_num,
+         p.point_id,
+         p.point_name,
+         p.door_open_1,
+         p.door_open_2,
+         p.door_open_3,
+         p.latitude,
+         p.longitude,
+         p.adress
+       FROM trip_points tp
+       JOIN points p ON tp.point_id = p.point_id
+       JOIN trip_messages tm ON tp.trip_identifier = tm.trip_identifier
+       WHERE tm.message_id IN (${placeholders})
+       ORDER BY tp.point_num`,
+      messageIds,
+    )
 
-    // Получаем старый telegram_message_id для удаления
-    const previousMessageResult = await sql`
-      SELECT telegram_message_id
-      FROM trip_messages
-      WHERE id = ANY(${messageIds}::int[])
-        AND telegram_message_id IS NOT NULL
-      LIMIT 1
-    `
+    // Группируем данные по рейсам
+    const tripsData = tripDataResult.rows.map((row: any) => ({
+      trip_identifier: row.trip_identifier,
+      vehicle_number: row.vehicle_number,
+      planned_loading_time: row.planned_loading_time,
+      driver_comment: row.driver_comment || "",
+      loading_points: [] as any[],
+      unloading_points: [] as any[],
+    }))
 
-    let previousTelegramMessageId = null
-    if (previousMessageResult.length > 0) {
-      previousTelegramMessageId = previousMessageResult[0].telegram_message_id
-    }
-
-    // Получаем данные о рейсах для отправки сообщения
-    const messages = await sql`
-      SELECT DISTINCT
-        tm.id,
-        tm.trip_id,
-        tm.trip_identifier,
-        tm.vehicle_number,
-        tm.planned_loading_time,
-        tm.driver_comment,
-        tm.telegram_id,
-        u.first_name,
-        u.full_name
-      FROM trip_messages tm
-      LEFT JOIN users u ON tm.telegram_id = u.telegram_id
-      WHERE tm.id = ANY(${messageIds}::int[])
-        AND tm.phone = ${phone}
-      ORDER BY tm.planned_loading_time
-    `
-
-    if (messages.length === 0) {
-      return NextResponse.json({ success: false, error: "Messages not found" }, { status: 404 })
-    }
-
-    const trips = []
-
-    for (const message of messages) {
-      console.log(`Processing message ${message.id} for trip ${message.trip_identifier}`)
-
-      // Получаем точки для каждого рейса
-      const pointsResult = await sql`
-        SELECT DISTINCT
-          tp.point_type,
-          tp.point_num,
-          p.point_id,
-          p.point_name,
-          p.door_open_1,
-          p.door_open_2,
-          p.door_open_3,
-          p.latitude,
-          p.longitude,
-          p.adress
-        FROM trip_points tp
-        JOIN points p ON tp.point_id = p.id
-        WHERE tp.trip_id = ${message.trip_id} 
-          AND tp.trip_identifier = ${message.trip_identifier}
-          AND tp.driver_phone = ${driver_phone}
-        ORDER BY tp.point_num
-      `
-
-      console.log(`Found ${pointsResult.length} points for trip ${message.trip_identifier}`)
-
-      const loading_points = []
-      const unloading_points = []
-      const all_points = [] // Временный массив для сортировки
-
-      // Собираем все точки
-      for (const point of pointsResult) {
-        const pointInfo = {
-          point_id: point.point_id,
-          point_name: point.point_name,
-          door_open_1: point.door_open_1,
-          door_open_2: point.door_open_2,
-          door_open_3: point.door_open_3,
-          latitude: point.latitude,
-          longitude: point.longitude,
-          adress: point.adress,
-          point_type: point.point_type,
-          point_num: point.point_num,
-        }
-
-        all_points.push(pointInfo)
-      }
-
-      // Сортируем по point_num
-      all_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-
-      // Разделяем по типам, сохраняя порядок
-      for (const point of all_points) {
+    // Распределяем точки по рейсам
+    pointsResult.rows.forEach((point: any) => {
+      const trip = tripsData.find((t) => t.trip_identifier === point.trip_identifier)
+      if (trip) {
         const pointInfo = {
           point_id: point.point_id,
           point_name: point.point_name,
@@ -142,63 +89,56 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         }
 
         if (point.point_type === "P") {
-          loading_points.push(pointInfo)
+          trip.loading_points.push(pointInfo)
         } else if (point.point_type === "D") {
-          unloading_points.push(pointInfo)
+          trip.unloading_points.push(pointInfo)
         }
       }
+    })
 
-      trips.push({
-        trip_identifier: message.trip_identifier,
-        vehicle_number: message.vehicle_number,
-        planned_loading_time: message.planned_loading_time,
-        driver_comment: message.driver_comment || "",
-        loading_points,
-        unloading_points,
-      })
-    }
+    // Сортируем точки внутри каждого рейса по point_num
+    tripsData.forEach((trip) => {
+      trip.loading_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+      trip.unloading_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
+    })
 
-    console.log(`Prepared ${trips.length} trips for sending`)
+    const userData = tripDataResult.rows[0]
+    const firstMessageId = messageIds[0]
 
-    // Отправляем сообщение через функцию
-    const { message_id, messageText } = await sendMultipleTripMessageWithButtons(
-      Number(user.telegram_id),
-      trips,
-      driverName,
-      messageIds[0],
-      isCorrection, // передаем isCorrection из запроса
-      true, // isResend = true
+    // Получаем предыдущий telegram_message_id для редактирования
+    const previousTelegramMessageId = userData.telegram_message_id
+
+    // Отправляем объединенное сообщение
+    const telegramResult = await sendMultipleTripMessageWithButtons(
+      userData.telegram_id,
+      tripsData,
+      userData.first_name,
+      firstMessageId,
+      isCorrection, // передаем isCorrection
+      !isCorrection, // isResend = true если не корректировка
       previousTelegramMessageId,
     )
 
-    // Обновляем статусы всех сообщений
-    await sql`
-      UPDATE trip_messages 
-      SET telegram_message_id = ${message_id},
-          status = 'sent',
-          sent_at = CURRENT_TIMESTAMP,
-          message = ${messageText}
-      WHERE id = ANY(${messageIds}::int[])
-    `
+    // Обновляем telegram_message_id для первого сообщения
+    await query(`UPDATE trip_messages SET telegram_message_id = $1 WHERE message_id = $2`, [
+      telegramResult.message_id,
+      firstMessageId,
+    ])
 
-    console.log(`Successfully sent message to ${user.telegram_id}, updated ${messageIds.length} messages`)
+    console.log("=== COMBINED MESSAGE SENT SUCCESSFULLY ===")
 
     return NextResponse.json({
       success: true,
-      message: "Messages resent successfully",
-      telegram_message_id: message_id,
-      trips_count: trips.length,
-      updated_messages: messageIds.length,
+      message: "Combined message sent successfully",
+      telegramMessageId: telegramResult.message_id,
+      tripsCount: tripsData.length,
     })
   } catch (error) {
-    console.error("Error resending messages:", error)
-    return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to resend messages",
-        details: error instanceof Error ? error.message : "Unknown error",
-      },
-      { status: 500 },
-    )
+    console.error("Error resending combined message:", error)
+    return NextResponse.json({
+      success: false,
+      error: "Failed to resend combined message",
+      details: error instanceof Error ? error.message : "Unknown error",
+    })
   }
 }
