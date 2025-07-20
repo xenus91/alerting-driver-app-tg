@@ -9,6 +9,7 @@ import { TripRow } from "./trip-row"
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
 
+// Helper for generating unique IDs
 const uuidv4 = () => {
   return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
     var r = (Math.random() * 16) | 0,
@@ -17,7 +18,7 @@ const uuidv4 = () => {
   })
 }
 
-interface PointData {
+export interface PointData {
   point_type: "P" | "D"
   point_num: number
   point_id: string
@@ -26,7 +27,7 @@ interface PointData {
   longitude?: string
 }
 
-interface CorrectionData {
+export interface CorrectionData {
   phone: string
   trip_identifier: string
   original_trip_identifier?: string
@@ -37,7 +38,7 @@ interface CorrectionData {
   points: PointData[]
 }
 
-interface Driver {
+export interface Driver {
   phone: string
   name: string
   first_name?: string
@@ -46,12 +47,18 @@ interface Driver {
   verified?: boolean
 }
 
-interface TripData {
+export interface TripData {
   trip_identifier: string
   vehicle_number: string
   planned_loading_time: string
   driver_comment?: string
   points?: PointData[]
+}
+
+interface DriverTripGroup {
+  id: string
+  driver: Driver | null
+  trips: CorrectionData[]
 }
 
 interface TripCorrectionModalProps {
@@ -83,12 +90,6 @@ export function TripCorrectionModal({
   onAssignmentSent,
   onOpenConflictTrip,
 }: TripCorrectionModalProps) {
-  interface DriverTripGroup {
-    id: string
-    driver: Driver | null
-    trips: CorrectionData[]
-  }
-
   const [driverTripGroups, setDriverTripGroups] = useState<DriverTripGroup[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<
@@ -113,7 +114,6 @@ export function TripCorrectionModal({
       trip_id: number
     }>
   >([])
-  const [driverSearchOpen, setDriverSearchOpen] = useState(false)
   const [driverSearchValue, setDriverSearchValue] = useState("")
 
   const createEmptyDriver = (): Driver => ({
@@ -132,11 +132,11 @@ export function TripCorrectionModal({
     longitude: "",
   })
 
-  const createEmptyTrip = (phone: string): CorrectionData => ({
-    phone: phone, // Use the provided phone
+  const createEmptyTrip = (driverPhone: string): CorrectionData => ({
+    phone: driverPhone,
     trip_identifier: "",
     vehicle_number: "",
-    planned_loading_time: new Date().toISOString(),
+    planned_loading_time: new Date().toISOString().slice(0, 16), // YYYY-MM-DDTHH:MM
     driver_comment: "",
     message_id: 0,
     points: [createEmptyPoint()],
@@ -167,7 +167,7 @@ export function TripCorrectionModal({
           return
         }
 
-        loadDriverDetails() // This function will now set driverTripGroups
+        loadDriverDetails()
       } else {
         console.log("Initializing create mode")
         if (initialDriver || (initialTrips && initialTrips.length > 0)) {
@@ -256,7 +256,10 @@ export function TripCorrectionModal({
           {
             id: uuidv4(), // Generate a unique ID for this group
             driver: { phone: phone, name: driverName || "Неизвестный", first_name: driverName, full_name: driverName },
-            trips: Object.values(grouped),
+            trips: Object.values(grouped).map((trip) => ({
+              ...trip,
+              planned_loading_time: formatDateTime(trip.planned_loading_time), // Format for input
+            })),
           },
         ])
       } else {
@@ -298,13 +301,13 @@ export function TripCorrectionModal({
     setDriverTripGroups((prevGroups) => {
       const updatedGroups = prevGroups.map((group) => {
         if (group.id === groupId) {
-          const updatedTrips = [...group.trips]
-          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], [field]: value }
-          return { ...group, trips: updatedTrips }
+          const updatedTrips = [...group.trips] // Creates a new array
+          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], [field]: value } // Creates a new trip object
+          return { ...group, trips: updatedTrips } // Creates a new group object
         }
         return group
       })
-      return updatedGroups
+      return updatedGroups // Returns a new array of groups
     })
   }, [])
 
@@ -317,15 +320,17 @@ export function TripCorrectionModal({
         const updatedGroups = prevGroups.map((group) => {
           if (group.id === groupId) {
             const updatedTrips = [...group.trips]
-            updatedTrips[tripIndex].points[pointIndex] = {
-              ...updatedTrips[tripIndex].points[pointIndex],
+            const updatedPoints = [...updatedTrips[tripIndex].points] // Create new points array
+            updatedPoints[pointIndex] = {
+              ...updatedPoints[pointIndex], // Creates a new point object
               [field]: value,
             }
-            return { ...group, trips: updatedTrips }
+            updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: updatedPoints } // Create new trip object with new points
+            return { ...group, trips: updatedTrips } // Creates a new group object
           }
           return group
         })
-        return updatedGroups
+        return updatedGroups // Returns a new array of groups
       })
     },
     [],
@@ -354,7 +359,7 @@ export function TripCorrectionModal({
 
           console.log("Adding new point:", newPoint)
 
-          updatedTrips[tripIndex].points = [...currentPoints, newPoint]
+          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: [...currentPoints, newPoint] }
           return { ...group, trips: updatedTrips }
         }
         return group
@@ -455,7 +460,7 @@ export function TripCorrectionModal({
             trip_identifier: trip.trip_identifier,
             original_trip_identifier: trip.original_trip_identifier,
             vehicle_number: trip.vehicle_number,
-            planned_loading_time: trip.planned_loading_time,
+            planned_loading_time: formatDateTimeForSave(trip.planned_loading_time), // Format for saving
             driver_comment: trip.driver_comment,
             message_id: trip.message_id,
             point_type: point.point_type,
@@ -490,7 +495,7 @@ export function TripCorrectionModal({
             phone: group.driver!.phone,
             trip_identifier: trip.trip_identifier,
             vehicle_number: trip.vehicle_number,
-            planned_loading_time: trip.planned_loading_time,
+            planned_loading_time: formatDateTimeForSave(trip.planned_loading_time), // Format for saving
             driver_comment: trip.driver_comment,
             loading_points: trip.points
               .filter((p) => p.point_type === "P")
@@ -525,7 +530,6 @@ export function TripCorrectionModal({
       if (identifiersToCheck.length > 0) {
         console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(", ")}`)
         const conflictCheckResponse = await fetch("/api/trips/check-conflicts", {
-          // New API endpoint for conflict check
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -659,25 +663,24 @@ export function TripCorrectionModal({
     if (!dateString) return ""
 
     try {
-      if (dateString.includes("T")) {
-        const [datePart, timePart] = dateString.split("T")
-        const timeWithoutSeconds = timePart.split(":").slice(0, 2).join(":")
-        return `${datePart}T${timeWithoutSeconds}`
+      // If it's already in YYYY-MM-DDTHH:MM format, return as is
+      if (dateString.match(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/)) {
+        return dateString
       }
 
-      if (dateString.includes("/") || dateString.includes("-")) {
-        const dateMatch = dateString.match(/(\d{1,2})[/-](\d{1,2})[/-](\d{4})/)
-        const timeMatch = dateString.match(/(\d{1,2}):(\d{2})/)
-
-        if (dateMatch && timeMatch) {
-          const [, day, month, year] = dateMatch
-          const [, hours, minutes] = timeMatch
-
-          return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}T${hours.padStart(2, "0")}:${minutes}`
-        }
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) {
+        console.warn("Invalid date string for formatting:", dateString)
+        return dateString // Return original if invalid
       }
 
-      return ""
+      const year = date.getFullYear()
+      const month = (date.getMonth() + 1).toString().padStart(2, "0")
+      const day = date.getDate().toString().padStart(2, "0")
+      const hours = date.getHours().toString().padStart(2, "0")
+      const minutes = date.getMinutes().toString().padStart(2, "0")
+
+      return `${year}-${month}-${day}T${hours}:${minutes}`
     } catch (error) {
       console.error("Error formatting date:", error, "Input:", dateString)
       return ""
@@ -687,7 +690,12 @@ export function TripCorrectionModal({
   const formatDateTimeForSave = (dateString: string) => {
     if (!dateString) return ""
     try {
-      return dateString + ":00.000"
+      // Ensure it ends with :00.000 for database compatibility
+      if (dateString.length === 16) {
+        // YYYY-MM-DDTHH:MM
+        return dateString + ":00.000"
+      }
+      return dateString
     } catch {
       return dateString
     }
@@ -788,7 +796,7 @@ export function TripCorrectionModal({
             points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
           )
 
-          updatedTrips[tripIndex].points = points
+          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: points }
           return { ...group, trips: updatedTrips }
         }
         return group
@@ -842,7 +850,7 @@ export function TripCorrectionModal({
             points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
           )
 
-          updatedTrips[tripIndex].points = points
+          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: points }
           return { ...group, trips: updatedTrips }
         }
         return group
@@ -882,7 +890,7 @@ export function TripCorrectionModal({
             recalculatedPoints.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
           )
 
-          updatedTrips[tripIndex].points = recalculatedPoints
+          updatedTrips[tripIndex] = { ...updatedTrips[tripIndex], points: recalculatedPoints }
           return { ...group, trips: updatedTrips }
         }
         return group

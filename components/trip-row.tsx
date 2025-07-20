@@ -1,416 +1,259 @@
 "use client"
 
-import type React from "react"
-
-import { memo, useCallback, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Badge } from "@/components/ui/badge"
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Plus, Trash2, Check, ChevronsUpDown, Search } from "lucide-react"
-import { cn } from "@/lib/utils"
-import { ChevronUp, ChevronDown } from "lucide-react"
+import { ChevronsUpDown, Plus, Trash2, ArrowUp, ArrowDown } from "lucide-react"
+import { useCallback } from "react"
+import type { CorrectionData, PointData } from "./trip-correction-modal" // Import interfaces
 
-interface PointData {
-  point_type: "P" | "D"
-  point_num: number
-  point_id: string
-  point_name?: string
-  latitude?: string
-  longitude?: string
+interface TripRowProps {
+  trip: CorrectionData
+  tripIndex: number
+  availablePoints: Array<{
+    point_id: string
+    point_name: string
+    latitude?: string
+    longitude?: string
+  }>
+  pointSearchStates: Record<string, { open: boolean; search: string }>
+  handleSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
+  updateTrip: (field: keyof CorrectionData, value: any) => void
+  movePointUp: (pointIndex: number) => void
+  movePointDown: (pointIndex: number) => void
+  updatePoint: (pointIndex: number, field: keyof PointData, value: any) => void
+  addNewPoint: () => void
+  removePoint: (pointIndex: number) => void
+  removeTrip: () => void
+  correctionsLength: number // Total number of trips in the current group
+  formatDateTime: (dateString: string) => string
+  formatDateTimeForSave: (dateString: string) => string
 }
 
-interface CorrectionData {
-  phone: string
-  trip_identifier: string
-  original_trip_identifier?: string
-  vehicle_number: string
-  planned_loading_time: string
-  driver_comment?: string
-  message_id: number
-  points: PointData[]
-}
-
-interface PointSelectorProps {
-  value: string
-  onChange: (point: { point_id: string; point_name: string; latitude?: string; longitude?: string }) => void
-  pointKey: string
-  availablePoints: Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>
-  searchState: { open: boolean; search: string }
-  onSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
-}
-
-const PointSelector = memo(
-  ({ value, onChange, pointKey, availablePoints, searchState, onSearchStateChange }: PointSelectorProps) => {
-    const filterPoints = useCallback(
-      (searchTerm: string) => {
-        if (!searchTerm) return availablePoints
-        const lowerSearch = searchTerm.toLowerCase()
-        return availablePoints.filter(
-          (point) =>
-            point.point_id.toLowerCase().includes(lowerSearch) || point.point_name.toLowerCase().includes(lowerSearch),
-        )
-      },
-      [availablePoints],
-    )
-
-    const filteredPoints = filterPoints(searchState.search)
-    const selectedPoint = availablePoints.find((p) => p.point_id === value)
-
-    const handleOpenChange = useCallback(
-      (open: boolean) => {
-        if (open) {
-          onSearchStateChange(pointKey, { open: true, search: "" })
-        } else {
-          onSearchStateChange(pointKey, { open: false, search: "" })
-        }
-      },
-      [pointKey, onSearchStateChange],
-    )
-
-    const handleSearchChange = useCallback(
-      (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newSearch = e.target.value
-        onSearchStateChange(pointKey, { search: newSearch })
-      },
-      [pointKey, onSearchStateChange],
-    )
-
-    const handlePointSelect = useCallback(
-      (point: { point_id: string; point_name: string; latitude?: string; longitude?: string }) => {
-        onChange(point)
-        onSearchStateChange(pointKey, { open: false, search: "" })
-      },
-      [pointKey, onChange, onSearchStateChange],
-    )
-
-    return (
-      <Popover open={searchState.open} onOpenChange={handleOpenChange}>
-        <PopoverTrigger asChild>
-          <Button
-            variant="outline"
-            role="combobox"
-            aria-expanded={searchState.open}
-            className="w-full justify-between bg-transparent"
-          >
-            {selectedPoint ? (
-              <div className="flex flex-col items-start">
-                <span className="font-medium">{selectedPoint.point_id}</span>
-                <span className="text-xs text-muted-foreground">{selectedPoint.point_name}</span>
-              </div>
-            ) : (
-              "Выберите точку..."
-            )}
-            <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[300px] p-0">
-          <div className="flex items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
-            <input
-              className="flex h-11 w-full rounded-md bg-transparent py-3 text-sm outline-none placeholder:text-muted-foreground disabled:cursor-not-allowed disabled:opacity-50"
-              placeholder="Поиск по коду или названию..."
-              value={searchState.search}
-              onChange={handleSearchChange}
-              autoFocus
-            />
-          </div>
-          <div className="max-h-[200px] overflow-auto">
-            {filteredPoints.length === 0 ? (
-              <div className="py-6 text-center text-sm">
-                {searchState.search ? "Точки не найдены." : "Введите текст для поиска"}
-              </div>
-            ) : (
-              filteredPoints.map((point) => (
-                <div
-                  key={point.point_id}
-                  className={cn(
-                    "relative flex cursor-default select-none items-center rounded-sm px-2 py-1.5 text-sm outline-none hover:bg-accent hover:text-accent-foreground",
-                    value === point.point_id && "bg-accent text-accent-foreground",
-                  )}
-                  onClick={() => handlePointSelect(point)}
-                >
-                  <Check className={cn("mr-2 h-4 w-4", value === point.point_id ? "opacity-100" : "opacity-0")} />
-                  <div className="flex flex-col">
-                    <span className="font-medium">{point.point_id}</span>
-                    <span className="text-sm text-muted-foreground">{point.point_name}</span>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        </PopoverContent>
-      </Popover>
-    )
-  },
-)
-PointSelector.displayName = "PointSelector"
-
-export const TripRow = memo(
-  ({
-    trip,
-    tripIndex,
-    availablePoints,
-    pointSearchStates,
-    handleSearchStateChange,
-    updateTrip,
-    updatePoint,
-    movePointUp,
-    movePointDown,
-    addNewPoint,
-    removePoint,
-    removeTrip,
-    correctionsLength,
-    formatDateTime,
-    formatDateTimeForSave,
-  }: {
-    trip: CorrectionData
-    tripIndex: number
-    availablePoints: Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>
-    pointSearchStates: Record<string, { open: boolean; search: string }>
-    handleSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
-    updateTrip: (tripIndex: number, field: keyof CorrectionData, value: any) => void
-    updatePoint: (tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => void
-    movePointUp?: (tripIndex: number, pointIndex: number) => void
-    movePointDown?: (tripIndex: number, pointIndex: number) => void
-    addNewPoint: (tripIndex: number) => void
-    removePoint: (tripIndex: number, pointIndex: number) => void
-    removeTrip: (tripIndex: number) => void
-    correctionsLength: number
-    formatDateTime: (dateString: string) => string
-    formatDateTimeForSave: (dateString: string) => string
-  }) => {
-    const inputRef = useRef<HTMLInputElement>(null)
-
-    // Сортируем точки только по point_num по возрастанию
-    const sortedPoints = [...trip.points].sort((a, b) => a.point_num - b.point_num)
-
-    console.log(`🔍 TripRow render for trip ${trip.trip_identifier}:`)
-    console.log(
-      "Original points:",
-      trip.points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
-    )
-    console.log(
-      "Sorted points:",
-      sortedPoints.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
-    )
-
-    useEffect(() => {
-      if (inputRef.current && document.activeElement === inputRef.current) {
-        inputRef.current.focus()
-      }
-    }, [trip.trip_identifier])
-
-    const getPointKey = (point: PointData, index: number) =>
-      `${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}-${point.point_id}-${index}`
-
-    // Функция для получения оригинального индекса точки в несортированном массиве
-    const getOriginalIndex = (sortedIndex: number) => {
-      const sortedPoint = sortedPoints[sortedIndex]
-      const originalIndex = trip.points.findIndex(
+export function TripRow({
+  trip,
+  tripIndex,
+  availablePoints,
+  pointSearchStates,
+  handleSearchStateChange,
+  updateTrip,
+  movePointUp,
+  movePointDown,
+  updatePoint,
+  addNewPoint,
+  removePoint,
+  removeTrip,
+  correctionsLength,
+  formatDateTime,
+  formatDateTimeForSave,
+}: TripRowProps) {
+  const filteredPoints = useCallback(
+    (search: string) => {
+      return availablePoints.filter(
         (point) =>
-          point.point_type === sortedPoint.point_type &&
-          point.point_num === sortedPoint.point_num &&
-          point.point_id === sortedPoint.point_id,
+          point.point_id.toLowerCase().includes(search.toLowerCase()) ||
+          (point.point_name || "").toLowerCase().includes(search.toLowerCase()),
       )
+    },
+    [availablePoints],
+  )
 
-      console.log(`📍 getOriginalIndex: sortedIndex=${sortedIndex} -> originalIndex=${originalIndex}`)
-      console.log(
-        `   Sorted point: ${sortedPoint.point_id} (${sortedPoint.point_type}) point_num=${sortedPoint.point_num}`,
-      )
-
-      return originalIndex
-    }
-
-    // Функция для проверки возможности перемещения вверх
-    const canMoveUp = (sortedIndex: number) => {
-      const currentPoint = sortedPoints[sortedIndex]
-      const targetPointNum = currentPoint.point_num - 1
-      const canMove = trip.points.some((p) => p.point_num === targetPointNum)
-
-      console.log(
-        `⬆️ canMoveUp check: point_num=${currentPoint.point_num}, target=${targetPointNum}, canMove=${canMove}`,
-      )
-      return canMove
-    }
-
-    // Функция для проверки возможности перемещения вниз
-    const canMoveDown = (sortedIndex: number) => {
-      const currentPoint = sortedPoints[sortedIndex]
-      const targetPointNum = currentPoint.point_num + 1
-      const canMove = trip.points.some((p) => p.point_num === targetPointNum)
-
-      console.log(
-        `⬇️ canMoveDown check: point_num=${currentPoint.point_num}, target=${targetPointNum}, canMove=${canMove}`,
-      )
-      return canMove
-    }
-
-    return (
-      <div key={trip.original_trip_identifier || `trip-${tripIndex}`} className="border rounded-lg p-4">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="text-lg font-semibold">Рейс {trip.trip_identifier || `Новый ${tripIndex + 1}`}</h3>
-          <div className="flex gap-2">
-            <Button onClick={() => addNewPoint(tripIndex)} variant="outline" size="sm" className="text-blue-600">
-              <Plus className="h-4 w-4 mr-2" />
-              Добавить точку
-            </Button>
-            {correctionsLength > 1 && (
-              <Button onClick={() => removeTrip(tripIndex)} variant="outline" size="sm" className="text-red-600">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Удалить рейс
-              </Button>
-            )}
-          </div>
-        </div>
-
-        <div className="grid grid-cols-4 gap-4 mb-4">
-          <div>
-            <label className="text-sm font-medium">Номер рейса</label>
-            <Input
-              ref={inputRef}
-              value={trip.trip_identifier || ""}
-              onChange={(e) => {
-                updateTrip(tripIndex, "trip_identifier", e.target.value)
-              }}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Транспорт</label>
-            <Input
-              value={trip.vehicle_number || ""}
-              onChange={(e) => updateTrip(tripIndex, "vehicle_number", e.target.value)}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Время погрузки</label>
-            <Input
-              type="datetime-local"
-              value={formatDateTime(trip.planned_loading_time || "")}
-              onChange={(e) => updateTrip(tripIndex, "planned_loading_time", formatDateTimeForSave(e.target.value))}
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium">Комментарий</label>
-            <Input
-              value={trip.driver_comment || ""}
-              onChange={(e) => updateTrip(tripIndex, "driver_comment", e.target.value)}
-            />
-          </div>
-        </div>
-
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Тип</TableHead>
-              <TableHead>№</TableHead>
-              <TableHead>Точка</TableHead>
-              <TableHead>Порядок</TableHead>
-              <TableHead>Действия</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {sortedPoints.map((point, sortedIndex) => {
-              const originalIndex = getOriginalIndex(sortedIndex)
-              const pointKey = getPointKey(point, sortedIndex)
-
-              return (
-                <TableRow key={pointKey}>
-                  <TableCell>
-                    <Select
-                      value={point.point_type}
-                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, originalIndex, "point_type", value)}
-                    >
-                      <SelectTrigger className="w-20">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="P">
-                          <Badge variant="outline" className="bg-blue-100 text-blue-600">
-                            P
-                          </Badge>
-                        </SelectItem>
-                        <SelectItem value="D">
-                          <Badge variant="outline" className="bg-green-100 text-green-600">
-                            D
-                          </Badge>
-                        </SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex items-center justify-center h-full">
-                      <span className="font-medium">{point.point_num}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <PointSelector
-                      value={point.point_id}
-                      onChange={(selectedPoint) => {
-                        updatePoint(tripIndex, originalIndex, "point_id", selectedPoint.point_id)
-                        updatePoint(tripIndex, originalIndex, "point_name", selectedPoint.point_name)
-                        updatePoint(tripIndex, originalIndex, "latitude", selectedPoint.latitude)
-                        updatePoint(tripIndex, originalIndex, "longitude", selectedPoint.longitude)
-                      }}
-                      pointKey={pointKey}
-                      availablePoints={availablePoints}
-                      searchState={pointSearchStates[pointKey] || { open: false, search: "" }}
-                      onSearchStateChange={handleSearchStateChange}
-                    />
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex flex-col gap-1 items-center">
-                      {canMoveUp(sortedIndex) && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            console.log(
-                              `🔼 Move up clicked: sortedIndex=${sortedIndex}, originalIndex=${originalIndex}`,
-                            )
-                            movePointUp && movePointUp(tripIndex, originalIndex)
-                          }}
-                          title="Переместить вверх"
-                        >
-                          <ChevronUp className="h-4 w-4" />
-                        </Button>
-                      )}
-                      {canMoveDown(sortedIndex) && (
-                        <Button
-                          variant="outline"
-                          size="icon"
-                          onClick={() => {
-                            console.log(
-                              `🔽 Move down clicked: sortedIndex=${sortedIndex}, originalIndex=${originalIndex}`,
-                            )
-                            movePointDown && movePointDown(tripIndex, originalIndex)
-                          }}
-                          title="Переместить вниз"
-                        >
-                          <ChevronDown className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Button
-                      onClick={() => removePoint(tripIndex, originalIndex)}
-                      variant="outline"
-                      size="sm"
-                      className="text-red-600"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              )
-            })}
-          </TableBody>
-        </Table>
+  return (
+    <div className="border p-4 rounded-lg shadow-sm bg-white">
+      <div className="flex justify-between items-center mb-4">
+        <h4 className="font-semibold text-md">Рейс #{tripIndex + 1}</h4>
+        {correctionsLength > 1 && (
+          <Button variant="destructive" size="sm" onClick={removeTrip}>
+            <Trash2 className="h-4 w-4 mr-2" />
+            Удалить рейс
+          </Button>
+        )}
       </div>
-    )
-  },
-)
-TripRow.displayName = "TripRow"
+
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+        <div>
+          <Label htmlFor={`trip_identifier-${tripIndex}`}>Номер рейса</Label>
+          <Input
+            id={`trip_identifier-${tripIndex}`}
+            value={trip.trip_identifier}
+            onChange={(e) => updateTrip("trip_identifier", e.target.value)}
+            placeholder="Введите номер рейса"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`vehicle_number-${tripIndex}`}>Номер ТС</Label>
+          <Input
+            id={`vehicle_number-${tripIndex}`}
+            value={trip.vehicle_number}
+            onChange={(e) => updateTrip("vehicle_number", e.target.value)}
+            placeholder="Введите номер ТС"
+          />
+        </div>
+        <div>
+          <Label htmlFor={`planned_loading_time-${tripIndex}`}>Плановое время погрузки</Label>
+          <Input
+            id={`planned_loading_time-${tripIndex}`}
+            type="datetime-local"
+            value={formatDateTime(trip.planned_loading_time)}
+            onChange={(e) => updateTrip("planned_loading_time", e.target.value)}
+          />
+        </div>
+        <div className="md:col-span-2">
+          <Label htmlFor={`driver_comment-${tripIndex}`}>Комментарий водителя</Label>
+          <Textarea
+            id={`driver_comment-${tripIndex}`}
+            value={trip.driver_comment || ""}
+            onChange={(e) => updateTrip("driver_comment", e.target.value)}
+            placeholder="Добавьте комментарий для водителя"
+          />
+        </div>
+      </div>
+
+      <h5 className="font-semibold text-md mb-3">Точки маршрута:</h5>
+      <div className="space-y-4">
+        {trip.points.map((point, pointIndex) => (
+          <div key={pointIndex} className="border p-3 rounded-md bg-gray-100 relative">
+            <div className="absolute top-2 right-2 flex gap-1">
+              {pointIndex > 0 && (
+                <Button variant="ghost" size="icon" onClick={() => movePointUp(pointIndex)} title="Переместить вверх">
+                  <ArrowUp className="h-4 w-4" />
+                </Button>
+              )}
+              {pointIndex < trip.points.length - 1 && (
+                <Button variant="ghost" size="icon" onClick={() => movePointDown(pointIndex)} title="Переместить вниз">
+                  <ArrowDown className="h-4 w-4" />
+                </Button>
+              )}
+              {trip.points.length > 1 && (
+                <Button variant="ghost" size="icon" onClick={() => removePoint(pointIndex)} title="Удалить точку">
+                  <Trash2 className="h-4 w-4 text-red-500" />
+                </Button>
+              )}
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pr-10">
+              <div>
+                <Label htmlFor={`point_type-${tripIndex}-${pointIndex}`}>Тип точки</Label>
+                <Select
+                  value={point.point_type}
+                  onValueChange={(value: "P" | "D") => updatePoint(pointIndex, "point_type", value)}
+                >
+                  <SelectTrigger id={`point_type-${tripIndex}-${pointIndex}`}>
+                    <SelectValue placeholder="Выберите тип" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="P">Погрузка</SelectItem>
+                    <SelectItem value="D">Выгрузка</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label htmlFor={`point_num-${tripIndex}-${pointIndex}`}>Порядковый номер</Label>
+                <Input
+                  id={`point_num-${tripIndex}-${pointIndex}`}
+                  type="number"
+                  value={point.point_num}
+                  onChange={(e) => updatePoint(pointIndex, "point_num", Number.parseInt(e.target.value) || 0)}
+                  readOnly // Point num is managed by move/remove functions
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Label htmlFor={`point_id-${tripIndex}-${pointIndex}`}>ID точки / Название</Label>
+                <Popover
+                  open={pointSearchStates[`${tripIndex}-${pointIndex}`]?.open}
+                  onOpenChange={(open) => handleSearchStateChange(`${tripIndex}-${pointIndex}`, { open })}
+                >
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={pointSearchStates[`${tripIndex}-${pointIndex}`]?.open}
+                      className="w-full justify-between bg-transparent"
+                    >
+                      {point.point_id
+                        ? `${point.point_id} - ${point.point_name || "Без названия"}`
+                        : "Выберите точку или введите ID"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Поиск по ID или названию..."
+                        value={pointSearchStates[`${tripIndex}-${pointIndex}`]?.search || ""}
+                        onChange={(e) =>
+                          handleSearchStateChange(`${tripIndex}-${pointIndex}`, { search: e.target.value })
+                        }
+                      />
+                      <CommandList>
+                        <CommandEmpty>Точки не найдены</CommandEmpty>
+                        <CommandGroup className="max-h-[200px] overflow-auto">
+                          {filteredPoints(pointSearchStates[`${tripIndex}-${pointIndex}`]?.search || "").map(
+                            (availablePoint) => (
+                              <CommandItem
+                                key={availablePoint.point_id}
+                                value={`${availablePoint.point_id} ${availablePoint.point_name}`}
+                                onSelect={() => {
+                                  updatePoint(pointIndex, "point_id", availablePoint.point_id)
+                                  updatePoint(pointIndex, "point_name", availablePoint.point_name)
+                                  updatePoint(pointIndex, "latitude", availablePoint.latitude)
+                                  updatePoint(pointIndex, "longitude", availablePoint.longitude)
+                                  handleSearchStateChange(`${tripIndex}-${pointIndex}`, { open: false })
+                                }}
+                              >
+                                <div className="flex flex-col">
+                                  <span>{availablePoint.point_id}</span>
+                                  <span className="text-sm text-gray-500">{availablePoint.point_name}</span>
+                                </div>
+                              </CommandItem>
+                            ),
+                          )}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+                {/* Fallback input for manual entry if not selected from list */}
+                {!point.point_id && (
+                  <Input
+                    className="mt-2"
+                    placeholder="Введите ID точки вручную"
+                    value={point.point_id}
+                    onChange={(e) => updatePoint(pointIndex, "point_id", e.target.value)}
+                  />
+                )}
+              </div>
+              <div>
+                <Label htmlFor={`latitude-${tripIndex}-${pointIndex}`}>Широта</Label>
+                <Input
+                  id={`latitude-${tripIndex}-${pointIndex}`}
+                  value={point.latitude || ""}
+                  onChange={(e) => updatePoint(pointIndex, "latitude", e.target.value)}
+                  placeholder="Введите широту"
+                />
+              </div>
+              <div>
+                <Label htmlFor={`longitude-${tripIndex}-${pointIndex}`}>Долгота</Label>
+                <Input
+                  id={`longitude-${tripIndex}-${pointIndex}`}
+                  value={point.longitude || ""}
+                  onChange={(e) => updatePoint(pointIndex, "longitude", e.target.value)}
+                  placeholder="Введите долготу"
+                />
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div className="flex justify-center mt-4">
+        <Button onClick={addNewPoint} variant="outline" className="text-blue-600 bg-transparent">
+          <Plus className="h-4 w-4 mr-2" />
+          Добавить точку
+        </Button>
+      </div>
+    </div>
+  )
+}
