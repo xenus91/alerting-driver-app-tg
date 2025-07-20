@@ -109,28 +109,18 @@ export function TripCorrectionModal({
     }>
   >([])
   const [driversList, setDriversList] = useState<Driver[]>([])
+  // Новое состояние для управления поиском и открытием Popover для каждого водителя
+  const [driverSearchStates, setDriverSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
 
   useEffect(() => {
-    console.log("TripCorrectionModal useEffect:", {
-      isOpen,
-      mode,
-      tripId,
-      phone,
-      driverName,
-    })
-
     if (isOpen) {
       setConflictedTrips([])
       setError(null)
       setSuccess(null)
       setDeletedTrips([]) // Сбрасываем удаленные рейсы при открытии
+      setDriverSearchStates({}) // Сбрасываем состояние поиска водителей
 
       if (mode === "edit") {
-        console.log("Loading driver details for edit mode", {
-          tripId,
-          phone,
-        })
-
         if (!phone || !tripId) {
           console.error("Phone or tripId missing for edit mode")
           onClose() // Закрываем модалку, если данные неполные
@@ -152,9 +142,7 @@ export function TripCorrectionModal({
         ])
         loadDriverDetails(phone, tripId)
       } else {
-        console.log("Initializing create mode")
         if (initialDriver && initialTrips && initialTrips.length > 0) {
-          console.log("Using initial driver and trips:", initialDriver, initialTrips)
           setDriverTripGroups([
             {
               id: uuidv4(),
@@ -164,7 +152,7 @@ export function TripCorrectionModal({
                 trip_identifier: trip.trip_identifier,
                 original_trip_identifier: trip.trip_identifier,
                 vehicle_number: trip.vehicle_number,
-                planned_loading_time: trip.planned_loading_time,
+                planned_loading_time: formatDateTime(trip.planned_loading_time), // Форматируем для input type="datetime-local"
                 driver_comment: trip.driver_comment || "",
                 message_id: 0,
                 points: trip.points || [createEmptyPoint()],
@@ -172,7 +160,6 @@ export function TripCorrectionModal({
             },
           ])
         } else {
-          console.log("Creating empty driver group")
           setDriverTripGroups([createEmptyDriverGroup()])
         }
       }
@@ -300,7 +287,7 @@ export function TripCorrectionModal({
               trip_identifier: item.trip_identifier,
               original_trip_identifier: item.trip_identifier,
               vehicle_number: item.vehicle_number,
-              planned_loading_time: item.planned_loading_time,
+              planned_loading_time: formatDateTime(item.planned_loading_time), // Форматируем для input type="datetime-local"
               driver_comment: item.driver_comment,
               message_id: item.message_id,
               points: [],
@@ -455,6 +442,8 @@ export function TripCorrectionModal({
       }))
       return updatedGroups
     })
+    // Закрываем Popover и очищаем поиск после выбора
+    setDriverSearchStates((prev) => ({ ...prev, [prevGroups[groupIndex].id]: { open: false, search: "" } }))
   }, [])
 
   // Сохранение и отправка
@@ -640,11 +629,6 @@ export function TripCorrectionModal({
         return dateString
       }
 
-      // Если это полный ISO-строка, обрезаем до YYYY-MM-DDTHH:MM
-      if (dateString.includes("T") && dateString.includes(":")) {
-        return dateString.slice(0, 16)
-      }
-
       // Попытка парсинга для других форматов
       const date = new Date(dateString)
       if (isNaN(date.getTime())) {
@@ -783,12 +767,20 @@ export function TripCorrectionModal({
                       <h3 className="font-medium text-blue-900">Выбор водителя для группы {groupIndex + 1}</h3>
                     </div>
 
-                    <Popover>
+                    <Popover
+                      open={driverSearchStates[group.id]?.open || false}
+                      onOpenChange={(open) =>
+                        setDriverSearchStates((prev) => ({
+                          ...prev,
+                          [group.id]: { ...prev[group.id], open },
+                        }))
+                      }
+                    >
                       <PopoverTrigger asChild>
                         <Button
                           variant="outline"
                           role="combobox"
-                          aria-expanded={false} // Managed internally by Popover
+                          aria-expanded={driverSearchStates[group.id]?.open || false}
                           className="w-full justify-between bg-white"
                         >
                           {group.driver?.phone
@@ -801,28 +793,20 @@ export function TripCorrectionModal({
                         <Command>
                           <CommandInput
                             placeholder="Поиск по имени или телефону..."
-                            value={
-                              driversList.find((d) => d.phone === group.driver?.phone)?.full_name ||
-                              group.driver?.phone ||
-                              ""
+                            value={driverSearchStates[group.id]?.search || ""}
+                            onValueChange={(search) =>
+                              setDriverSearchStates((prev) => ({
+                                ...prev,
+                                [group.id]: { ...prev[group.id], search },
+                              }))
                             }
-                            onValueChange={(search) => {
-                              // This is a bit tricky with shadcn's CommandInput.
-                              // It's usually for filtering, not direct value setting.
-                              // For simplicity, we'll just filter the list.
-                              // The actual selection happens on CommandItem click.
-                            }}
                           />
                           <CommandList>
                             <CommandEmpty>Водители не найдены</CommandEmpty>
                             <CommandGroup className="max-h-[300px] overflow-auto">
                               {driversList
                                 .filter((driver) => {
-                                  const search = (
-                                    driversList.find((d) => d.phone === group.driver?.phone)?.full_name ||
-                                    group.driver?.phone ||
-                                    ""
-                                  ).toLowerCase()
+                                  const search = (driverSearchStates[group.id]?.search || "").toLowerCase()
                                   return (
                                     driver.phone.toLowerCase().includes(search) ||
                                     (driver.full_name || "").toLowerCase().includes(search) ||
