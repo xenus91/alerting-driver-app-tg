@@ -187,6 +187,16 @@ export const TripRow = memo(
     // Сортируем точки только по point_num по возрастанию
     const sortedPoints = [...trip.points].sort((a, b) => a.point_num - b.point_num)
 
+    console.log(`🔍 TripRow render for trip ${trip.trip_identifier}:`)
+    console.log(
+      "Original points:",
+      trip.points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+    )
+    console.log(
+      "Sorted points:",
+      sortedPoints.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+    )
+
     useEffect(() => {
       if (inputRef.current && document.activeElement === inputRef.current) {
         inputRef.current.focus()
@@ -199,12 +209,43 @@ export const TripRow = memo(
     // Функция для получения оригинального индекса точки в несортированном массиве
     const getOriginalIndex = (sortedIndex: number) => {
       const sortedPoint = sortedPoints[sortedIndex]
-      return trip.points.findIndex(
+      const originalIndex = trip.points.findIndex(
         (point) =>
           point.point_type === sortedPoint.point_type &&
           point.point_num === sortedPoint.point_num &&
           point.point_id === sortedPoint.point_id,
       )
+
+      console.log(`📍 getOriginalIndex: sortedIndex=${sortedIndex} -> originalIndex=${originalIndex}`)
+      console.log(
+        `   Sorted point: ${sortedPoint.point_id} (${sortedPoint.point_type}) point_num=${sortedPoint.point_num}`,
+      )
+
+      return originalIndex
+    }
+
+    // Функция для проверки возможности перемещения вверх
+    const canMoveUp = (sortedIndex: number) => {
+      const currentPoint = sortedPoints[sortedIndex]
+      const targetPointNum = currentPoint.point_num - 1
+      const canMove = trip.points.some((p) => p.point_num === targetPointNum)
+
+      console.log(
+        `⬆️ canMoveUp check: point_num=${currentPoint.point_num}, target=${targetPointNum}, canMove=${canMove}`,
+      )
+      return canMove
+    }
+
+    // Функция для проверки возможности перемещения вниз
+    const canMoveDown = (sortedIndex: number) => {
+      const currentPoint = sortedPoints[sortedIndex]
+      const targetPointNum = currentPoint.point_num + 1
+      const canMove = trip.points.some((p) => p.point_num === targetPointNum)
+
+      console.log(
+        `⬇️ canMoveDown check: point_num=${currentPoint.point_num}, target=${targetPointNum}, canMove=${canMove}`,
+      )
+      return canMove
     }
 
     return (
@@ -321,21 +362,31 @@ export const TripRow = memo(
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col gap-1 items-center">
-                      {sortedIndex > 0 && (
+                      {canMoveUp(sortedIndex) && (
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => movePointUp && movePointUp(tripIndex, originalIndex)}
+                          onClick={() => {
+                            console.log(
+                              `🔼 Move up clicked: sortedIndex=${sortedIndex}, originalIndex=${originalIndex}`,
+                            )
+                            movePointUp && movePointUp(tripIndex, originalIndex)
+                          }}
                           title="Переместить вверх"
                         >
                           <ChevronUp className="h-4 w-4" />
                         </Button>
                       )}
-                      {sortedIndex < sortedPoints.length - 1 && (
+                      {canMoveDown(sortedIndex) && (
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => movePointDown && movePointDown(tripIndex, originalIndex)}
+                          onClick={() => {
+                            console.log(
+                              `🔽 Move down clicked: sortedIndex=${sortedIndex}, originalIndex=${originalIndex}`,
+                            )
+                            movePointDown && movePointDown(tripIndex, originalIndex)
+                          }}
                           title="Переместить вниз"
                         >
                           <ChevronDown className="h-4 w-4" />

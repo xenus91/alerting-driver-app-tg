@@ -197,59 +197,140 @@ export function TripCorrectionModal({
     points: [createEmptyPoint()],
   })
 
-  // Функция для пересчета point_num для всех точек в рейсе
-  const recalculatePointNumbers = (points: PointData[]): PointData[] => {
-    return points.map((point, index) => ({
-      ...point,
-      point_num: index + 1,
-    }))
-  }
-
-  // Функции перемещения точек с пересчетом point_num
+  // Функции перемещения точек - правильная логика
   const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
-    if (pointIndex === 0) return
+    console.log(`🔼 movePointUp called: tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
 
     setCorrections((prev) => {
       const updated = [...prev]
       const points = [...updated[tripIndex].points]
 
-      // Меняем точки местами
-      ;[points[pointIndex - 1], points[pointIndex]] = [points[pointIndex], points[pointIndex - 1]]
+      console.log(
+        "Points before movePointUp:",
+        points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+      )
 
-      // Пересчитываем point_num для всех точек
-      updated[tripIndex].points = recalculatePointNumbers(points)
+      const currentPoint = points[pointIndex]
+      console.log(
+        `Current point: ${currentPoint.point_id} (${currentPoint.point_type}) with point_num=${currentPoint.point_num}`,
+      )
 
+      // Находим точку с point_num на 1 меньше
+      const targetPointNum = currentPoint.point_num - 1
+      const targetPointIndex = points.findIndex((p) => p.point_num === targetPointNum)
+
+      console.log(`Looking for point with point_num=${targetPointNum}, found at index=${targetPointIndex}`)
+
+      if (targetPointIndex === -1) {
+        console.log("❌ Cannot move up - no point with smaller point_num found")
+        return prev
+      }
+
+      const targetPoint = points[targetPointIndex]
+      console.log(
+        `Target point: ${targetPoint.point_id} (${targetPoint.point_type}) with point_num=${targetPoint.point_num}`,
+      )
+
+      // Меняем point_num местами
+      const newCurrentPointNum = targetPoint.point_num
+      const newTargetPointNum = currentPoint.point_num
+
+      points[pointIndex] = { ...currentPoint, point_num: newCurrentPointNum }
+      points[targetPointIndex] = { ...targetPoint, point_num: newTargetPointNum }
+
+      console.log(
+        "Points after movePointUp:",
+        points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+      )
+
+      updated[tripIndex].points = points
       return updated
     })
   }, [])
 
   const movePointDown = useCallback((tripIndex: number, pointIndex: number) => {
+    console.log(`🔽 movePointDown called: tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
+
     setCorrections((prev) => {
       const updated = [...prev]
       const points = [...updated[tripIndex].points]
 
-      if (pointIndex >= points.length - 1)
+      console.log(
+        "Points before movePointDown:",
+        points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+      )
+
+      const currentPoint = points[pointIndex]
+      console.log(
+        `Current point: ${currentPoint.point_id} (${currentPoint.point_type}) with point_num=${currentPoint.point_num}`,
+      )
+
+      // Находим точку с point_num на 1 больше
+      const targetPointNum = currentPoint.point_num + 1
+      const targetPointIndex = points.findIndex((p) => p.point_num === targetPointNum)
+
+      console.log(`Looking for point with point_num=${targetPointNum}, found at index=${targetPointIndex}`)
+
+      if (targetPointIndex === -1) {
+        console.log("❌ Cannot move down - no point with larger point_num found")
         return prev
+      }
 
-        // Меняем точки местами
-      ;[points[pointIndex], points[pointIndex + 1]] = [points[pointIndex + 1], points[pointIndex]]
+      const targetPoint = points[targetPointIndex]
+      console.log(
+        `Target point: ${targetPoint.point_id} (${targetPoint.point_type}) with point_num=${targetPoint.point_num}`,
+      )
 
-      // Пересчитываем point_num для всех точек
-      updated[tripIndex].points = recalculatePointNumbers(points)
+      // Меняем point_num местами
+      const newCurrentPointNum = targetPoint.point_num
+      const newTargetPointNum = currentPoint.point_num
 
+      points[pointIndex] = { ...currentPoint, point_num: newCurrentPointNum }
+      points[targetPointIndex] = { ...targetPoint, point_num: newTargetPointNum }
+
+      console.log(
+        "Points after movePointDown:",
+        points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+      )
+
+      updated[tripIndex].points = points
       return updated
     })
   }, [])
 
   // Обновленная функция удаления точки с пересчетом
   const removePoint = useCallback((tripIndex: number, pointIndex: number) => {
+    console.log(`🗑️ removePoint called: tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
+
     setCorrections((prev) => {
       const updated = [...prev]
-      const filteredPoints = updated[tripIndex].points.filter((_, i) => i !== pointIndex)
+      const points = [...updated[tripIndex].points]
 
-      // Пересчитываем point_num для оставшихся точек
-      updated[tripIndex].points = recalculatePointNumbers(filteredPoints)
+      console.log(
+        "Points before removal:",
+        points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+      )
 
+      const removedPoint = points[pointIndex]
+      console.log(
+        `Removing point: ${removedPoint.point_id} (${removedPoint.point_type}) with point_num=${removedPoint.point_num}`,
+      )
+
+      // Удаляем точку
+      const filteredPoints = points.filter((_, i) => i !== pointIndex)
+
+      // Пересчитываем point_num для всех точек
+      const recalculatedPoints = filteredPoints.map((point, index) => ({
+        ...point,
+        point_num: index + 1,
+      }))
+
+      console.log(
+        "Points after removal and recalculation:",
+        recalculatedPoints.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+      )
+
+      updated[tripIndex].points = recalculatedPoints
       return updated
     })
   }, [])
@@ -344,6 +425,9 @@ export function TripCorrectionModal({
   }, [])
 
   const updatePoint = useCallback((tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
+    console.log(
+      `📝 updatePoint called: tripIndex=${tripIndex}, pointIndex=${pointIndex}, field=${field}, value=${value}`,
+    )
     setCorrections((prev) => {
       const updated = [...prev]
       updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
@@ -352,8 +436,12 @@ export function TripCorrectionModal({
   }, [])
 
   const addNewPoint = (tripIndex: number) => {
+    console.log(`➕ addNewPoint called: tripIndex=${tripIndex}`)
+
     const currentPoints = corrections[tripIndex].points
     const maxPointNum = currentPoints.length > 0 ? Math.max(...currentPoints.map((p) => p.point_num || 0)) : 0
+
+    console.log(`Current points count: ${currentPoints.length}, maxPointNum: ${maxPointNum}`)
 
     const newPoint: PointData = {
       point_type: "P",
@@ -363,6 +451,9 @@ export function TripCorrectionModal({
       latitude: "",
       longitude: "",
     }
+
+    console.log("Adding new point:", newPoint)
+
     setCorrections((prev) => {
       const updated = [...prev]
       updated[tripIndex].points = [...updated[tripIndex].points, newPoint]
@@ -371,6 +462,8 @@ export function TripCorrectionModal({
   }
 
   const addNewTrip = () => {
+    console.log("➕ addNewTrip called")
+
     const newTrip: CorrectionData = {
       phone: driver?.phone || "",
       trip_identifier: "",
@@ -380,11 +473,17 @@ export function TripCorrectionModal({
       message_id: 0,
       points: [createEmptyPoint()],
     }
+
+    console.log("Adding new trip:", newTrip)
     setCorrections([...corrections, newTrip])
   }
 
   const removeTrip = (tripIndex: number) => {
+    console.log(`🗑️ removeTrip called: tripIndex=${tripIndex}`)
+
     const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
+    console.log(`Removing trip: ${tripIdentifier}`)
+
     setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
     if (tripIdentifier) {
       setDeletedTrips((prev) => [...prev, tripIdentifier])
@@ -393,6 +492,8 @@ export function TripCorrectionModal({
 
   // Сохранение и отправка
   const saveCorrections = async () => {
+    console.log("💾 saveCorrections called")
+
     setIsSaving(true)
     setError(null)
     setSuccess(null)
@@ -417,6 +518,8 @@ export function TripCorrectionModal({
           longitude: point.longitude,
         })),
       )
+
+      console.log("Flat corrections to save:", flatCorrections)
 
       const endpoint = mode === "edit" ? `/api/trips/${tripId}/save-corrections` : "/api/send-messages"
 
@@ -460,18 +563,20 @@ export function TripCorrectionModal({
       const data = await response.json()
 
       if (data.success) {
+        console.log("✅ Save successful:", data)
         return { success: true, data }
       } else if (data.error === "trip_already_assigned") {
         setConflictedTrips(data.conflict_data || [])
         setError(`Конфликт рейсов: ${data.trip_identifiers?.join(", ") || "неизвестные рейсы"}`)
         return { success: false, conflict: true }
       } else {
+        console.error("❌ Save failed:", data.error)
         setError(data.error || "Ошибка при сохранении данных")
         return { success: false }
       }
     } catch (error) {
+      console.error("❌ Save error:", error)
       setError("Ошибка при сохранении данных")
-      console.error("Error saving data:", error)
       return { success: false }
     } finally {
       setIsSaving(false)
@@ -479,6 +584,8 @@ export function TripCorrectionModal({
   }
 
   const sendData = async () => {
+    console.log("📤 sendData called")
+
     setIsSending(true)
     setError(null)
     setSuccess(null)
@@ -494,6 +601,8 @@ export function TripCorrectionModal({
 
       if (mode === "edit") {
         const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+        console.log("Resending messages with IDs:", messageIds)
+
         const resendResponse = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -509,21 +618,33 @@ export function TripCorrectionModal({
         const resendData = await resendResponse.json()
         if (resendData.success) {
           setSuccess("Корректировка отправлена водителю!")
-          onCorrectionSent?.(corrections, deletedTrips)
+          console.log("✅ Correction sent successfully")
+
+          // Исправляем вызов onCorrectionSent - убираем несуществующий loadTripDetails
+          if (onCorrectionSent) {
+            console.log("Calling onCorrectionSent callback")
+            onCorrectionSent(corrections, deletedTrips)
+          }
         } else {
+          console.error("❌ Resend failed:", resendData.error)
           setError(resendData.error || "Ошибка при отправке корректировки")
         }
       } else {
         setSuccess("Рассылка создана успешно!")
-        onAssignmentSent?.(data)
+        console.log("✅ Assignment sent successfully")
+
+        if (onAssignmentSent) {
+          console.log("Calling onAssignmentSent callback")
+          onAssignmentSent(data)
+        }
       }
 
       if (success) {
         setTimeout(() => onClose(), 3000)
       }
     } catch (error) {
+      console.error("❌ Send error:", error)
       setError("Ошибка при отправке данных")
-      console.error("Error sending data:", error)
     } finally {
       setIsSending(false)
     }
@@ -536,10 +657,6 @@ export function TripCorrectionModal({
     trip_identifier: string
   }) => {
     console.log("Opening conflict trip modal with:", conflict)
-
-    // Сохраняем текущее состояние
-    const currentCorrections = [...corrections]
-    const currentDeletedTrips = [...deletedTrips]
 
     // Закрываем текущую модалку
     onClose()
