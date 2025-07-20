@@ -151,9 +151,9 @@ function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: n
     return lat && lng && !isNaN(lat) && !isNaN(lng)
   })
 
-  // Изменяем логику: строим маршрут если есть хотя бы 2 точки с координатами
-  if (validPoints.length < 2) {
-    console.log(`Not enough valid points for route: ${validPoints.length} (need at least 2)`)
+  // ИЗМЕНЕНО: Проверяем, что ВСЕ точки имеют координаты
+  if (validPoints.length !== points.length || validPoints.length < 2) {
+    console.log(`Cannot build route: ${validPoints.length} valid points out of ${points.length} total points`)
     return null
   }
 
@@ -166,7 +166,7 @@ function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: n
     .join("~")
 
   const url = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
-  console.log(`Built route URL with ${validPoints.length} points: ${url}`)
+  console.log(`Built route URL: ${url}`)
   return url
 }
 
@@ -241,10 +241,7 @@ export async function sendMultipleTripMessageWithButtons(
   firstName: string,
   messageId: number,
   isCorrection = false,
-  // === НАЧАЛО ИЗМЕНЕНИЙ ===
-  // Добавлен параметр isResend для различения первичной и повторной отправки
   isResend = false,
-  // === КОНЕЦ ИЗМЕНЕНИЙ ===
   previousTelegramMessageId?: number,
 ): Promise<{ message_id: number; messageText: string }> {
   try {
@@ -257,7 +254,6 @@ export async function sendMultipleTripMessageWithButtons(
     // Генерируем красивое сообщение для нового сообщения
     let message = ""
 
-    // === НАЧАЛО ИЗМЕНЕНИЙ ===
     // Обновляем логику выбора шапки сообщения
     if (isCorrection) {
       message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`
@@ -266,7 +262,6 @@ export async function sendMultipleTripMessageWithButtons(
       message += `🔄 <b>ПОВТОРНАЯ ОТПРАВКА ЗАЯВОК</b>\n\n`
       console.log("Added resend header")
     }
-    // === КОНЕЦ ИЗМЕНЕНИЙ ===
 
     message += `🌅 <b>Доброго времени суток!</b>\n\n`
     message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
