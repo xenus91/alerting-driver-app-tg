@@ -338,8 +338,9 @@ export async function sendMultipleTripMessageWithButtons(
         allPoints.forEach((point, index) => {
           const typeIcon = point.type === "loading" ? "📦" : "📤"
           const typeText = point.type === "loading" ? "Погрузка" : "Разгрузка"
+          const pointNum = point.point_num || index + 1
 
-          message += `${index + 1}) ${typeIcon} <b>${point.point_id} ${point.point_name}</b> (${typeText})\n`
+          message += `${pointNum}) ${typeIcon} <b>${point.point_id} ${point.point_name}</b> (${typeText})\n`
 
           // Добавляем адрес с гиперссылкой
           if (point.adress) {
