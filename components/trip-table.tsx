@@ -43,35 +43,50 @@ export function TripTable({ trips, onEdit, onDelete }: TripTableProps) {
       return []
     }
     return trips.filter((trip) =>
-      Object.values(trip).some((value) => String(value).toLowerCase().includes(searchTerm.toLowerCase())),
+      Object.values(trip).some((value) =>
+        String(value || "")
+          .toLowerCase()
+          .includes(searchTerm.toLowerCase()),
+      ),
     )
   }, [trips, searchTerm])
 
+  const formatDateValue = (dateString?: string | null) => {
+    if (!dateString) return "N/A"
+    try {
+      const date = new Date(dateString)
+      if (isNaN(date.getTime())) {
+        return "Некорректная дата"
+      }
+      return format(date, "dd.MM.yyyy HH:mm", { locale: ru })
+    } catch (e) {
+      console.error("Error formatting date:", dateString, e)
+      return "Ошибка даты"
+    }
+  }
+
   const columns = [
-    { id: "trip_id", header: "ID Рейса", accessor: (trip: Trip) => trip.trip_id },
+    { id: "trip_id", header: "ID Рейса", accessor: (trip: Trip) => trip.id }, // Assuming trip.id is the actual trip_id
     { id: "trip_identifier", header: "Идентификатор", accessor: (trip: Trip) => trip.trip_identifier },
-    { id: "driver_name", header: "Водитель", accessor: (trip: Trip) => trip.driver_name },
-    { id: "driver_phone", header: "Телефон Водителя", accessor: (trip: Trip) => trip.driver_phone },
-    { id: "car_number", header: "Номер ТС", accessor: (trip: Trip) => trip.car_number },
-    { id: "carpark", header: "Автопарк", accessor: (trip: Trip) => trip.carpark },
-    { id: "status", header: "Статус", accessor: (trip: Trip) => trip.status },
+    { id: "driver_name", header: "Водитель", accessor: (trip: Trip) => trip.driver_name || "N/A" },
+    { id: "driver_phone", header: "Телефон Водителя", accessor: (trip: Trip) => trip.driver_phone || "N/A" },
+    { id: "car_number", header: "Номер ТС", accessor: (trip: Trip) => trip.car_number || "N/A" },
+    { id: "carpark", header: "Автопарк", accessor: (trip: Trip) => trip.carpark || "N/A" },
+    { id: "status", header: "Статус", accessor: (trip: Trip) => trip.status || "N/A" },
     {
       id: "planned_loading_time",
       header: "Плановое время погрузки",
-      accessor: (trip: Trip) =>
-        trip.planned_loading_time
-          ? format(new Date(trip.planned_loading_time), "dd.MM.yyyy HH:mm", { locale: ru })
-          : "N/A",
+      accessor: (trip: Trip) => formatDateValue(trip.planned_loading_time),
     },
     {
       id: "created_at",
       header: "Создан",
-      accessor: (trip: Trip) => format(new Date(trip.created_at), "dd.MM.yyyy HH:mm", { locale: ru }),
+      accessor: (trip: Trip) => formatDateValue(trip.created_at),
     },
     {
       id: "updated_at",
       header: "Обновлен",
-      accessor: (trip: Trip) => format(new Date(trip.updated_at), "dd.MM.yyyy HH:mm", { locale: ru }),
+      accessor: (trip: Trip) => formatDateValue(trip.updated_at),
     },
   ]
 
@@ -138,7 +153,9 @@ export function TripTable({ trips, onEdit, onDelete }: TripTableProps) {
           <TableBody>
             {filteredTrips.length ? (
               filteredTrips.map((trip) => (
-                <TableRow key={trip.trip_id}>
+                <TableRow key={trip.id}>
+                  {" "}
+                  {/* Use trip.id as key */}
                   {columns.map(
                     (column) =>
                       columnVisibility[column.id as keyof typeof columnVisibility] && (
@@ -150,7 +167,9 @@ export function TripTable({ trips, onEdit, onDelete }: TripTableProps) {
                       <Button variant="ghost" size="icon" onClick={() => onEdit(trip)} className="mr-2">
                         <PencilIcon className="h-4 w-4" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => onDelete(trip.trip_id)}>
+                      <Button variant="ghost" size="icon" onClick={() => onDelete(String(trip.id))}>
+                        {" "}
+                        {/* Pass trip.id as string */}
                         <TrashIcon className="h-4 w-4" />
                       </Button>
                     </TableCell>

@@ -5,8 +5,11 @@ import { cookies } from "next/headers"
 
 const sql = neon(process.env.DATABASE_URL!)
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
+    const { searchParams } = new URL(request.url)
+    const carpark = searchParams.get("carpark") || undefined
+
     const cookieStore = await cookies()
     const sessionToken = cookieStore.get("session_token")?.value
 
@@ -29,10 +32,10 @@ export async function GET() {
 
     let trips
 
-    if (currentUser.role === "operator" && currentUser.carpark) {
+    if (currentUser.role === "operator" && currentUser.carpark && !carpark) {
       trips = await getTrips(currentUser.carpark)
     } else {
-      trips = await getTrips()
+      trips = await getTrips(carpark)
     }
 
     for (const trip of trips) {
@@ -55,7 +58,7 @@ export async function GET() {
       },
     })
   } catch (error) {
-    console.error("Get trips error:", error)
+    console.error("Error fetching trips:", error)
     return NextResponse.json(
       {
         success: false,

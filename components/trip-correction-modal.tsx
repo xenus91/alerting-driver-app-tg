@@ -133,7 +133,8 @@ export function TripCorrectionModal({
             driver: null,
             trips: [
               {
-                trip_id: "",
+                id: 0, // Default value for new trip
+                trip_id: "", // Default value for new trip
                 trip_identifier: "",
                 driver_telegram_id: "",
                 driver_name: "",
@@ -166,7 +167,8 @@ export function TripCorrectionModal({
         driver: null,
         trips: [
           {
-            trip_id: "",
+            id: 0, // Default value for new trip
+            trip_id: "", // Default value for new trip
             trip_identifier: "",
             driver_telegram_id: "",
             driver_name: "",
@@ -206,7 +208,7 @@ export function TripCorrectionModal({
             ...trip,
             driver_telegram_id: selectedUser?.telegram_id || "",
             driver_name: selectedUser?.full_name || "",
-            driver_phone: selectedUser?.phone_number || "",
+            driver_phone: selectedUser?.phone || "", // Use user.phone
           }))
           return { ...group, driver: selectedUser, trips: updatedTrips }
         }
@@ -271,11 +273,12 @@ export function TripCorrectionModal({
       prevGroups.map((group) => {
         if (group.id === groupId) {
           const newTrip: Trip = {
-            trip_id: "",
+            id: 0, // Default value for new trip
+            trip_id: "", // Default value for new trip
             trip_identifier: "",
             driver_telegram_id: group.driver?.telegram_id || "",
             driver_name: group.driver?.full_name || "",
-            driver_phone: group.driver?.phone_number || "",
+            driver_phone: group.driver?.phone || "", // Use group.driver.phone
             car_number: "",
             carpark: "",
             status: "pending",
@@ -313,6 +316,7 @@ export function TripCorrectionModal({
           const updatedTrips = group.trips.map((trip, tIdx) => {
             if (tIdx === tripIndex) {
               const newPoint: Point = {
+                id: 0, // Default value for new point
                 point_id: "",
                 point_name: null,
                 latitude: null,
@@ -395,7 +399,7 @@ export function TripCorrectionModal({
     if (hasError) return
 
     try {
-      const endpoint = mode === "edit" ? `/api/trips/${initialTrip?.trip_id}/save-corrections` : "/api/send-messages"
+      const endpoint = mode === "edit" ? `/api/trips/${initialTrip?.id}/save-corrections` : "/api/send-messages" // Use initialTrip.id
       const method = "POST" // Both are POST for now
 
       const payload = mode === "edit" ? tripsToSave[0] : { trips: tripsToSave }
@@ -450,7 +454,7 @@ export function TripCorrectionModal({
       const search = driverSearchStates[groupId]?.search || ""
       if (!search) return users
       return users.filter(
-        (user) => user.full_name?.toLowerCase().includes(search.toLowerCase()) || user.phone_number?.includes(search),
+        (user) => user.full_name?.toLowerCase().includes(search.toLowerCase()) || user.phone?.includes(search), // Use user.phone
       )
     }
   }, [users, driverSearchStates])
@@ -516,7 +520,8 @@ export function TripCorrectionModal({
                       aria-expanded={driverSearchStates[group.id]?.open}
                       className="w-full justify-between bg-transparent"
                     >
-                      {group.driver ? group.driver.full_name || group.driver.phone_number : "Выберите водителя..."}
+                      {group.driver ? group.driver.full_name || group.driver.phone : "Выберите водителя..."}{" "}
+                      {/* Use user.phone */}
                       <ChevronDownIcon className="ml-2 h-4 w-4 shrink-0 opacity-50" />
                     </Button>
                   </PopoverTrigger>
@@ -535,7 +540,7 @@ export function TripCorrectionModal({
                           {filteredUsers(group.id).map((user) => (
                             <CommandItem
                               key={user.telegram_id}
-                              value={user.full_name || user.phone_number}
+                              value={user.full_name || user.phone} // Use user.phone
                               onSelect={() => {
                                 updateDriverForGroup(group.id, user)
                                 setDriverSearchStates((prev) => ({
@@ -544,7 +549,7 @@ export function TripCorrectionModal({
                                 }))
                               }}
                             >
-                              {user.full_name} ({user.phone_number})
+                              {user.full_name} ({user.phone}) {/* Use user.phone */}
                             </CommandItem>
                           ))}
                         </CommandGroup>

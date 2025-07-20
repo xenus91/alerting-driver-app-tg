@@ -41,18 +41,25 @@ export interface Trip {
   pending_responses?: number
   first_sent_at?: string
   last_sent_at?: string
+  // Добавленные поля для TripTable
+  trip_id: string // Assuming trip_id is a string for display/lookup
+  driver_name?: string
+  driver_phone?: string
+  car_number?: string
+  updated_at?: string
 }
 
 export interface Point {
   id: number
   point_id: string
-  point_name: string
+  point_name: string | null
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
-  latitude?: number
-  longitude?: number
-  address: string
+  latitude?: number | null
+  longitude?: number | null
+  address: string | null
+  comment: string | null
   created_at: string
   updated_at: string
 }
@@ -291,7 +298,7 @@ export async function createTripMessage(
         trip_identifier, vehicle_number, planned_loading_time, driver_comment
       )
       VALUES (
-        ${tripId}, ${normalizedPhone}, ${telegramId || null}, 'pending',
+        ${tripId}, ${normalizedPhone}, ${message}, ${telegramId || null}, 'pending',
         ${tripData?.trip_identifier || null}, ${tripData?.vehicle_number || null}, 
         ${tripData?.planned_loading_time || null}, ${tripData?.driver_comment || null}
       )
