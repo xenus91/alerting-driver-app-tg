@@ -3,6 +3,9 @@ import { subscriptionService } from "./subscription-service"
 
 const sql = neon(process.env.DATABASE_URL!)
 
+// Экспортируем query для обратной совместимости
+export const query = sql
+
 export interface User {
   id: number
   telegram_id: number
@@ -42,7 +45,6 @@ export interface Point {
   adress?: string // Поле адреса (с одной 'd' как в БД)
   created_at: string
   updated_at: string
-  
 }
 
 export interface TripPoint {
@@ -317,11 +319,11 @@ export async function createTripPoint(
   pointType: "P" | "D",
   pointNum: number,
   tripIdentifier?: string,
-  driverPhone?: string // Добавляем новый параметр
+  driverPhone?: string, // Добавляем новый параметр
 ) {
   try {
     console.log(
-      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}, driverPhone: ${driverPhone}`
+      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}, driverPhone: ${driverPhone}`,
     )
 
     const pointResult = await sql`

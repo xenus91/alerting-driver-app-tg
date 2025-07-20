@@ -4,141 +4,145 @@ import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
+    const messageId = Number.parseInt(params.id)
     const body = await request.json()
-    const { messageIds, isCorrection = false } = body
+    const { isCorrection = false } = body
 
-    console.log("=== RESEND COMBINED REQUEST ===")
-    console.log("Message IDs:", messageIds)
-    console.log("Is Correction:", isCorrection)
+    console.log(`=== DEBUG: resend-combined for messageId: ${messageId}, isCorrection: ${isCorrection} ===`)
 
-    if (!messageIds || messageIds.length === 0) {
-      return NextResponse.json({ success: false, error: "No message IDs provided" })
+    // Получаем информацию о сообщении
+    const messageResult = await query`
+      SELECT trip_id, phone, telegram_id FROM trip_messages WHERE id = ${messageId}
+    `
+
+    if (messageResult.length === 0) {
+      return NextResponse.json({ success: false, error: "Message not found" }, { status: 404 })
     }
 
-    // Получаем данные о рейсах для всех сообщений
-    const placeholders = messageIds.map((_: any, index: number) => `$${index + 1}`).join(",")
+    const { trip_id: tripId, phone, telegram_id } = messageResult[0]
 
-    const tripDataResult = await query(
-      `SELECT DISTINCT 
-         tm.message_id,
-         tm.trip_identifier,
-         tm.vehicle_number,
-         tm.planned_loading_time,
-         tm.driver_comment,
-         tm.telegram_message_id,
-         u.first_name,
-         u.telegram_id,
-         u.phone
-       FROM trip_messages tm
-       JOIN users u ON tm.phone = u.phone
-       WHERE tm.message_id IN (${placeholders})
-       ORDER BY tm.planned_loading_time`,
-      messageIds,
-    )
+    console.log(`DEBUG: Found message - tripId: ${tripId}, phone: ${phone}, telegram_id: ${telegram_id}`)
 
-    if (tripDataResult.rows.length === 0) {
-      return NextResponse.json({ success: false, error: "No trips found" })
-    }
+    // Получаем все сообщения для этого телефона в данном рейсе
+    const result = await query`
+      SELECT DISTINCT
+        tm.phone,
+        tm.telegram_id,
+        tm.trip_identifier,
+        tm.vehicle_number,
+        tm.planned_loading_time,
+        tm.driver_comment,
+        u.first_name,
+        u.full_name
+      FROM trip_messages tm
+      LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+      WHERE tm.trip_id = ${tripId} AND tm.phone = ${phone} AND tm.telegram_id IS NOT NULL
+      ORDER BY tm.planned_loading_time
+    `
 
-    // Получаем все точки для всех рейсов
-    const pointsResult = await query(
-      `SELECT 
-         tp.trip_identifier,
-         tp.point_type,
-         tp.point_num,
-         p.point_id,
-         p.point_name,
-         p.door_open_1,
-         p.door_open_2,
-         p.door_open_3,
-         p.latitude,
-         p.longitude,
-         p.adress
-       FROM trip_points tp
-       JOIN points p ON tp.point_id = p.point_id
-       JOIN trip_messages tm ON tp.trip_identifier = tm.trip_identifier
-       WHERE tm.message_id IN (${placeholders})
-       ORDER BY tp.point_num`,
-      messageIds,
-    )
+    console.log(`DEBUG: Found ${result.length} trip messages for phone ${phone}`)
 
-    // Группируем данные по рейсам
-    const tripsData = tripDataResult.rows.map((row: any) => ({
-      trip_identifier: row.trip_identifier,
-      vehicle_number: row.vehicle_number,
-      planned_loading_time: row.planned_loading_time,
-      driver_comment: row.driver_comment || "",
-      loading_points: [] as any[],
-      unloading_points: [] as any[],
-    }))
+    const groupedData = new Map()
 
-    // Распределяем точки по рейсам
-    pointsResult.rows.forEach((point: any) => {
-      const trip = tripsData.find((t) => t.trip_identifier === point.trip_identifier)
-      if (trip) {
-        const pointInfo = {
-          point_id: point.point_id,
-          point_name: point.point_name,
-          door_open_1: point.door_open_1,
-          door_open_2: point.door_open_2,
-          door_open_3: point.door_open_3,
-          latitude: point.latitude,
-          longitude: point.longitude,
-          adress: point.adress,
-          point_num: point.point_num,
-        }
-
-        if (point.point_type === "P") {
-          trip.loading_points.push(pointInfo)
-        } else if (point.point_type === "D") {
-          trip.unloading_points.push(pointInfo)
-        }
+    for (const row of result) {
+      if (!groupedData.has(row.phone)) {
+        groupedData.set(row.phone, {
+          phone: row.phone,
+          telegram_id: row.telegram_id,
+          first_name: row.first_name,
+          full_name: row.full_name,
+          trips: new Map(),
+        })
       }
-    })
 
-    // Сортируем точки внутри каждого рейса по point_num
-    tripsData.forEach((trip) => {
-      trip.loading_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-      trip.unloading_points.sort((a, b) => (a.point_num || 0) - (b.point_num || 0))
-    })
+      const phoneGroup = groupedData.get(row.phone)
 
-    const userData = tripDataResult.rows[0]
-    const firstMessageId = messageIds[0]
+      if (row.trip_identifier && !phoneGroup.trips.has(row.trip_identifier)) {
+        console.log(`DEBUG: Getting points for trip_identifier: ${row.trip_identifier}`)
 
-    // Получаем предыдущий telegram_message_id для редактирования
-    const previousTelegramMessageId = userData.telegram_message_id
+        // Получаем точки для этого рейса, отсортированные только по point_num
+        const tripPointsResult = await query`
+          SELECT DISTINCT
+            tp.point_type,
+            tp.point_num,
+            p.point_id,
+            p.point_name,
+            p.door_open_1,
+            p.door_open_2,
+            p.door_open_3,
+            p.latitude,
+            p.longitude,
+            p.adress
+          FROM trip_points tp
+          JOIN points p ON tp.point_id = p.id
+          WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${row.trip_identifier}
+          ORDER BY tp.point_num
+        `
 
-    // Отправляем объединенное сообщение
-    const telegramResult = await sendMultipleTripMessageWithButtons(
-      userData.telegram_id,
-      tripsData,
-      userData.first_name,
-      firstMessageId,
-      isCorrection, // передаем isCorrection
-      !isCorrection, // isResend = true если не корректировка
-      previousTelegramMessageId,
-    )
+        console.log(`DEBUG: Found ${tripPointsResult.length} points for trip ${row.trip_identifier}`)
 
-    // Обновляем telegram_message_id для первого сообщения
-    await query(`UPDATE trip_messages SET telegram_message_id = $1 WHERE message_id = $2`, [
-      telegramResult.message_id,
-      firstMessageId,
-    ])
+        // Сначала сортируем все точки по point_num
+        const sortedPoints = tripPointsResult.sort((a, b) => a.point_num - b.point_num)
 
-    console.log("=== COMBINED MESSAGE SENT SUCCESSFULLY ===")
+        const loading_points = []
+        const unloading_points = []
+
+        // Затем разделяем на типы, сохраняя порядок по point_num
+        for (const point of sortedPoints) {
+          const pointInfo = {
+            point_id: point.point_id,
+            point_name: point.point_name,
+            point_num: point.point_num,
+            door_open_1: point.door_open_1,
+            door_open_2: point.door_open_2,
+            door_open_3: point.door_open_3,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            adress: point.adress,
+          }
+
+          if (point.point_type === "P") {
+            loading_points.push(pointInfo)
+          } else if (point.point_type === "D") {
+            unloading_points.push(pointInfo)
+          }
+        }
+
+        phoneGroup.trips.set(row.trip_identifier, {
+          trip_identifier: row.trip_identifier,
+          vehicle_number: row.vehicle_number,
+          planned_loading_time: row.planned_loading_time,
+          driver_comment: row.driver_comment,
+          loading_points: loading_points,
+          unloading_points: unloading_points,
+        })
+
+        console.log(
+          `DEBUG: Created trip ${row.trip_identifier} with ${loading_points.length} loading and ${unloading_points.length} unloading points`,
+        )
+      }
+    }
+
+    console.log(`DEBUG: Final grouped data has ${groupedData.size} phone groups`)
+
+    // Отправляем сообщения
+    const sendResults = await sendMultipleTripMessageWithButtons(groupedData, true, isCorrection)
+
+    console.log(`DEBUG: Send results:`, sendResults)
 
     return NextResponse.json({
       success: true,
-      message: "Combined message sent successfully",
-      telegramMessageId: telegramResult.message_id,
-      tripsCount: tripsData.length,
+      results: sendResults,
     })
   } catch (error) {
-    console.error("Error resending combined message:", error)
-    return NextResponse.json({
-      success: false,
-      error: "Failed to resend combined message",
-      details: error instanceof Error ? error.message : "Unknown error",
-    })
+    console.error("Error in resend-combined:", error)
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to resend messages",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }

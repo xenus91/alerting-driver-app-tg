@@ -4,198 +4,219 @@ import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
 
 export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
   try {
-    const { corrections, deletedTrips } = await request.json()
-    console.log("=== SAVE CORRECTIONS REQUEST ===")
-    console.log("Trip ID:", params.id)
-    console.log("Corrections:", JSON.stringify(corrections, null, 2))
-    console.log("Deleted trips:", deletedTrips)
+    const tripId = Number.parseInt(params.id)
+    const body = await request.json()
+    const { corrections, deletedTrips } = body
 
-    if (!corrections || corrections.length === 0) {
-      return NextResponse.json({ success: false, error: "No corrections provided" })
+    console.log(`=== DEBUG: save-corrections for tripId: ${tripId} ===`)
+    console.log(`Corrections:`, corrections)
+    console.log(`Deleted trips:`, deletedTrips)
+
+    // Обрабатываем удаленные рейсы
+    if (deletedTrips && deletedTrips.length > 0) {
+      for (const deletedTrip of deletedTrips) {
+        console.log(`DEBUG: Deleting trip ${deletedTrip.trip_identifier} for phone ${deletedTrip.phone}`)
+
+        // Удаляем сообщения для этого рейса
+        await query`
+          DELETE FROM trip_messages 
+          WHERE trip_id = ${tripId} 
+          AND phone = ${deletedTrip.phone} 
+          AND trip_identifier = ${deletedTrip.trip_identifier}
+        `
+
+        // Удаляем точки для этого рейса
+        await query`
+          DELETE FROM trip_points 
+          WHERE trip_id = ${tripId} 
+          AND trip_identifier = ${deletedTrip.trip_identifier}
+        `
+      }
     }
 
-    // Группируем корректировки по trip_identifier
-    const tripGroups = corrections.reduce((groups: any, correction: any) => {
-      const key = correction.trip_identifier
-      if (!groups[key]) {
-        groups[key] = []
-      }
-      groups[key].push(correction)
-      return groups
-    }, {})
+    // Обрабатываем корректировки
+    if (corrections && corrections.length > 0) {
+      // Группируем корректировки по original_trip_identifier и phone
+      const groupedCorrections = new Map()
 
-    console.log("Trip groups:", Object.keys(tripGroups))
+      for (const correction of corrections) {
+        const key = `${correction.phone}_${correction.original_trip_identifier}`
+        if (!groupedCorrections.has(key)) {
+          groupedCorrections.set(key, {
+            phone: correction.phone,
+            driver_phone: correction.driver_phone,
+            original_trip_identifier: correction.original_trip_identifier,
+            new_trip_identifier: correction.trip_identifier,
+            vehicle_number: correction.vehicle_number,
+            planned_loading_time: correction.planned_loading_time,
+            driver_comment: correction.driver_comment,
+            message_id: correction.message_id,
+            points: [],
+          })
+        }
 
-    // Обрабатываем каждую группу рейсов
-    for (const [tripIdentifier, tripCorrections] of Object.entries(tripGroups)) {
-      const corrections_array = tripCorrections as any[]
-      const firstCorrection = corrections_array[0]
-
-      console.log(`Processing trip: ${tripIdentifier}`)
-      console.log(`Original trip identifier: ${firstCorrection.original_trip_identifier}`)
-
-      // Обновляем основную информацию о рейсе в trip_messages
-      const updateTripResult = await query(
-        `UPDATE trip_messages 
-         SET trip_identifier = $1, 
-             vehicle_number = $2, 
-             planned_loading_time = $3, 
-             driver_comment = $4
-         WHERE trip_identifier = $5 AND message_id = $6`,
-        [
-          tripIdentifier,
-          firstCorrection.vehicle_number,
-          firstCorrection.planned_loading_time,
-          firstCorrection.driver_comment,
-          firstCorrection.original_trip_identifier,
-          firstCorrection.message_id,
-        ],
-      )
-
-      console.log(`Updated trip_messages for ${tripIdentifier}:`, updateTripResult.rowCount)
-
-      // Удаляем старые точки для этого рейса
-      const deletePointsResult = await query(`DELETE FROM trip_points WHERE trip_identifier = $1`, [
-        firstCorrection.original_trip_identifier,
-      ])
-
-      console.log(`Deleted old points for ${firstCorrection.original_trip_identifier}:`, deletePointsResult.rowCount)
-
-      // Добавляем новые точки
-      for (const correction of corrections_array) {
-        const insertPointResult = await query(
-          `INSERT INTO trip_points (
-            trip_identifier, point_type, point_num, point_id, point_name
-          ) VALUES ($1, $2, $3, $4, $5)`,
-          [tripIdentifier, correction.point_type, correction.point_num, correction.point_id, correction.point_name],
-        )
-
-        console.log(`Inserted point ${correction.point_id} for trip ${tripIdentifier}`)
+        groupedCorrections.get(key).points.push({
+          point_type: correction.point_type,
+          point_num: correction.point_num,
+          point_id: correction.point_id,
+          point_name: correction.point_name,
+        })
       }
 
-      // Обновляем trip_identifier во всех связанных таблицах
-      await query(`UPDATE trip_points SET trip_identifier = $1 WHERE trip_identifier = $2`, [
-        tripIdentifier,
-        firstCorrection.original_trip_identifier,
-      ])
+      console.log(`DEBUG: Processing ${groupedCorrections.size} correction groups`)
+
+      // Обрабатываем каждую группу корректировок
+      for (const [key, group] of groupedCorrections) {
+        console.log(`DEBUG: Processing correction group: ${key}`)
+
+        // Обновляем trip_messages
+        await query`
+          UPDATE trip_messages 
+          SET trip_identifier = ${group.new_trip_identifier},
+              vehicle_number = ${group.vehicle_number},
+              planned_loading_time = ${group.planned_loading_time},
+              driver_comment = ${group.driver_comment}
+          WHERE trip_id = ${tripId} 
+          AND phone = ${group.phone} 
+          AND trip_identifier = ${group.original_trip_identifier}
+        `
+
+        // Удаляем старые точки для этого рейса
+        await query`
+          DELETE FROM trip_points 
+          WHERE trip_id = ${tripId} 
+          AND trip_identifier = ${group.original_trip_identifier}
+        `
+
+        // Добавляем новые точки
+        for (const point of group.points) {
+          // Получаем ID точки из таблицы points
+          const pointResult = await query`
+            SELECT id FROM points WHERE point_id = ${point.point_id}
+          `
+
+          if (pointResult.length > 0) {
+            await query`
+              INSERT INTO trip_points (trip_id, point_id, point_type, point_num, trip_identifier, driver_phone)
+              VALUES (${tripId}, ${pointResult[0].id}, ${point.point_type}, ${point.point_num}, ${group.new_trip_identifier}, ${group.driver_phone})
+            `
+          }
+        }
+      }
     }
 
-    // Получаем обновленные данные для отправки сообщения
-    const messageId = corrections[0].message_id
+    // Получаем обновленные данные для отправки сообщений
+    const result = await query`
+      SELECT DISTINCT
+        tm.phone,
+        tm.telegram_id,
+        tm.trip_identifier,
+        tm.vehicle_number,
+        tm.planned_loading_time,
+        tm.driver_comment,
+        u.first_name,
+        u.full_name
+      FROM trip_messages tm
+      LEFT JOIN users u ON tm.telegram_id = u.telegram_id
+      WHERE tm.trip_id = ${tripId} AND tm.status = 'pending' AND tm.telegram_id IS NOT NULL
+      ORDER BY tm.planned_loading_time
+    `
 
-    const tripDataResult = await query(
-      `SELECT DISTINCT 
-         tm.trip_identifier,
-         tm.vehicle_number,
-         tm.planned_loading_time,
-         tm.driver_comment,
-         tm.telegram_message_id,
-         u.first_name,
-         u.telegram_id
-       FROM trip_messages tm
-       JOIN users u ON tm.phone = u.phone
-       WHERE tm.message_id = $1`,
-      [messageId],
-    )
+    console.log(`DEBUG: Found ${result.length} messages to update`)
 
-    if (tripDataResult.rows.length === 0) {
-      return NextResponse.json({ success: false, error: "Trip not found" })
-    }
+    const groupedData = new Map()
 
-    const tripData = tripDataResult.rows[0]
+    for (const row of result) {
+      if (!groupedData.has(row.phone)) {
+        groupedData.set(row.phone, {
+          phone: row.phone,
+          telegram_id: row.telegram_id,
+          first_name: row.first_name,
+          full_name: row.full_name,
+          trips: new Map(),
+        })
+      }
 
-    // Получаем все точки для всех рейсов этого сообщения
-    const pointsResult = await query(
-      `SELECT 
-         tp.trip_identifier,
-         tp.point_type,
-         tp.point_num,
-         p.point_id,
-         p.point_name,
-         p.door_open_1,
-         p.door_open_2,
-         p.door_open_3,
-         p.latitude,
-         p.longitude,
-         p.adress
-       FROM trip_points tp
-       JOIN points p ON tp.point_id = p.point_id
-       JOIN trip_messages tm ON tp.trip_identifier = tm.trip_identifier
-       WHERE tm.message_id = $1
-       ORDER BY tp.point_num`,
-      [messageId],
-    )
+      const phoneGroup = groupedData.get(row.phone)
 
-    // Группируем точки по рейсам
-    const tripsData = tripDataResult.rows.reduce((trips: any[], row: any) => {
-      const existingTrip = trips.find((t) => t.trip_identifier === row.trip_identifier)
-      if (!existingTrip) {
-        trips.push({
+      if (row.trip_identifier && !phoneGroup.trips.has(row.trip_identifier)) {
+        // Получаем точки для этого рейса, отсортированные только по point_num
+        const tripPointsResult = await query`
+          SELECT DISTINCT
+            tp.point_type,
+            tp.point_num,
+            p.point_id,
+            p.point_name,
+            p.door_open_1,
+            p.door_open_2,
+            p.door_open_3,
+            p.latitude,
+            p.longitude,
+            p.adress
+          FROM trip_points tp
+          JOIN points p ON tp.point_id = p.id
+          WHERE tp.trip_id = ${tripId} AND tp.trip_identifier = ${row.trip_identifier}
+          ORDER BY tp.point_num
+        `
+
+        // Сначала сортируем все точки по point_num
+        const sortedPoints = tripPointsResult.sort((a, b) => a.point_num - b.point_num)
+
+        const loading_points = []
+        const unloading_points = []
+
+        // Затем разделяем на типы, сохраняя порядок по point_num
+        for (const point of sortedPoints) {
+          const pointInfo = {
+            point_id: point.point_id,
+            point_name: point.point_name,
+            point_num: point.point_num,
+            door_open_1: point.door_open_1,
+            door_open_2: point.door_open_2,
+            door_open_3: point.door_open_3,
+            latitude: point.latitude,
+            longitude: point.longitude,
+            adress: point.adress,
+          }
+
+          if (point.point_type === "P") {
+            loading_points.push(pointInfo)
+          } else if (point.point_type === "D") {
+            unloading_points.push(pointInfo)
+          }
+        }
+
+        phoneGroup.trips.set(row.trip_identifier, {
           trip_identifier: row.trip_identifier,
           vehicle_number: row.vehicle_number,
           planned_loading_time: row.planned_loading_time,
-          driver_comment: row.driver_comment || "",
-          loading_points: [],
-          unloading_points: [],
+          driver_comment: row.driver_comment,
+          loading_points: loading_points,
+          unloading_points: unloading_points,
         })
       }
-      return trips
-    }, [])
+    }
 
-    // Распределяем точки по рейсам
-    pointsResult.rows.forEach((point: any) => {
-      const trip = tripsData.find((t) => t.trip_identifier === point.trip_identifier)
-      if (trip) {
-        const pointInfo = {
-          point_id: point.point_id,
-          point_name: point.point_name,
-          door_open_1: point.door_open_1,
-          door_open_2: point.door_open_2,
-          door_open_3: point.door_open_3,
-          latitude: point.latitude,
-          longitude: point.longitude,
-          adress: point.adress,
-          point_num: point.point_num,
-        }
-
-        if (point.point_type === "P") {
-          trip.loading_points.push(pointInfo)
-        } else if (point.point_type === "D") {
-          trip.unloading_points.push(pointInfo)
-        }
-      }
-    })
-
-    // Отправляем обновленное сообщение
-    const telegramResult = await sendMultipleTripMessageWithButtons(
-      tripData.telegram_id,
-      tripsData,
-      tripData.first_name,
-      messageId,
-      true, // isCorrection = true
-      false, // isResend = false
-      tripData.telegram_message_id,
-    )
-
-    // Обновляем telegram_message_id
-    await query(`UPDATE trip_messages SET telegram_message_id = $1 WHERE message_id = $2`, [
-      telegramResult.message_id,
-      messageId,
-    ])
-
-    console.log("=== CORRECTIONS SAVED SUCCESSFULLY ===")
+    // Отправляем обновленные сообщения
+    if (groupedData.size > 0) {
+      console.log(`DEBUG: Sending corrected messages to ${groupedData.size} phones`)
+      const sendResults = await sendMultipleTripMessageWithButtons(groupedData, false, true)
+      console.log(`DEBUG: Send results:`, sendResults)
+    }
 
     return NextResponse.json({
       success: true,
-      message: "Corrections saved and message sent successfully",
-      telegramMessageId: telegramResult.message_id,
+      message: "Corrections saved and messages sent successfully",
     })
   } catch (error) {
     console.error("Error saving corrections:", error)
-    return NextResponse.json({
-      success: false,
-      error: "Failed to save corrections",
-      details: error instanceof Error ? error.message : "Unknown error",
-    })
+    return NextResponse.json(
+      {
+        success: false,
+        error: "Failed to save corrections",
+        details: error instanceof Error ? error.message : "Unknown error",
+      },
+      { status: 500 },
+    )
   }
 }
