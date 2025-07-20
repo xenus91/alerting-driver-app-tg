@@ -175,6 +175,11 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                             <p>
                               <strong>Водитель:</strong> {conflict.driver_name} ({formatPhone(conflict.driver_phone)})
                             </p>
+                            {conflict.trip_id && (
+                              <p>
+                                <strong>Номер рассылки:</strong> {conflict.trip_id}
+                              </p>
+                            )}
                           </div>
                         ))}
                       </div>
