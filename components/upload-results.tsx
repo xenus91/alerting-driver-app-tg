@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Separator } from "@/components/ui/separator"
 import { CheckCircle, XCircle, AlertTriangle, Send, RefreshCw, Users, UserX, MapPin } from "lucide-react"
-import { TripCorrectionModal } from "./trip-correction-modal" // Импортируем TripCorrectionModal
+// Импортируем TripCorrectionModal
+import { TripCorrectionModal } from "./trip-correction-modal"
 
 interface UploadResult {
   success: boolean
@@ -71,11 +72,11 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
   const [isSending, setIsSending] = useState(false)
   const [sendResult, setSendResult] = useState<SendResult | null>(null)
 
-  // Состояния для TripCorrectionModal
-  const [isCorrectionModalOpen, setIsCorrectionModalOpen] = useState(false)
-  const [correctionModalTripId, setCorrectionModalTripId] = useState<number | undefined>(undefined)
-  const [correctionModalPhone, setCorrectionModalPhone] = useState<string | undefined>(undefined)
-  const [correctionModalDriverName, setCorrectionModalDriverName] = useState<string | undefined>(undefined)
+  // Состояние для управления модальным окном TripCorrectionModal
+  const [showCorrectionModal, setShowCorrectionModal] = useState(false)
+  const [currentConflictTripId, setCurrentConflictTripId] = useState<number | undefined>(undefined)
+  const [currentConflictPhone, setCurrentConflictPhone] = useState<string | undefined>(undefined)
+  const [currentConflictDriverName, setCurrentConflictDriverName] = useState<string | undefined>(undefined)
 
   const handleSendMessages = async () => {
     if (!result.tripData || result.tripData.length === 0) {
@@ -138,18 +139,20 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
     return phone
   }
 
-  const handleOpenCorrectionModal = (tripId: number, driverPhone: string, driverName: string) => {
-    setCorrectionModalTripId(tripId)
-    setCorrectionModalPhone(driverPhone)
-    setCorrectionModalDriverName(driverName)
-    setIsCorrectionModalOpen(true)
+  // Функция для открытия TripCorrectionModal
+  const openCorrectionModalForConflict = (tripId: number, driverPhone: string, driverName: string) => {
+    setCurrentConflictTripId(tripId)
+    setCurrentConflictPhone(driverPhone)
+    setCurrentConflictDriverName(driverName)
+    setShowCorrectionModal(true)
   }
 
-  const handleCloseCorrectionModal = () => {
-    setIsCorrectionModalOpen(false)
-    setCorrectionModalTripId(undefined)
-    setCorrectionModalPhone(undefined)
-    setCorrectionModalDriverName(undefined)
+  // Функция для закрытия TripCorrectionModal
+  const closeCorrectionModal = () => {
+    setShowCorrectionModal(false)
+    setCurrentConflictTripId(undefined)
+    setCurrentConflictPhone(undefined)
+    setCurrentConflictDriverName(undefined)
   }
 
   // Используем sendResult для отображения ошибок после попытки отправки
@@ -204,7 +207,7 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                                     variant="outline"
                                     size="sm"
                                     onClick={() =>
-                                      handleOpenCorrectionModal(
+                                      openCorrectionModalForConflict(
                                         conflict.trip_id,
                                         conflict.driver_phone,
                                         conflict.driver_name,
@@ -249,15 +252,17 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
           </CardContent>
         </Card>
 
-        {isCorrectionModalOpen && (
+        {/* TripCorrectionModal, которая будет открываться */}
+        {showCorrectionModal && (
           <TripCorrectionModal
-            isOpen={isCorrectionModalOpen}
-            onClose={handleCloseCorrectionModal}
+            isOpen={showCorrectionModal}
+            onClose={closeCorrectionModal}
             mode="edit"
-            tripId={correctionModalTripId}
-            phone={correctionModalPhone}
-            driverName={correctionModalDriverName}
-            onOpenConflictTrip={() => {}} // Этот пропс не используется при прямом открытии
+            tripId={currentConflictTripId}
+            phone={currentConflictPhone}
+            driverName={currentConflictDriverName}
+            // onCorrectionSent и onAssignmentSent не нужны здесь, так как это только просмотр/редактирование
+            onOpenConflictTrip={() => {}} // Пустая функция, так как мы уже в модалке
           />
         )}
       </>

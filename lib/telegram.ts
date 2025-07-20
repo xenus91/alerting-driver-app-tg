@@ -1,374 +1,5 @@
-import { AppConfig } from "./app-config"
-import { normalizePhoneNumber } from "./utils"
-
-const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN
-const NEXT_PUBLIC_BOT_USERNAME = process.env.NEXT_PUBLIC_BOT_USERNAME
-
-if (!TELEGRAM_BOT_TOKEN) {
-  console.error("TELEGRAM_BOT_TOKEN is not set")
-}
-
-if (!NEXT_PUBLIC_BOT_USERNAME) {
-  console.error("NEXT_PUBLIC_BOT_USERNAME is not set")
-}
-
-const TELEGRAM_API_BASE = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
-
-interface TelegramResponse {
-  ok: boolean
-  result?: any
-  description?: string
-  error_code?: number
-}
-
-interface SendMessageOptions {
-  chat_id: number | string
-  text: string
-  parse_mode?: "HTML" | "MarkdownV2" | "Markdown"
-  reply_markup?: any
-  disable_web_page_preview?: boolean
-  disable_notification?: boolean
-  protect_content?: boolean
-  reply_to_message_id?: number
-  allow_sending_without_reply?: boolean
-}
-
-interface SetWebhookOptions {
-  url: string
-  ip_address?: string
-  max_connections?: number
-  allowed_updates?: string[]
-  drop_pending_updates?: boolean
-  secret_token?: string
-}
-
-interface BotCommand {
-  command: string
-  description: string
-}
-
-interface TripPoint {
-  point_id: string
-  point_type: "P" | "D"
-  point_num: number
-  point_name?: string
-  latitude?: string
-  longitude?: string
-}
-
-interface TripData {
-  trip_id?: number // Optional for new trips
-  trip_identifier: string
-  vehicle_number: string
-  planned_loading_time: string
-  driver_comment?: string
-  points: TripPoint[]
-}
-
-export async function callTelegramApi(method: string, data: Record<string, any> = {}): Promise<TelegramResponse> {
-  const url = `${TELEGRAM_API_BASE}/${method}`
-  try {
-    const response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    })
-    const json: TelegramResponse = await response.json()
-    if (!json.ok) {
-      console.error(`Telegram API error for method ${method}:`, json.description)
-    }
-    return json
-  } catch (error) {
-    console.error(`Error calling Telegram API method ${method}:`, error)
-    return { ok: false, description: (error as Error).message }
-  }
-}
-
-export async function sendMessage(options: SendMessageOptions): Promise<TelegramResponse> {
-  return callTelegramApi("sendMessage", options)
-}
-
-export async function setWebhook(options: SetWebhookOptions): Promise<TelegramResponse> {
-  return callTelegramApi("setWebhook", options)
-}
-
-export async function deleteWebhook(drop_pending_updates = false): Promise<TelegramResponse> {
-  return callTelegramApi("deleteWebhook", { drop_pending_updates })
-}
-
-export async function getWebhookInfo(): Promise<TelegramResponse> {
-  return callTelegramApi("getWebhookInfo")
-}
-
-export async function getMe(): Promise<TelegramResponse> {
-  return callTelegramApi("getMe")
-}
-
-export async function getUpdates(offset?: number, limit?: number, timeout?: number): Promise<TelegramResponse> {
-  const data: Record<string, any> = {}
-  if (offset !== undefined) data.offset = offset
-  if (limit !== undefined) data.limit = limit
-  if (timeout !== undefined) data.timeout = timeout
-  return callTelegramApi("getUpdates", data)
-}
-
-export async function setMyCommands(commands: BotCommand[]): Promise<TelegramResponse> {
-  return callTelegramApi("setMyCommands", { commands })
-}
-
-export async function getMyCommands(): Promise<TelegramResponse> {
-  return callTelegramApi("getMyCommands")
-}
-
-export async function deleteMyCommands(): Promise<TelegramResponse> {
-  return callTelegramApi("deleteMyCommands")
-}
-
-export async function editMessageText(
-  chat_id: number | string,
-  message_id: number,
-  text: string,
-  parse_mode?: "HTML" | "MarkdownV2" | "Markdown",
-  reply_markup?: any,
-): Promise<TelegramResponse> {
-  return callTelegramApi("editMessageText", {
-    chat_id,
-    message_id,
-    text,
-    parse_mode,
-    reply_markup,
-  })
-}
-
-export async function sendTripMessage(
-  chatId: number,
-  trips: TripData[],
-  isCorrection = false,
-  deletedTripIdentifiers: string[] = [],
-  originalMessageId?: number, // For editing existing message
-): Promise<{ success: boolean; telegramMessageId?: number; error?: string }> {
-  if (!TELEGRAM_BOT_TOKEN) {
-    return { success: false, error: "Telegram bot token is not configured." }
-  }
-
-  let messageText = ""
-  const reply_markup: any = {
-    inline_keyboard: [],
-  }
-
-  if (isCorrection) {
-    messageText += "🔄 *Корректировка рейсов*\n\n"
-    if (deletedTripIdentifiers.length > 0) {
-      messageText += `❌ Удалены рейсы: ${deletedTripIdentifiers.join(", ")}\n\n`
-    }
-  } else {
-    messageText += "✅ *Новые рейсы*\n\n"
-  }
-
-  trips.forEach((trip, index) => {
-    const plannedTime = new Date(trip.planned_loading_time).toLocaleString("ru-RU", {
-      year: "numeric",
-      month: "2-digit",
-      day: "2-digit",
-      hour: "2-digit",
-      minute: "2-digit",
-    })
-
-    messageText += `*Рейс ${index + 1}:* ${trip.trip_identifier}\n`
-    messageText += `🚚 Номер ТС: ${trip.vehicle_number}\n`
-    messageText += `⏰ Время погрузки: ${plannedTime}\n`
-
-    if (trip.driver_comment) {
-      messageText += `💬 Комментарий: ${trip.driver_comment}\n`
-    }
-
-    trip.points
-      .sort((a, b) => a.point_num - b.point_num)
-      .forEach((point) => {
-        const type = point.point_type === "P" ? "⬆️ Погрузка" : "⬇️ Выгрузка"
-        messageText += `  - ${type}: ${point.point_name || point.point_id}\n`
-      })
-    messageText += "\n"
-
-    // Add buttons for each trip
-    reply_markup.inline_keyboard.push([
-      {
-        text: `✅ Принять рейс ${trip.trip_identifier}`,
-        callback_data: `confirm_trip:${trip.trip_id || trip.trip_identifier}`,
-      },
-    ])
-    reply_markup.inline_keyboard.push([
-      {
-        text: `❌ Отказаться от рейса ${trip.trip_identifier}`,
-        callback_data: `reject_trip:${trip.trip_id || trip.trip_identifier}`,
-      },
-    ])
-  })
-
-  // Add a general decline button if there are multiple trips or if it's a correction
-  if (trips.length > 1 || isCorrection) {
-    reply_markup.inline_keyboard.push([
-      {
-        text: "🚫 Отказаться от всех рейсов",
-        callback_data: `decline_all_trips`,
-      },
-    ])
-  }
-
-  try {
-    let response: TelegramResponse
-    if (isCorrection && originalMessageId) {
-      // If it's a correction and we have the original message ID, edit the message
-      response = await editMessageText(chatId, originalMessageId, messageText, "MarkdownV2", reply_markup)
-    } else {
-      // Otherwise, send a new message
-      response = await sendMessage({
-        chat_id: chatId,
-        text: messageText,
-        parse_mode: "MarkdownV2",
-        reply_markup: reply_markup,
-      })
-    }
-
-    if (response.ok) {
-      return { success: true, telegramMessageId: response.result.message_id }
-    } else {
-      return { success: false, error: response.description }
-    }
-  } catch (error: any) {
-    console.error("Error sending trip message to Telegram:", error)
-    return { success: false, error: error.message }
-  }
-}
-
-export async function sendWelcomeMessage(chatId: number, username: string): Promise<TelegramResponse> {
-  const welcomeText = `
-Привет, ${username}! 👋
-Я бот-диспетчер, который поможет тебе получать и управлять рейсами.
-
-Чтобы начать работу, пожалуйста, подтверди свой номер телефона.
-Нажми на кнопку "Подтвердить номер телефона" ниже.
-`
-  return sendMessage({
-    chat_id: chatId,
-    text: welcomeText,
-    reply_markup: {
-      keyboard: [
-        [
-          {
-            text: "📞 Подтвердить номер телефона",
-            request_contact: true,
-          },
-        ],
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true,
-    },
-  })
-}
-
-export async function sendPhoneVerificationSuccess(chatId: number): Promise<TelegramResponse> {
-  const text = `
-✅ Отлично! Ваш номер телефона подтвержден.
-Теперь вы можете получать рейсы.
-`
-  return sendMessage({
-    chat_id: chatId,
-    text: text,
-    reply_markup: {
-      remove_keyboard: true,
-    },
-  })
-}
-
-export async function sendPhoneVerificationFailed(chatId: number): Promise<TelegramResponse> {
-  const text = `
-❌ Не удалось подтвердить номер телефона.
-Пожалуйста, убедитесь, что вы отправляете свой контакт, а не просто вводите номер.
-Попробуйте еще раз, нажав на кнопку "Подтвердить номер телефона".
-`
-  return sendMessage({
-    chat_id: chatId,
-    text: text,
-    reply_markup: {
-      keyboard: [
-        [
-          {
-            text: "📞 Подтвердить номер телефона",
-            request_contact: true,
-          },
-        ],
-      ],
-      resize_keyboard: true,
-      one_time_keyboard: true,
-    },
-  })
-}
-
-export async function sendTripConfirmation(
-  chatId: number,
-  tripIdentifier: string,
-  status: "confirmed" | "rejected" | "declined",
-): Promise<TelegramResponse> {
-  let text = ""
-  switch (status) {
-    case "confirmed":
-      text = `✅ Рейс ${tripIdentifier} успешно подтвержден!`
-      break
-    case "rejected":
-      text = `❌ Вы отказались от рейса ${tripIdentifier}.`
-      break
-    case "declined":
-      text = `🚫 Вы отказались от всех предложенных рейсов.`
-      break
-  }
-  return sendMessage({ chat_id: chatId, text: text })
-}
-
-export async function sendAdminNotification(chatId: number, message: string): Promise<TelegramResponse> {
-  const SUPPORT_OPERATOR_CHAT_ID = process.env.SUPPORT_OPERATOR_CHAT_ID
-  if (!SUPPORT_OPERATOR_CHAT_ID) {
-    console.warn("SUPPORT_OPERATOR_CHAT_ID is not set. Admin notifications will not be sent.")
-    return { ok: false, description: "Admin chat ID not configured." }
-  }
-  return sendMessage({ chat_id: SUPPORT_OPERATOR_CHAT_ID, text: message })
-}
-
-export async function sendDriverNotFoundMessage(chatId: number, phone: string): Promise<TelegramResponse> {
-  const text = `
-К сожалению, ваш номер телефона (${normalizePhoneNumber(phone)}) не найден в нашей системе.
-Пожалуйста, свяжитесь с администратором для регистрации.
-`
-  return sendMessage({ chat_id: chatId, text: text })
-}
-
-export async function sendDriverNotVerifiedMessage(chatId: number, phone: string): Promise<TelegramResponse> {
-  const text = `
-Ваш номер телефона (${normalizePhoneNumber(phone)}) еще не верифицирован администратором.
-Пожалуйста, дождитесь подтверждения или свяжитесь с администратором.
-`
-  return sendMessage({ chat_id: chatId, text: text })
-}
-
-export async function sendErrorMessage(chatId: number, errorMessage: string): Promise<TelegramResponse> {
-  const text = `
-Произошла ошибка:
-\`\`\`
-${errorMessage}
-\`\`\`
-Пожалуйста, попробуйте еще раз или свяжитесь с администратором.
-`
-  return sendMessage({ chat_id: chatId, text: text, parse_mode: "MarkdownV2" })
-}
-
-export async function sendDebugMessage(chatId: number, message: string): Promise<TelegramResponse> {
-  if (AppConfig.DEBUG_MODE) {
-    return sendMessage({ chat_id: chatId, text: `DEBUG: ${message}` })
-  }
-  return { ok: true } // Do nothing if debug mode is off
-}
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
 
 export interface TelegramMessage {
   message_id: number
@@ -409,6 +40,9 @@ export interface TelegramUpdate {
 }
 
 export async function sendReplyToMessage(chatId: number, replyToMessageId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
   try {
     const payload = {
       chat_id: chatId,
@@ -417,7 +51,7 @@ export async function sendReplyToMessage(chatId: number, replyToMessageId: numbe
       reply_to_message_id: replyToMessageId,
     }
 
-    const response = await fetch(`${TELEGRAM_API_BASE}/sendMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -439,9 +73,106 @@ export async function sendReplyToMessage(chatId: number, replyToMessageId: numbe
   }
 }
 
+export async function sendMessage(chatId: number, text: string) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  try {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: text,
+        parse_mode: "HTML",
+      }),
+    })
+
+    const data = await response.json()
+
+    if (!data.ok) {
+      throw new Error(data.description || "Failed to send message")
+    }
+
+    return data.result
+  } catch (error) {
+    console.error("Error sending Telegram message:", error)
+    throw error
+  }
+}
+
+export async function editMessageReplyMarkup(chatId: number, messageId: number, replyMarkup?: any) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
+  console.log("=== EDITING MESSAGE REPLY MARKUP ===")
+  console.log("Chat ID:", chatId)
+  console.log("Message ID:", messageId)
+  console.log("New reply markup:", JSON.stringify(replyMarkup, null, 2))
+
+  try {
+    const payload = {
+      chat_id: chatId,
+      message_id: messageId,
+      reply_markup: replyMarkup,
+    }
+
+    const response = await fetch(`${TELEGRAM_API_URL}/editMessageReplyMarkup`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+    console.log("editMessageReplyMarkup response:", JSON.stringify(data, null, 2))
+
+    if (!data.ok) {
+      console.error("Failed to edit message reply markup:", data.description)
+      return null
+    }
+
+    console.log("=== MESSAGE REPLY MARKUP EDITED SUCCESSFULLY ===")
+    return data.result
+  } catch (error) {
+    console.error("Error editing message reply markup:", error)
+    return null
+  }
+}
+
+// Функция для построения URL маршрута в Яндекс.Картах
+function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: number | string }>) {
+  const validPoints = points.filter((p) => {
+    const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+    const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+    return lat && lng && !isNaN(lat) && !isNaN(lng)
+  })
+
+  // ИЗМЕНЕНО: Проверяем, что ВСЕ точки имеют координаты
+  if (validPoints.length !== points.length || validPoints.length < 2) {
+    console.log(`Cannot build route: ${validPoints.length} valid points out of ${points.length} total points`)
+    return null
+  }
+
+  const coordinates = validPoints
+    .map((p) => {
+      const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
+      const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
+      return `${lat},${lng}`
+    })
+    .join("~")
+
+  const url = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
+  console.log(`Built route URL: ${url}`)
+  return url
+}
+
 export async function sendContactRequest(chatId: number) {
   try {
-    const response = await fetch(`${TELEGRAM_API_BASE}/sendMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -672,7 +403,7 @@ export async function sendMultipleTripMessageWithButtons(
         // Получаем текст старого сообщения (можно использовать заглушку, так как мы зачеркиваем)
         const strikethroughMessage = `<s>Устаревшее сообщение. Пожалуйста, используйте новое сообщение ниже.</s>`
 
-        const editResponse = await fetch(`${TELEGRAM_API_BASE}/editMessageText`, {
+        const editResponse = await fetch(`${TELEGRAM_API_URL}/editMessageText`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
@@ -700,7 +431,7 @@ export async function sendMultipleTripMessageWithButtons(
     }
 
     // Отправляем новое сообщение
-    const response = await fetch(`${TELEGRAM_API_BASE}/sendMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -814,7 +545,7 @@ export async function sendTripMessageWithButtons(
 
     message += `🙏 <b>Просьба подтвердить рейс</b>`
 
-    const response = await fetch(`${TELEGRAM_API_BASE}/sendMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -855,7 +586,7 @@ export async function sendTripMessageWithButtons(
 
 export async function sendMessageWithButtons(chatId: number, text: string, messageId: number) {
   try {
-    const response = await fetch(`${TELEGRAM_API_BASE}/sendMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -896,7 +627,7 @@ export async function sendMessageWithButtons(chatId: number, text: string, messa
 
 export async function answerCallbackQuery(callbackQueryId: string, text?: string) {
   try {
-    const response = await fetch(`${TELEGRAM_API_BASE}/answerCallbackQuery`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/answerCallbackQuery`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -922,8 +653,11 @@ export async function answerCallbackQuery(callbackQueryId: string, text?: string
 }
 
 export async function sendTelegramMessage(chatId: number, text: string, messageId?: number) {
+  const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN!
+  const TELEGRAM_API_URL = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}`
+
   try {
-    const response = await fetch(`${TELEGRAM_API_BASE}/sendMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/sendMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -964,73 +698,29 @@ export async function sendTelegramMessage(chatId: number, text: string, messageI
   }
 }
 
-export async function editMessageReplyMarkup(chatId: number, messageId: number, replyMarkup?: any) {
-  console.log("=== EDITING MESSAGE REPLY MARKUP ===")
-  console.log("Chat ID:", chatId)
-  console.log("Message ID:", messageId)
-  console.log("New reply markup:", JSON.stringify(replyMarkup, null, 2))
-
+export async function setWebhook(webhookUrl: string) {
   try {
-    const payload = {
-      chat_id: chatId,
-      message_id: messageId,
-      reply_markup: replyMarkup,
-    }
-
-    const response = await fetch(`${TELEGRAM_API_BASE}/editMessageReplyMarkup`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/setWebhook`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        url: webhookUrl,
+      }),
     })
 
     const data = await response.json()
-    console.log("editMessageReplyMarkup response:", JSON.stringify(data, null, 2))
-
-    if (!data.ok) {
-      console.error("Failed to edit message reply markup:", data.description)
-      return null
-    }
-
-    console.log("=== MESSAGE REPLY MARKUP EDITED SUCCESSFULLY ===")
-    return data.result
+    return data
   } catch (error) {
-    console.error("Error editing message reply markup:", error)
-    return null
+    console.error("Error setting webhook:", error)
+    throw error
   }
-}
-
-// Функция для построения URL маршрута в Яндекс.Картах
-function buildRouteUrl(points: Array<{ latitude?: number | string; longitude?: number | string }>) {
-  const validPoints = points.filter((p) => {
-    const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
-    const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
-    return lat && lng && !isNaN(lat) && !isNaN(lng)
-  })
-
-  // ИЗМЕНЕНО: Проверяем, что ВСЕ точки имеют координаты
-  if (validPoints.length !== points.length || validPoints.length < 2) {
-    console.log(`Cannot build route: ${validPoints.length} valid points out of ${points.length} total points`)
-    return null
-  }
-
-  const coordinates = validPoints
-    .map((p) => {
-      const lat = typeof p.latitude === "string" ? Number.parseFloat(p.latitude) : p.latitude
-      const lng = typeof p.longitude === "string" ? Number.parseFloat(p.longitude) : p.longitude
-      return `${lat},${lng}`
-    })
-    .join("~")
-
-  const url = `https://yandex.ru/maps/?mode=routes&rtt=auto&rtext=${coordinates}&utm_source=ymaps_app_redirect`
-  console.log(`Built route URL: ${url}`)
-  return url
 }
 
 export async function deleteMessage(chatId: number, messageId: number) {
   try {
-    const response = await fetch(`${TELEGRAM_API_BASE}/deleteMessage`, {
+    const response = await fetch(`${TELEGRAM_API_URL}/deleteMessage`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
