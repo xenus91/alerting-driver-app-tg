@@ -19,9 +19,9 @@ import {
   AlertTriangle,
   Zap,
 } from "lucide-react"
-import { QuickTripForm } from "@/components/quick-trip-form"
 import { TripSubscriptionButton } from "@/components/trip-subscription-button"
 import { useToast } from "@/hooks/use-toast"
+import { TripCorrectionModal } from "@/components/trip-correction-modal" // Импортируем модалку
 
 interface TripData {
   id: number
@@ -53,7 +53,8 @@ export default function TripsPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [deletingTripId, setDeletingTripId] = useState<number | null>(null)
   const [showDeleteConfirm, setShowDeleteConfirm] = useState<number | null>(null)
-  const [showQuickTripForm, setShowQuickTripForm] = useState(false)
+  const [showQuickTripForm, setShowQuickTripForm] = useState(false) // Это будет удалено или переименовано
+  const [showTripCorrectionModal, setShowTripCorrectionModal] = useState(false) // Новое состояние для модалки
   const [currentUser, setCurrentUser] = useState<{ telegram_id?: number } | null>(null)
 
   // Состояния для диалога ошибок
@@ -376,151 +377,151 @@ export default function TripsPage() {
   }
 
   return (
-<div className="flex flex-col h-screen">
-  {/* Фиксированная верхняя часть */}
-  <div className="space-y-6 p-4 bg-white border-b sticky top-0 z-10">
-    <div className="flex items-center justify-between">
-      <div>
-        <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
-        <p className="text-muted-foreground">Управление рассылками и отслеживание ответов водителей</p>
-      </div>
-      <div className="flex gap-2">
-        <Button onClick={() => setShowQuickTripForm(true)} className="bg-blue-600 hover:bg-blue-700">
-          <Zap className="h-4 w-4 mr-2" />
-          Быстрая рассылка
-        </Button>
-        <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
-          <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-          Обновить
-        </Button>
-      </div>
-    </div>
-  </div>
-  <div className="flex-1 overflow-auto">
-      {isLoading ? (
-        <div className="flex items-center justify-center p-8">
-          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-          Загрузка рассылок...
-        </div>
-      ) : trips.length === 0 ? (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <Truck className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-semibold mb-2">Рассылки не найдены</h3>
-            <p className="text-muted-foreground text-center mb-4">
-              Создайте первую рассылку, загрузив файл с данными о рейсах
-            </p>
-            <Button asChild>
-              <Link href="/upload">Загрузить файл</Link>
+    <div className="flex flex-col h-screen">
+      {/* Фиксированная верхняя часть */}
+      <div className="space-y-6 p-4 bg-white border-b sticky top-0 z-10">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold">Рассылки рейсов</h1>
+            <p className="text-muted-foreground">Управление рассылками и отслеживание ответов водителей</p>
+          </div>
+          <div className="flex gap-2">
+            <Button onClick={() => setShowTripCorrectionModal(true)} className="bg-blue-600 hover:bg-blue-700">
+              <Zap className="h-4 w-4 mr-2" />
+              Быстрая рассылка
             </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-4">
-          {trips.map((trip) => {
-            const sentPercentage = calculateSentPercentage(trip.sent_messages, trip.total_messages)
-            const responsePercentage = calculateResponsePercentage(
-              trip.confirmed_responses,
-              trip.rejected_responses,
-              trip.declined_responses,
-              trip.sent_messages,
-            )
+            <Button onClick={fetchTrips} disabled={isLoading} variant="outline">
+              <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Обновить
+            </Button>
+          </div>
+        </div>
+      </div>
+      <div className="flex-1 overflow-auto">
+        {isLoading ? (
+          <div className="flex items-center justify-center p-8">
+            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+            Загрузка рассылок...
+          </div>
+        ) : trips.length === 0 ? (
+          <Card>
+            <CardContent className="flex flex-col items-center justify-center py-12">
+              <Truck className="h-12 w-12 text-muted-foreground mb-4" />
+              <h3 className="text-lg font-semibold mb-2">Рассылки не найдены</h3>
+              <p className="text-muted-foreground text-center mb-4">
+                Создайте первую рассылку, загрузив файл с данными о рейсах
+              </p>
+              <Button asChild>
+                <Link href="/upload">Загрузить файл</Link>
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-4">
+            {trips.map((trip) => {
+              const sentPercentage = calculateSentPercentage(trip.sent_messages, trip.total_messages)
+              const responsePercentage = calculateResponsePercentage(
+                trip.confirmed_responses,
+                trip.rejected_responses,
+                trip.declined_responses,
+                trip.sent_messages,
+              )
 
-            return (
-              <Card key={trip.id} className={`w-full ${getCardBackgroundColor(trip)}`}>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
-                        <Truck className="h-5 w-5 text-blue-600" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-lg">Рассылка #{trip.id}</CardTitle>
-                        <CardDescription className="flex items-center gap-4">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="h-3 w-3" />
-                            {formatDate(trip.created_at)}
-                          </span>
-                          {trip.first_sent_at && (
+              return (
+                <Card key={trip.id} className={`w-full ${getCardBackgroundColor(trip)}`}>
+                  <CardHeader>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-blue-100">
+                          <Truck className="h-5 w-5 text-blue-600" />
+                        </div>
+                        <div>
+                          <CardTitle className="text-lg">Рассылка #{trip.id}</CardTitle>
+                          <CardDescription className="flex items-center gap-4">
                             <span className="flex items-center gap-1">
-                              <Clock className="h-3 w-3" />
-                              {getTimeSinceSent(trip, trip.first_sent_at)}
+                              <Calendar className="h-3 w-3" />
+                              {formatDate(trip.created_at)}
                             </span>
-                          )}
-                          {trip.carpark && (
-                            <span className="text-xs bg-gray-100 px-2 py-1 rounded">Автопарк: {trip.carpark}</span>
-                          )}
-                        </CardDescription>
+                            {trip.first_sent_at && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {getTimeSinceSent(trip, trip.first_sent_at)}
+                              </span>
+                            )}
+                            {trip.carpark && (
+                              <span className="text-xs bg-gray-100 px-2 py-1 rounded">Автопарк: {trip.carpark}</span>
+                            )}
+                          </CardDescription>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button asChild variant="outline">
+                          <Link href={`/trips/${trip.id}`}>
+                            <Eye className="h-4 w-4 mr-2" />
+                            Детали
+                          </Link>
+                        </Button>
+                        <TripSubscriptionButton
+                          tripId={trip.id}
+                          userTelegramId={currentUser?.telegram_id}
+                          className="mr-2"
+                        />
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="ghost" size="sm">
+                              <MoreVertical className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end">
+                            {canDeleteTrip(trip) && (
+                              <DropdownMenuItem
+                                onClick={() => setShowDeleteConfirm(trip.id)}
+                                className="text-red-600 focus:text-red-600"
+                                disabled={deletingTripId === trip.id}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                {deletingTripId === trip.id ? "Удаление..." : "Удалить рассылку"}
+                              </DropdownMenuItem>
+                            )}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </div>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Button asChild variant="outline">
-                        <Link href={`/trips/${trip.id}`}>
-                          <Eye className="h-4 w-4 mr-2" />
-                          Детали
-                        </Link>
-                      </Button>
-                      <TripSubscriptionButton
-                        tripId={trip.id}
-                        userTelegramId={currentUser?.telegram_id}
-                        className="mr-2"
-                      />
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button variant="ghost" size="sm">
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          {canDeleteTrip(trip) && (
-                            <DropdownMenuItem
-                              onClick={() => setShowDeleteConfirm(trip.id)}
-                              className="text-red-600 focus:text-red-600"
-                              disabled={deletingTripId === trip.id}
-                            >
-                              <Trash2 className="h-4 w-4 mr-2" />
-                              {deletingTripId === trip.id ? "Удаление..." : "Удалить рассылку"}
-                            </DropdownMenuItem>
-                          )}
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
-                  {/* Всего */}
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-blue-600">{trip.total_messages}</div>
-                      <div className="text-sm text-muted-foreground">Всего</div>
-                    </div>
-                    {/* Отправлено */}
-                    <div className="text-center">
-                      <div className="text-2xl font-bold text-green-600">{trip.sent_messages}</div>
-                      <div className="text-sm text-muted-foreground">Отправлено</div>
-                    </div>
-                    {/* Подтверждено - кликабельное */}
-                    <div className="text-center">
-                      {Number(trip.confirmed_responses) > 0 ? (
-                        <Link
-                          href={`/trips/${trip.id}?filter=confirmed`}
-                          className="block hover:opacity-80 transition-opacity"
-                        >
-                          <div className="text-2xl font-bold text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors">
-                            {trip.confirmed_responses}
-                          </div>
-                          <div className="text-sm text-muted-foreground hover:text-emerald-600 transition-colors">
-                            Подтверждено
-                          </div>
-                        </Link>
-                      ) : (
-                        <>
-                          <div className="text-2xl font-bold text-emerald-600">{trip.confirmed_responses}</div>
-                          <div className="text-sm text-muted-foreground">Подтверждено</div>
-                        </>
-                      )}
-                    </div>
-                    {/* Отменено (новый блок) */}
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-4 mb-6">
+                      {/* Всего */}
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-blue-600">{trip.total_messages}</div>
+                        <div className="text-sm text-muted-foreground">Всего</div>
+                      </div>
+                      {/* Отправлено */}
+                      <div className="text-center">
+                        <div className="text-2xl font-bold text-green-600">{trip.sent_messages}</div>
+                        <div className="text-sm text-muted-foreground">Отправлено</div>
+                      </div>
+                      {/* Подтверждено - кликабельное */}
+                      <div className="text-center">
+                        {Number(trip.confirmed_responses) > 0 ? (
+                          <Link
+                            href={`/trips/${trip.id}?filter=confirmed`}
+                            className="block hover:opacity-80 transition-opacity"
+                          >
+                            <div className="text-2xl font-bold text-emerald-600 cursor-pointer hover:text-emerald-700 transition-colors">
+                              {trip.confirmed_responses}
+                            </div>
+                            <div className="text-sm text-muted-foreground hover:text-emerald-600 transition-colors">
+                              Подтверждено
+                            </div>
+                          </Link>
+                        ) : (
+                          <>
+                            <div className="text-2xl font-bold text-emerald-600">{trip.confirmed_responses}</div>
+                            <div className="text-sm text-muted-foreground">Подтверждено</div>
+                          </>
+                        )}
+                      </div>
+                      {/* Отменено (новый блок) */}
                       <div className="text-center">
                         {Number(trip.declined_responses) > 0 ? (
                           <Link href={`/trips/${trip.id}?filter=declined`}>
@@ -534,105 +535,104 @@ export default function TripsPage() {
                           </>
                         )}
                       </div>
-                    {/* Отклонено - кликабельное */}
-                    <div className="text-center">
-                      {Number(trip.rejected_responses) > 0 ? (
-                        <Link
-                          href={`/trips/${trip.id}?filter=rejected`}
-                          className="block hover:opacity-80 transition-opacity"
+                      {/* Отклонено - кликабельное */}
+                      <div className="text-center">
+                        {Number(trip.rejected_responses) > 0 ? (
+                          <Link
+                            href={`/trips/${trip.id}?filter=rejected`}
+                            className="block hover:opacity-80 transition-opacity"
+                          >
+                            <div className="text-2xl font-bold text-red-600 cursor-pointer hover:text-red-700 transition-colors">
+                              {trip.rejected_responses}
+                            </div>
+                            <div className="text-sm text-muted-foreground hover:text-red-600 transition-colors">
+                              Отклонено
+                            </div>
+                          </Link>
+                        ) : (
+                          <>
+                            <div className="text-2xl font-bold text-red-600">{trip.rejected_responses}</div>
+                            <div className="text-sm text-muted-foreground">Отклонено</div>
+                          </>
+                        )}
+                      </div>
+
+                      {/* Ожидают - кликабельное */}
+                      <div className="text-center">
+                        {Number(trip.pending_responses) > 0 ? (
+                          <Link
+                            href={`/trips/${trip.id}?filter=pending`}
+                            className="block hover:opacity-80 transition-opacity"
+                          >
+                            <div className="text-2xl font-bold text-orange-600 cursor-pointer hover:text-orange-700 transition-colors">
+                              {trip.pending_responses}
+                            </div>
+                            <div className="text-sm text-muted-foreground hover:text-orange-600 transition-colors">
+                              Ожидают
+                            </div>
+                          </Link>
+                        ) : (
+                          <>
+                            <div className="text-2xl font-bold text-orange-600">{trip.pending_responses}</div>
+                            <div className="text-sm text-muted-foreground">Ожидают</div>
+                          </>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="space-y-4">
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">Прогресс отправки</span>
+                          <span className="text-sm text-muted-foreground">{sentPercentage}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-2 transition-all duration-300 ${getProgressColor(sentPercentage)}`}
+                            style={{ width: `${sentPercentage}%` }}
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">Прогресс ответов</span>
+                          <span className="text-sm text-muted-foreground">
+                            {responsePercentage}% (
+                            {Number(trip.confirmed_responses) +
+                              Number(trip.rejected_responses) +
+                              Number(trip.declined_responses)}
+                            /{trip.sent_messages})
+                          </span>
+                        </div>
+                        <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
+                          <div
+                            className={`h-2 transition-all duration-300 ${getProgressColor(responsePercentage)}`}
+                            style={{ width: `${responsePercentage}%` }}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 mt-4">
+                      {getTripStatusBadge(trip)}
+                      {Number(trip.error_messages) > 0 && (
+                        <Badge
+                          variant="destructive"
+                          className="cursor-pointer hover:bg-red-700 transition-colors"
+                          onClick={() => handleShowErrors(trip.id)}
                         >
-                          <div className="text-2xl font-bold text-red-600 cursor-pointer hover:text-red-700 transition-colors">
-                            {trip.rejected_responses}
-                          </div>
-                          <div className="text-sm text-muted-foreground hover:text-red-600 transition-colors">
-                            Отклонено
-                          </div>
-                        </Link>
-                      ) : (
-                        <>
-                          <div className="text-2xl font-bold text-red-600">{trip.rejected_responses}</div>
-                          <div className="text-sm text-muted-foreground">Отклонено</div>
-                        </>
+                          <XCircle className="h-3 w-3 mr-1" />
+                          {trip.error_messages} ошибок
+                        </Badge>
                       )}
                     </div>
-
-                    {/* Ожидают - кликабельное */}
-                    <div className="text-center">
-                      {Number(trip.pending_responses) > 0 ? (
-                        <Link
-                          href={`/trips/${trip.id}?filter=pending`}
-                          className="block hover:opacity-80 transition-opacity"
-                        >
-                          <div className="text-2xl font-bold text-orange-600 cursor-pointer hover:text-orange-700 transition-colors">
-                            {trip.pending_responses}
-                          </div>
-                          <div className="text-sm text-muted-foreground hover:text-orange-600 transition-colors">
-                            Ожидают
-                          </div>
-                        </Link>
-                      ) : (
-                        <>
-                          <div className="text-2xl font-bold text-orange-600">{trip.pending_responses}</div>
-                          <div className="text-sm text-muted-foreground">Ожидают</div>
-                        </>
-                      )}
-                    </div>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">Прогресс отправки</span>
-                        <span className="text-sm text-muted-foreground">{sentPercentage}%</span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-2 transition-all duration-300 ${getProgressColor(sentPercentage)}`}
-                          style={{ width: `${sentPercentage}%` }}
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">Прогресс ответов</span>
-                        <span className="text-sm text-muted-foreground">
-                           {responsePercentage}% (
-                            {Number(trip.confirmed_responses) + 
-                            Number(trip.rejected_responses) + 
-                            Number(trip.declined_responses)}/
-                            {trip.sent_messages})
-                        </span>
-                      </div>
-                      <div className="w-full bg-gray-200 rounded-full h-2 overflow-hidden">
-                        <div
-                          className={`h-2 transition-all duration-300 ${getProgressColor(responsePercentage)}`}
-                          style={{ width: `${responsePercentage}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center gap-2 mt-4">
-                    {getTripStatusBadge(trip)}
-                    {Number(trip.error_messages) > 0 && (
-                      <Badge
-                        variant="destructive"
-                        className="cursor-pointer hover:bg-red-700 transition-colors"
-                        onClick={() => handleShowErrors(trip.id)}
-                      >
-                        <XCircle className="h-3 w-3 mr-1" />
-                        {trip.error_messages} ошибок
-                      </Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
-      )}
-
+                  </CardContent>
+                </Card>
+              )
+            })}
+          </div>
+        )}
       </div>
 
       {/* Диалог ошибок */}
@@ -733,14 +733,16 @@ export default function TripsPage() {
           </div>
         </div>
       )}
-      {/* Модальное окно быстрой рассылки */}
-      <QuickTripForm
-        isOpen={showQuickTripForm}
-        onClose={() => setShowQuickTripForm(false)}
-        onTripSent={() => {
+      {/* Модальное окно быстрой рассылки (теперь TripCorrectionModal) */}
+      <TripCorrectionModal
+        isOpen={showTripCorrectionModal}
+        onClose={() => setShowTripCorrectionModal(false)}
+        mode="create"
+        onAssignmentSent={() => {
           fetchTrips() // Обновляем список после отправки
-          setShowQuickTripForm(false)
+          setShowTripCorrectionModal(false)
         }}
+        onOpenConflictTrip={() => {}} // Пустая функция, так как в этом контексте не используется
       />
     </div>
   )
