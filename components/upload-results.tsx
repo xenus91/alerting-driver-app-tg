@@ -84,7 +84,6 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
 
     setIsSending(true)
     try {
-      // Отправляем POST запрос с правильной структурой данных
       const response = await fetch("/api/send-messages", {
         method: "POST",
         headers: {
@@ -95,23 +94,27 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
         }),
       })
 
+      const responseData = await response.json() // Всегда парсим JSON ответ
+
       if (!response.ok) {
-        const errorData = await response.json()
-        console.error("API Error Response:", errorData) // Логируем полный ответ API при ошибке
-        throw new Error(errorData.error || "Ошибка сервера")
+        // Если ответ не OK, responseData содержит детали ошибки
+        setSendResult({
+          success: false,
+          error: responseData.error,
+          details: responseData.details,
+          trip_identifiers: responseData.trip_identifiers,
+          conflict_data: responseData.conflict_data,
+        })
+        return // Выходим из функции после установки состояния ошибки
       }
 
-      const responseData = await response.json()
-      console.log("API Success Response Data:", responseData) // Логируем полный ответ API при успехе
+      // Если ответ OK, responseData содержит детали успеха
       setSendResult(responseData)
     } catch (error) {
       console.error("Error sending messages:", error)
       setSendResult({
         success: false,
         error: error instanceof Error ? error.message : "Ошибка при отправке сообщений",
-        // Если ошибка пришла из API, пытаемся сохранить trip_identifiers и conflict_data
-        trip_identifiers: (error as any).trip_identifiers,
-        conflict_data: (error as any).conflict_data,
       })
     } finally {
       setIsSending(false)
@@ -172,12 +175,6 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
                             <p>
                               <strong>Водитель:</strong> {conflict.driver_name} ({formatPhone(conflict.driver_phone)})
                             </p>
-                            {/* Добавляем trip_id, если он есть и нужен для отображения */}
-                            {conflict.trip_id && (
-                              <p>
-                                <strong>ID рейса в системе:</strong> {conflict.trip_id}
-                              </p>
-                            )}
                           </div>
                         ))}
                       </div>
@@ -442,54 +439,7 @@ export default function UploadResults({ result, onSendMessages }: UploadResultsP
             ) : (
               <Alert variant="destructive">
                 <XCircle className="h-4 w-4" />
-                <AlertDescription>
-                  {sendResult.error || "Неизвестная ошибка при отправке"}
-                  {sendResult.details && (
-                    <div className="mt-2">
-                      <strong>Детали:</strong> {sendResult.details}
-                    </div>
-                  )}
-                  {/* Добавляем отображение conflict_data и trip_identifiers для sendResult */}
-                  {sendResult.error?.trim() === "trip_already_assigned" && (
-                    <>
-                      <p className="mt-2">
-                        Рейс(ы) со следующими идентификаторами уже существуют в системе и назначены водителям:
-                      </p>
-                      {sendResult.trip_identifiers && sendResult.trip_identifiers.length > 0 && (
-                        <ul className="list-disc list-inside mt-2">
-                          {sendResult.trip_identifiers.map((id, index) => (
-                            <li key={index}>
-                              <strong>{id}</strong>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      {sendResult.conflict_data && sendResult.conflict_data.length > 0 && (
-                        <div className="mt-4">
-                          <h5 className="font-medium mb-2">Детали конфликта:</h5>
-                          <div className="space-y-2">
-                            {sendResult.conflict_data.map((conflict, index) => (
-                              <div key={index} className="p-2 bg-red-50 border border-red-200 rounded text-sm">
-                                <p>
-                                  <strong>Идентификатор рейса:</strong> {conflict.trip_identifier}
-                                </p>
-                                <p>
-                                  <strong>Водитель:</strong> {conflict.driver_name} (
-                                  {formatPhone(conflict.driver_phone)})
-                                </p>
-                                {conflict.trip_id && (
-                                  <p>
-                                    <strong>ID рейса в системе:</strong> {conflict.trip_id}
-                                  </p>
-                                )}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </>
-                  )}
-                </AlertDescription>
+                <AlertDescription>{sendResult.error || "Неизвестная ошибка при отправке"}</AlertDescription>
               </Alert>
             )}
           </CardContent>
