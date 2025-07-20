@@ -5,7 +5,7 @@ const sql = neon(process.env.DATABASE_URL!)
 
 export interface User {
   id: number
-  telegram_id: string
+  telegram_id: number
   phone: string
   name: string
   first_name?: string
@@ -17,9 +17,6 @@ export interface User {
   temp_last_name?: string
   verified?: boolean
   created_at: string
-  updated_at: string
-  username: string | null
-  role: string
 }
 
 export interface Trip {
@@ -28,40 +25,24 @@ export interface Trip {
   vehicle_number?: string
   planned_loading_time?: string
   driver_comment?: string
-  carpark?: string
+  carpark?: string // Добавляем поле carpark
   created_at: string
   status: string
-  points: Point[]
-  total_messages?: number
-  sent_messages?: number
-  error_messages?: number
-  confirmed_responses?: number
-  rejected_responses?: number
-  declined_responses?: number
-  pending_responses?: number
-  first_sent_at?: string
-  last_sent_at?: string
-  // Добавленные поля для TripTable
-  trip_id: string // Assuming trip_id is a string for display/lookup
-  driver_name?: string
-  driver_phone?: string
-  car_number?: string
-  updated_at?: string
 }
 
 export interface Point {
   id: number
   point_id: string
-  point_name: string | null
+  point_name: string
   door_open_1?: string
   door_open_2?: string
   door_open_3?: string
-  latitude?: number | null
-  longitude?: number | null
-  address: string | null
-  comment: string | null
+  latitude?: string // Теперь без пробела!
+  longitude?: string
+  adress?: string // Поле адреса (с одной 'd' как в БД)
   created_at: string
   updated_at: string
+  
 }
 
 export interface TripPoint {
@@ -79,7 +60,7 @@ export interface TripPoint {
   door_open_3?: string
   latitude?: number
   longitude?: number
-  driver_phone?: string
+  driver_phone?: string // Добавляем новое поле
 }
 
 export interface TripMessage {
@@ -110,7 +91,7 @@ export interface UserPendingAction {
   created_at: string
 }
 
-export async function createUser(telegramId: string, phone: string, name: string) {
+export async function createUser(telegramId: number, phone: string, name: string) {
   try {
     const normalizedPhone = phone.startsWith("+") ? phone.slice(1) : phone
 
@@ -133,7 +114,7 @@ export async function createUser(telegramId: string, phone: string, name: string
   }
 }
 
-export async function updateUserRegistrationStep(telegramId: string, step: string, data?: any) {
+export async function updateUserRegistrationStep(telegramId: number, step: string, data?: any) {
   try {
     let updateQuery
 
@@ -181,7 +162,7 @@ export async function updateUserRegistrationStep(telegramId: string, step: strin
   }
 }
 
-export async function getUserByTelegramId(telegramId: string) {
+export async function getUserByTelegramId(telegramId: number) {
   try {
     const result = await sql`
       SELECT * FROM users WHERE telegram_id = ${telegramId}
@@ -237,6 +218,7 @@ export async function getUsersWithVerificationByPhones(phones: string[]) {
   }
 }
 
+// Обновляем функцию createTrip для сохранения carpark
 export async function createTrip(carpark?: string) {
   try {
     const result = await sql`
@@ -335,11 +317,11 @@ export async function createTripPoint(
   pointType: "P" | "D",
   pointNum: number,
   tripIdentifier?: string,
-  driverPhone?: string,
+  driverPhone?: string // Добавляем новый параметр
 ) {
   try {
     console.log(
-      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}, driverPhone: ${driverPhone}`,
+      `DEBUG: Creating trip point - tripId: ${tripId}, pointId: ${pointId}, type: ${pointType}, num: ${pointNum}, tripIdentifier: ${tripIdentifier}, driverPhone: ${driverPhone}`
     )
 
     const pointResult = await sql`
@@ -386,14 +368,14 @@ export async function createPoint(
   doorOpen1?: string,
   doorOpen2?: string,
   doorOpen3?: string,
-  latitude?: number,
-  longitude?: number,
-  address?: string,
+  latitude?: string,
+  longitude?: string,
+  adress?: string,
 ) {
   try {
     const result = await sql`
-      INSERT INTO points (point_id, point_name, door_open_1, door_open_2, door_open_3, latitude, longitude, address)
-      VALUES (${pointId}, ${pointName}, ${doorOpen1 || null}, ${doorOpen2 || null}, ${doorOpen3 || null}, ${latitude || null}, ${longitude || null}, ${address || null})
+      INSERT INTO points (point_id, point_name, door_open_1, door_open_2, door_open_3, latitude, longitude, adress)
+      VALUES (${pointId}, ${pointName}, ${doorOpen1 || null}, ${doorOpen2 || null}, ${doorOpen3 || null}, ${latitude || null}, ${longitude || null}, ${adress || null})
       RETURNING *
     `
     return result[0] as Point
@@ -410,9 +392,9 @@ export async function updatePoint(
   doorOpen1?: string,
   doorOpen2?: string,
   doorOpen3?: string,
-  latitude?: number,
-  longitude?: number,
-  address?: string,
+  latitude?: string,
+  longitude?: string,
+  adress?: string,
 ) {
   try {
     const result = await sql`
@@ -424,7 +406,7 @@ export async function updatePoint(
           door_open_3 = ${doorOpen3 || null},
           latitude = ${latitude || null},
           longitude = ${longitude || null},
-          address = ${address || null},
+          adress = ${adress || null},
           updated_at = CURRENT_TIMESTAMP
       WHERE id = ${id}
       RETURNING *
@@ -497,6 +479,7 @@ export async function updateMessageResponse(messageId: number, responseStatus: s
       WHERE id = ${messageId}
       RETURNING *
     `
+    // Автоматически проверяем подписки при изменении статуса ответа
     try {
       await subscriptionService.checkSubscriptions()
     } catch (error) {
@@ -564,7 +547,7 @@ export async function deleteUserPendingAction(userId: number) {
   }
 }
 
-export async function getTripMessageByTelegramId(telegramUserId: string, tripMessageId: number) {
+export async function getTripMessageByTelegramId(telegramUserId: number, tripMessageId: number) {
   try {
     const result = await sql`
       SELECT tm.* 
@@ -600,17 +583,18 @@ export async function getTripMessages(tripId: number) {
   }
 }
 
+// Обновляем функцию getTrips для фильтрации по carpark
 export async function getTrips(carparkFilter?: string) {
   try {
-    let result
+    let query
 
     if (carparkFilter) {
-      result = await sql`
+      query = sql`
         SELECT 
           t.id,
           t.created_at,
           t.carpark,
-          COUNT(DISTINCT u.telegram_id) AS total_messages, 
+          COUNT(DISTINCT u.telegram_id) AS total_messages, -- Изменено: уникальные пользователи
           COUNT(DISTINCT CASE WHEN tm.status = 'sent' THEN u.telegram_id END) AS sent_messages,
           COUNT(DISTINCT CASE WHEN tm.status = 'error' THEN u.telegram_id END) AS error_messages,
           COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_responses,
@@ -627,7 +611,7 @@ export async function getTrips(carparkFilter?: string) {
         ORDER BY t.created_at DESC
       `
     } else {
-      result = await sql`
+      query = sql`
         SELECT 
           t.id,
           t.created_at,
@@ -648,6 +632,8 @@ export async function getTrips(carparkFilter?: string) {
         ORDER BY t.created_at DESC
       `
     }
+
+    const result = await query
     return result
   } catch (error) {
     console.error("Error getting trips:", error)
@@ -658,7 +644,7 @@ export async function getTrips(carparkFilter?: string) {
 export async function getAllUsers() {
   try {
     const result = await sql`
-      SELECT id, telegram_id, phone, name, first_name, last_name, full_name, carpark, created_at, registration_state, verified, username, role
+      SELECT id, telegram_id, phone, name, first_name, last_name, full_name, carpark, created_at, registration_state, verified
       FROM users
       ORDER BY created_at DESC
     `
@@ -669,6 +655,7 @@ export async function getAllUsers() {
   }
 }
 
+// Функции для обратной совместимости (старые названия)
 export async function createCampaign(carpark?: string) {
   return createTrip(carpark)
 }
@@ -688,7 +675,7 @@ export async function createCampaignMessage(
   return createTripMessage(tripId, phone, message, telegramId, tripData)
 }
 
-export async function getCampaignMessageByTelegramId(telegramUserId: string, messageId: number) {
+export async function getCampaignMessageByTelegramId(telegramUserId: number, messageId: number) {
   return getTripMessageByTelegramId(telegramUserId, messageId)
 }
 
@@ -863,6 +850,7 @@ export async function getTripDataGroupedByPhone(tripId: number) {
 
 export async function deleteTrip(tripId: number) {
   try {
+    // Удаляем связанные записи в правильном порядке
     await sql`DELETE FROM trip_messages WHERE trip_id = ${tripId}`
     await sql`DELETE FROM trip_points WHERE trip_id = ${tripId}`
     await sql`DELETE FROM trips WHERE id = ${tripId}`
