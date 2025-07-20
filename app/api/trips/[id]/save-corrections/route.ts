@@ -1,13 +1,6 @@
-//app/api/trips/[id]/save-corrections/route.ts
-
 import { type NextRequest, NextResponse } from "next/server"
 import { neon } from "@neondatabase/serverless"
-/* === ИСПРАВЛЕНИЕ ===
- * Добавлен импорт функции sendMultipleTripMessageWithButtons из @/lib/telegram,
- * чтобы устранить ошибку "ReferenceError: sendMultipleTripMessageWithButtons is not defined".
- */
 import { sendMultipleTripMessageWithButtons } from "@/lib/telegram"
-/* === КОНЕЦ ИСПРАВЛЕНИЯ === */
 
 const sql = neon(process.env.DATABASE_URL!)
 
@@ -19,15 +12,14 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     console.log(`Saving corrections for trip ${tripId}, phone ${phone}`)
     console.log("Corrections data:", corrections)
     console.log("Deleted trips:", deletedTrips)
-       /* === ПРОВЕРКА КОНФЛИКТУЮЩИХ РЕЙСОВ === */
-    const identifiersToCheck = [
-      ...deletedTrips,
-      ...corrections.map((c: any) => String(c.trip_identifier))
-    ].filter((value, index, self) => self.indexOf(value) === index);
+    /* === ПРОВЕРКА КОНФЛИКТУЮЩИХ РЕЙСОВ === */
+    const identifiersToCheck = [...deletedTrips, ...corrections.map((c: any) => String(c.trip_identifier))].filter(
+      (value, index, self) => self.indexOf(value) === index,
+    )
 
     if (identifiersToCheck.length > 0) {
-      console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(', ')}`)
-      
+      console.log(`Checking conflicts for identifiers: ${identifiersToCheck.join(", ")}`)
+
       const conflictingTrips = await sql`
         SELECT 
           tm.trip_identifier,
@@ -40,26 +32,29 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         WHERE tm.trip_identifier = ANY(${identifiersToCheck}::text[])
           AND tm.phone <> ${phone}
           AND (tm.response_status IS NULL OR tm.response_status NOT IN ('declined', 'rejected', 'error'))
-      `;
+      `
 
       if (conflictingTrips.length > 0) {
-        const conflictData = conflictingTrips.map(t => ({
+        const conflictData = conflictingTrips.map((t) => ({
           trip_identifier: t.trip_identifier,
           driver_phone: t.phone,
           driver_name: t.full_name || t.first_name || t.phone,
-          trip_id: t.trip_id // Добавляем ID поездки
-        }));
-        
-        console.log(`Conflict found for trips: ${conflictData.map(c => c.trip_identifier).join(', ')}`);
-        
-        return NextResponse.json({ 
-          success: false, 
-          error: "trip_already_assigned",
-          trip_identifiers: conflictData.map(c => c.trip_identifier),
-          conflict_data: conflictData
-        }, { status: 409 });
+          trip_id: t.trip_id, // Добавляем ID поездки
+        }))
+
+        console.log(`Conflict found for trips: ${conflictData.map((c) => c.trip_identifier).join(", ")}`)
+
+        return NextResponse.json(
+          {
+            success: false,
+            error: "trip_already_assigned",
+            trip_identifiers: conflictData.map((c) => c.trip_identifier),
+            conflict_data: conflictData,
+          },
+          { status: 409 },
+        )
       } else {
-        console.log("No trip conflicts found");
+        console.log("No trip conflicts found")
       }
     }
     /* === КОНЕЦ ПРОВЕРКИ КОНФЛИКТОВ === */
@@ -193,12 +188,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           }
         }
       }
-   /* === ИСПРАВЛЕННЫЙ БЛОК ===
-       * Исправлена ошибка обращения к несуществующему столбцу tm.driver_name.
-       * Вместо tm.driver_name используется u.first_name из таблицы users.
-       * Добавлено соединение с таблицей users в SQL-запросе для получения имени водителя.
-       * Сохранена остальная логика формирования trips и отправки сообщения.
-       */
+
       // Получаем данные о рейсах для отправки сообщения
       const messages = await sql`
        SELECT 
@@ -247,8 +237,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
             vehicle_number: row.vehicle_number,
             planned_loading_time: row.planned_loading_time,
             driver_comment: row.driver_comment || "",
-            loading_points: [],
-            unloading_points: [],
+            points: [], // Изменено: теперь все точки в одном массиве
           })
         }
 
@@ -256,20 +245,27 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
           const point = {
             point_id: row.point_id,
             point_name: row.point_name,
-            adress: row.adress, // Добавляем адрес
+            adress: row.adress,
             door_open_1: row.door_open_1,
             door_open_2: row.door_open_2,
             door_open_3: row.door_open_3,
             latitude: row.latitude,
             longitude: row.longitude,
+            point_type: row.point_type, // Добавляем тип точки
+            point_num: row.point_num, // Добавляем номер точки
           }
           const trip = tripsMap.get(row.trip_identifier)!
-          if (row.point_type === "P") {
-            trip.loading_points.push(point)
-          } else if (row.point_type === "D") {
-            trip.unloading_points.push(point)
-          }
+          trip.points.push(point) // Добавляем все точки в один массив
         }
+      }
+
+      // Сортируем точки в каждом рейсе только по point_num
+      for (const trip of tripsMap.values()) {
+        trip.points.sort((a: any, b: any) => a.point_num - b.point_num)
+
+        // Разделяем точки на погрузку и разгрузку для совместимости с существующей функцией
+        trip.loading_points = trip.points.filter((p: any) => p.point_type === "P")
+        trip.unloading_points = trip.points.filter((p: any) => p.point_type === "D")
       }
 
       const trips = Array.from(tripsMap.values())
@@ -288,7 +284,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         messageIds[0], // Используем первый messageId для callback_data
         true, // isCorrection = true
         false, // isResend = false
-        previousTelegramMessageId
+        previousTelegramMessageId,
       )
 
       // Обновляем все сообщения водителя с новым telegram_message_id и текстом
@@ -302,7 +298,7 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
         WHERE id = ANY(${messageIds})
         AND phone = ${phone}
       `
-      /* === КОНЕЦ ИСПРАВЛЕННОГО БЛОКА === */
+
       await sql`COMMIT`
 
       console.log(
