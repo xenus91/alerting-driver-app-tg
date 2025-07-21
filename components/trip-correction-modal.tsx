@@ -226,13 +226,13 @@ export function TripCorrectionModal({
     setDeletedTrips((prev) => [...prev, ...deletedTripIdentifiers]);
   }
 
-  // Функции перемещения точек - правильная логика
-  const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
-    console.log(`🔼 movePointUp called: tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
+  // Функции перемещения точек
+  const movePointUp = useCallback((driverIndex: number, tripIndex: number, pointIndex: number) => {
+    console.log(`🔼 movePointUp called: driverIndex=${driverIndex}, tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
 
-    setCorrections((prev) => {
+    setDriverAssignments((prev) => {
       const updated = [...prev]
-      const points = [...updated[tripIndex].points]
+      const points = [...updated[driverIndex].corrections[tripIndex].Touch]
 
       console.log(
         "Points before movePointUp:",
@@ -244,7 +244,6 @@ export function TripCorrectionModal({
         `Current point: ${currentPoint.point_id} (${currentPoint.point_type}) with point_num=${currentPoint.point_num}`,
       )
 
-      // Находим точку с point_num на 1 меньше
       const targetPointNum = currentPoint.point_num - 1
       const targetPointIndex = points.findIndex((p) => p.point_num === targetPointNum)
 
@@ -260,19 +259,15 @@ export function TripCorrectionModal({
         `Target point: ${targetPoint.point_id} (${targetPoint.point_type}) with point_num=${targetPoint.point_num}`,
       )
 
-      // Меняем point_num местами
-      const newCurrentPointNum = targetPoint.point_num
-      const newTargetPointNum = currentPoint.point_num
-
-      points[pointIndex] = { ...currentPoint, point_num: newCurrentPointNum }
-      points[targetPointIndex] = { ...targetPoint, point_num: newTargetPointNum }
+      points[pointIndex] = { ...currentPoint, point_num: targetPoint.point_num }
+      points[targetPointIndex] = { ...targetPoint, point_num: currentPoint.point_num }
 
       console.log(
         "Points after movePointUp:",
         points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
       )
 
-      updated[tripIndex].points = points
+      updated[driverIndex].corrections[tripIndex].points = points
       return updated
     })
   }, [])
