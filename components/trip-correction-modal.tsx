@@ -624,7 +624,7 @@ export function TripCorrectionModal({
     }
   }
 
-  const sendData = async () => {
+   const sendData = async () => {
     console.log("📤 sendData called")
 
     setIsSending(true)
@@ -641,7 +641,7 @@ export function TripCorrectionModal({
       }
 
       if (mode === "edit") {
-        const messageIds = [...new Set(corrections.map((c) => c.message_id))]
+        const messageIds = [...new Set(driverAssignments[0].corrections.map((c) => c.message_id))]
         console.log("Resending messages with IDs:", messageIds)
 
         const resendResponse = await fetch(`/api/trips/messages/${messageIds[0]}/resend-combined`, {
@@ -661,10 +661,9 @@ export function TripCorrectionModal({
           setSuccess("Корректировка отправлена водителю!")
           console.log("✅ Correction sent successfully")
 
-          // Исправляем вызов onCorrectionSent - убираем несуществующий loadTripDetails
           if (onCorrectionSent) {
             console.log("Calling onCorrectionSent callback")
-            onCorrectionSent(corrections, deletedTrips)
+            onCorrectionSent(driverAssignments[0].corrections, deletedTrips)
           }
         } else {
           console.error("❌ Resend failed:", resendData.error)
