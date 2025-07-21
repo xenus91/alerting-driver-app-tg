@@ -168,12 +168,14 @@ export function TripCorrectionModal({
           return
         }
 
-        setDriver({
+         setDrivers([
+        {
           phone: phone,
           name: driverName || "Неизвестный",
           first_name: driverName,
           full_name: driverName,
-        })
+        }
+      ]);
         loadDriverDetails()
       } else {
         console.log("Initializing create mode")
