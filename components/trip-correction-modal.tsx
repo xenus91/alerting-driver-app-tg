@@ -1044,5 +1044,5 @@ return (
       )}
     </DialogContent>
   </Dialog>
-);
+)
 }
