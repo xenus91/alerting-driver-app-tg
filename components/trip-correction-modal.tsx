@@ -317,13 +317,12 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  // Обновленная функция удаления точки с пересчетом
-  const removePoint = useCallback((tripIndex: number, pointIndex: number) => {
-    console.log(`🗑️ removePoint called: tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
+  const removePoint = useCallback((driverIndex: number, tripIndex: number, pointIndex: number) => {
+    console.log(`🗑️ removePoint called: driverIndex=${driverIndex}, tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
 
-    setCorrections((prev) => {
+    setDriverAssignments((prev) => {
       const updated = [...prev]
-      const points = [...updated[tripIndex].points]
+      const points = [...updated[driverIndex].corrections[tripIndex].points]
 
       console.log(
         "Points before removal:",
@@ -335,10 +334,8 @@ export function TripCorrectionModal({
         `Removing point: ${removedPoint.point_id} (${removedPoint.point_type}) with point_num=${removedPoint.point_num}`,
       )
 
-      // Удаляем точку
       const filteredPoints = points.filter((_, i) => i !== pointIndex)
 
-      // Пересчитываем point_num для всех точек
       const recalculatedPoints = filteredPoints.map((point, index) => ({
         ...point,
         point_num: index + 1,
@@ -349,10 +346,11 @@ export function TripCorrectionModal({
         recalculatedPoints.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
       )
 
-      updated[tripIndex].points = recalculatedPoints
+      updated[driverIndex].corrections[tripIndex].points = recalculatedPoints
       return updated
     })
   }, [])
+
 
   const loadDriverDetails = async () => {
     if (!phone || !tripId) {
