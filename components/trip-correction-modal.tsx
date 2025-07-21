@@ -439,11 +439,14 @@ export function TripCorrectionModal({
     }
   }
 
-  // Работа с рейсами и точками
-  const updateTrip = useCallback((tripIndex: number, field: keyof CorrectionData, value: any) => {
-    setCorrections((prev) => {
+   // Работа с рейсами и точками
+  const updateTrip = useCallback((driverIndex: number, tripIndex: number, field: keyof CorrectionData, value: any) => {
+    setDriverAssignments((prev) => {
       const updated = [...prev]
-      updated[tripIndex] = { ...updated[tripIndex], [field]: value }
+      updated[driverIndex].corrections[tripIndex] = {
+        ...updated[driverIndex].corrections[tripIndex],
+        [field]: value
+      }
       return updated
     })
   }, [])
