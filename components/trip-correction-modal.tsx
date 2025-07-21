@@ -202,6 +202,8 @@ export function TripCorrectionModal({
       loadAvailablePoints()
     }
   }, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
+
+
   // Вспомогательные функции
   const createEmptyDriver = (): Driver => ({
     phone: "",
@@ -448,79 +450,79 @@ export function TripCorrectionModal({
   }
 
   // Работа с рейсами и точками
-  const updateTrip = useCallback((tripIndex: number, field: keyof CorrectionData, value: any) => {
-    setCorrections((prev) => {
+  const updateTrip = useCallback((driverIndex: number, tripIndex: number, field: keyof CorrectionData, value: any) => {
+    setCorrectionsByDriver(prev => {
       const updated = [...prev]
-      updated[tripIndex] = { ...updated[tripIndex], [field]: value }
+      updated[driverIndex] = [...updated[driverIndex]]
+      updated[driverIndex][tripIndex] = { ...updated[driverIndex][tripIndex], [field]: value }
       return updated
     })
   }, [])
 
-  const updatePoint = useCallback((tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
-    console.log(
-      `📝 updatePoint called: tripIndex=${tripIndex}, pointIndex=${pointIndex}, field=${field}, value=${value}`,
-    )
-    setCorrections((prev) => {
+  const updatePoint = useCallback((driverIndex: number, tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
+    setCorrectionsByDriver(prev => {
       const updated = [...prev]
-      updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
+      updated[driverIndex] = [...updated[driverIndex]]
+      updated[driverIndex][tripIndex] = { ...updated[driverIndex][tripIndex] }
+      updated[driverIndex][tripIndex].points = [...updated[driverIndex][tripIndex].points]
+      updated[driverIndex][tripIndex].points[pointIndex] = { 
+        ...updated[driverIndex][tripIndex].points[pointIndex], 
+        [field]: value 
+      }
       return updated
     })
   }, [])
 
-  const addNewPoint = (tripIndex: number) => {
-    console.log(`➕ addNewPoint called: tripIndex=${tripIndex}`)
-
-    const currentPoints = corrections[tripIndex].points
-    const maxPointNum = currentPoints.length > 0 ? Math.max(...currentPoints.map((p) => p.point_num || 0)) : 0
-
-    console.log(`Current points count: ${currentPoints.length}, maxPointNum: ${maxPointNum}`)
-
-    const newPoint: PointData = {
-      point_type: "P",
-      point_num: maxPointNum + 1,
-      point_id: "",
-      point_name: "",
-      latitude: "",
-      longitude: "",
-    }
-
-    console.log("Adding new point:", newPoint)
-
-    setCorrections((prev) => {
+  const addNewPoint = (driverIndex: number, tripIndex: number) => {
+    setCorrectionsByDriver(prev => {
       const updated = [...prev]
-      updated[tripIndex].points = [...updated[tripIndex].points, newPoint]
+      updated[driverIndex] = [...updated[driverIndex]]
+      
+      const currentPoints = updated[driverIndex][tripIndex].points
+      const maxPointNum = currentPoints.length > 0 
+        ? Math.max(...currentPoints.map(p => p.point_num || 0)) 
+        : 0
+      
+      updated[driverIndex][tripIndex] = {
+        ...updated[driverIndex][tripIndex],
+        points: [
+          ...currentPoints,
+          {
+            point_type: "P",
+            point_num: maxPointNum + 1,
+            point_id: "",
+            point_name: "",
+            latitude: "",
+            longitude: "",
+          }
+        ]
+      }
+      
       return updated
     })
   }
 
-  const addNewTrip = () => {
-    console.log("➕ addNewTrip called")
-
-    const newTrip: CorrectionData = {
-      phone: driver?.phone || "",
-      trip_identifier: "",
-      vehicle_number: "",
-      planned_loading_time: new Date().toISOString(),
-      driver_comment: "",
-      message_id: 0,
-      points: [createEmptyPoint()],
-    }
-
-    console.log("Adding new trip:", newTrip)
-    setCorrections([...corrections, newTrip])
+   const addNewTrip = (driverIndex: number) => {
+    console.log("➕ addNewTrip called for driver:", driverIndex)
+    
+    setCorrectionsByDriver(prev => {
+      const updated = [...prev]
+      updated[driverIndex] = [
+        ...updated[driverIndex],
+        createEmptyTrip(drivers[driverIndex].phone)
+      ]
+      return updated
+    })
   }
 
-  const removeTrip = (tripIndex: number) => {
-    console.log(`🗑️ removeTrip called: tripIndex=${tripIndex}`)
-
-    const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
-    console.log(`Removing trip: ${tripIdentifier}`)
-
-    setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
-    if (tripIdentifier) {
-      setDeletedTrips((prev) => [...prev, tripIdentifier])
-    }
+  const removeTrip = (driverIndex: number, tripIndex: number) => {
+    setCorrectionsByDriver(prev => {
+      const updated = [...prev]
+      updated[driverIndex] = updated[driverIndex].filter((_, i) => i !== tripIndex)
+      return updated
+    })
   }
+
 
   // Сохранение и отправка
   const saveCorrections = async () => {
