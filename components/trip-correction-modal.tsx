@@ -491,11 +491,11 @@ export function TripCorrectionModal({
     })
   }
 
-  const addNewTrip = () => {
-    console.log("➕ addNewTrip called")
+ const addNewTrip = (driverIndex: number) => {
+    console.log(`➕ addNewTrip called: driverIndex=${driverIndex}`)
 
     const newTrip: CorrectionData = {
-      phone: driver?.phone || "",
+      phone: driverAssignments[driverIndex].driver?.phone || "",
       trip_identifier: "",
       vehicle_number: "",
       planned_loading_time: new Date().toISOString(),
@@ -505,8 +505,13 @@ export function TripCorrectionModal({
     }
 
     console.log("Adding new trip:", newTrip)
-    setCorrections([...corrections, newTrip])
+    setDriverAssignments((prev) => {
+      const updated = [...prev]
+      updated[driverIndex].corrections = [...updated[driverIndex].corrections, newTrip]
+      return updated
+    })
   }
+
 
   const removeTrip = (tripIndex: number) => {
     console.log(`🗑️ removeTrip called: tripIndex=${tripIndex}`)
