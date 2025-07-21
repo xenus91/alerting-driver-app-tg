@@ -795,7 +795,7 @@ export function TripCorrectionModal({
     return phone
   }
 
-  return (
+ return (
     <Dialog open={isOpen} onOpenChange={onClose}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
@@ -858,94 +858,147 @@ export function TripCorrectionModal({
           </div>
         ) : (
           <div className="space-y-6">
-            {mode === "create" && (
-              <div className="border rounded-lg p-4 bg-blue-50 mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <User className="h-4 w-4 text-blue-600" />
-                  <h3 className="font-medium text-blue-900">Выбор водителя</h3>
-                </div>
-
-                <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
-                  <PopoverTrigger asChild>
+            {driverAssignments.map((assignment, driverIndex) => (
+              // === НОВЫЙ БЛОК: Форма для каждого водителя ===
+              <div key={`driver-${driverIndex}`} className="border rounded-lg p-4 bg-gray-50 mb-4">
+                <div className="flex items-center justify-between mb-3">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-blue-600" />
+                    <h3 className="font-medium text-blue-900">
+                      Водитель {driverIndex + 1}
+                    </h3>
+                  </div>
+                  {mode === "create" && driverAssignments.length > 1 && (
                     <Button
                       variant="outline"
-                      role="combobox"
-                      aria-expanded={driverSearchOpen}
-                      className="w-full justify-between bg-transparent"
+                      className="text-red-600 bg-transparent"
+                      onClick={() => removeDriver(driverIndex)}
                     >
-                      {driver?.phone
-                        ? `${getDriverDisplayName(driver)} (${formatPhone(driver.phone)})`
-                        : "Выберите водителя"}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      Удалить водителя
                     </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0" align="start">
-                    <Command>
-                      <CommandInput
-                        placeholder="Поиск по имени или телефону..."
-                        value={driverSearchValue}
-                        onValueChange={setDriverSearchValue}
-                      />
-                      <CommandList>
-                        <CommandEmpty>Водители не найдены</CommandEmpty>
-                        <CommandGroup className="max-h-[300px] overflow-auto">
-                          {filteredDrivers.map((driver) => (
-                            <CommandItem
-                              key={driver.phone}
-                              value={`${getDriverDisplayName(driver)} ${driver.phone}`}
-                              onSelect={() => {
-                                setDriver(driver)
-                                setDriverSearchOpen(false)
-                                // Обновляем phone во всех рейсах
-                                setCorrections((prev) =>
-                                  prev.map((trip) => ({
-                                    ...trip,
-                                    phone: driver.phone,
-                                  })),
-                                )
-                              }}
-                            >
-                              <div className="flex flex-col">
-                                <span>{getDriverDisplayName(driver)}</span>
-                                <span className="text-sm text-gray-500">{formatPhone(driver.phone)}</span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
+                  )}
+                </div>
+
+                {mode === "create" && (
+                  <div className="mb-4">
+                    <Popover
+                      open={driverSearchStates[`driver-${driverIndex}`]?.open || false}
+                      onOpenChange={(open) => handleDriverSearchStateChange(driverIndex, { open })}
+                    >
+                      <PopoverTrigger asChild>
+                        <Button
+                          variant="outline"
+                          role="combobox"
+                          aria-expanded={driverSearchStates[`driver-${driverIndex}`]?.open || false}
+                          className="w-full justify-between bg-transparent"
+                        >
+                          {assignment.driver?.phone
+                            ? `${getDriverDisplayName(assignment.driver)} (${formatPhone(assignment.driver.phone)})`
+                            : "Выберите водителя"}
+                          <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent className="w-full p-0" align="start">
+                        <Command>
+                          <CommandInput
+                            placeholder="Поиск по имени или телефону..."
+                            value={driverSearchStates[`driver-${driverIndex}`]?.search || ""}
+                            onValueChange={(search) => handleDriverSearchStateChange(driverIndex, { search })}
+                          />
+                          <CommandList>
+                            <CommandEmpty>Водители не найдены</CommandEmpty>
+                            <CommandGroup className="max-h-[300px] overflow-auto">
+                              {driversList
+                                .filter((d) => d.verified)
+                                .filter((driver) => {
+                                  const search = (driverSearchStates[`driver-${driverIndex}`]?.search || "").toLowerCase()
+                                  return (
+                                    driver.phone.toLowerCase().includes(search) ||
+                                    (driver.full_name || "").toLowerCase().includes(search) ||
+                                    (driver.first_name || "").toLowerCase().includes(search)
+                                  )
+                                })
+                                .map((driver) => (
+                                  <CommandItem
+                                    key={driver.phone}
+                                    value={`${getDriverDisplayName(driver)} ${driver.phone}`}
+                                    onSelect={() => {
+                                      setDriverAssignments((prev) => {
+                                        const updated = [...prev]
+                                        updated[driverIndex].driver = driver
+                                        updated[driverIndex].corrections = updated[driverIndex].corrections.map((trip) => ({
+                                          ...trip,
+                                          phone: driver.phone,
+                                        }))
+                                        return updated
+                                      })
+                                      handleDriverSearchStateChange(driverIndex, { open: false })
+                                    }}
+                                  >
+                                    <div className="flex flex-col">
+                                      <span>{getDriverDisplayName(driver)}</span>
+                                      <span className="text-sm text-gray-500">{formatPhone(driver.phone)}</span>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                            </CommandGroup>
+                          </CommandList>
+                        </Command>
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                )}
+
+                <div className="flex justify-end mb-3">
+                  <Button
+                    onClick={() => addNewTrip(driverIndex)}
+                    variant="outline"
+                    className="text-green-600 bg-transparent"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Добавить новый рейс
+                  </Button>
+                </div>
+
+                {assignment.corrections.map((trip, tripIndex) => (
+                  <TripRow
+                    key={trip.original_trip_identifier || `trip-${driverIndex}-${tripIndex}`}
+                    trip={trip}
+                    tripIndex={tripIndex}
+                    driverIndex={driverIndex}
+                    availablePoints={availablePoints}
+                    pointSearchStates={pointSearchStates}
+                    handleSearchStateChange={handleSearchStateChange}
+                    updateTrip={updateTrip}
+                    movePointUp={movePointUp}
+                    movePointDown={movePointDown}
+                    updatePoint={updatePoint}
+                    addNewPoint={addNewPoint}
+                    removePoint={removePoint}
+                    removeTrip={removeTrip}
+                    correctionsLength={assignment.corrections.length}
+                    formatDateTime={formatDateTime}
+                    formatDateTimeForSave={formatDateTimeForSave}
+                  />
+                ))}
               </div>
-            )}
-
-            <div className="flex justify-end">
-              <Button onClick={addNewTrip} variant="outline" className="text-green-600 bg-transparent">
-                <Plus className="h-4 w-4 mr-2" />
-                Добавить новый рейс
-              </Button>
-            </div>
-
-            {corrections.map((trip, tripIndex) => (
-              <TripRow
-                key={trip.original_trip_identifier || `trip-${tripIndex}`}
-                trip={trip}
-                tripIndex={tripIndex}
-                availablePoints={availablePoints}
-                pointSearchStates={pointSearchStates}
-                handleSearchStateChange={handleSearchStateChange}
-                updateTrip={updateTrip}
-                movePointUp={movePointUp}
-                movePointDown={movePointDown}
-                updatePoint={updatePoint}
-                addNewPoint={addNewPoint}
-                removePoint={removePoint}
-                removeTrip={removeTrip}
-                correctionsLength={corrections.length}
-                formatDateTime={formatDateTime}
-                formatDateTimeForSave={formatDateTimeForSave}
-              />
+              // === КОНЕЦ НОВОГО БЛОКА ===
             ))}
+
+            {mode === "create" && (
+              // === НОВЫЙ БЛОК: Кнопка добавления нового водителя ===
+              <div className="flex justify-end">
+                <Button
+                  onClick={addNewDriver}
+                  variant="outline"
+                  className="text-blue-600 bg-transparent"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Добавить водителя
+                </Button>
+              </div>
+              // === КОНЕЦ НОВОГО БЛОКА ===
+            )}
 
             <div className="flex gap-4 justify-end">
               <Button onClick={onClose} variant="outline">
@@ -953,12 +1006,17 @@ export function TripCorrectionModal({
               </Button>
               <Button
                 onClick={sendData}
-                disabled={isSending || isSaving || conflictedTrips.length > 0 || (mode === "create" && !driver?.phone)}
+                disabled={
+                  isSending ||
+                  isSaving ||
+                  conflictedTrips.length > 0 ||
+                  (mode === "create" && driverAssignments.some((assignment) => !assignment.driver?.phone))
+                }
                 title={
                   conflictedTrips.length > 0
                     ? "Сначала разрешите конфликты рейсов"
-                    : mode === "create" && !driver?.phone
-                      ? "Выберите водителя"
+                    : mode === "create" && driverAssignments.some((assignment) => !assignment.driver?.phone)
+                      ? "Выберите всех водителей"
                       : ""
                 }
               >
