@@ -773,7 +773,7 @@ const saveCorrections = async () => {
   }, [])
 
   // Выбор водителя
-  const [driversList, setDriversList] = useState<Driver[]>([])
+  //const [driversList, setDriversList] = useState<Driver[]>([])
 
   useEffect(() => {
     if (mode === "create" && isOpen) {
