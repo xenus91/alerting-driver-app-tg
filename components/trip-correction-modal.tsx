@@ -513,13 +513,18 @@ export function TripCorrectionModal({
   }
 
 
-  const removeTrip = (tripIndex: number) => {
-    console.log(`🗑️ removeTrip called: tripIndex=${tripIndex}`)
+  const removeTrip = (driverIndex: number, tripIndex: number) => {
+    console.log(`🗑️ removeTrip called: driverIndex=${driverIndex}, tripIndex=${tripIndex}`)
 
-    const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
+    const tripIdentifier = driverAssignments[driverIndex].corrections[tripIndex].original_trip_identifier || 
+                         driverAssignments[driverIndex].corrections[tripIndex].trip_identifier
     console.log(`Removing trip: ${tripIdentifier}`)
 
-    setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
+    setDriverAssignments((prev) => {
+      const updated = [...prev]
+      updated[driverIndex].corrections = updated[driverIndex].corrections.filter((_, i) => i !== tripIndex)
+      return updated
+    })
     if (tripIdentifier) {
       setDeletedTrips((prev) => [...prev, tripIdentifier])
     }
