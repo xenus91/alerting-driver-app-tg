@@ -524,16 +524,18 @@ export function TripCorrectionModal({
   }
 
 
-  // Сохранение и отправка
-  const saveCorrections = async () => {
-    console.log("💾 saveCorrections called")
+ // Сохранение и отправка
+const saveCorrections = async () => {
+  console.log("💾 saveCorrections called")
 
-    setIsSaving(true)
-    setError(null)
-    setSuccess(null)
-    setConflictedTrips([])
+  setIsSaving(true)
+  setError(null)
+  setSuccess(null)
+  setConflictedTrips([])
 
-    try {
+  try {
+    // Режим редактирования - остается как было
+    if (mode === "edit") {
       const flatCorrections = corrections.flatMap((trip) =>
         trip.points.map((point) => ({
           phone: trip.phone,
@@ -555,43 +557,15 @@ export function TripCorrectionModal({
 
       console.log("Flat corrections to save:", flatCorrections)
 
-      const endpoint = mode === "edit" ? `/api/trips/${tripId}/save-corrections` : "/api/send-messages"
-
-      const response = await fetch(endpoint, {
+      const response = await fetch(`/api/trips/${tripId}/save-corrections`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          mode === "edit"
-            ? {
-                phone,
-                driver_phone: phone,
-                corrections: flatCorrections,
-                deletedTrips,
-              }
-            : {
-                tripData: corrections.map((trip) => ({
-                  phone: driver?.phone || "",
-                  trip_identifier: trip.trip_identifier,
-                  vehicle_number: trip.vehicle_number,
-                  planned_loading_time: trip.planned_loading_time,
-                  driver_comment: trip.driver_comment,
-                  loading_points: trip.points
-                    .filter((p) => p.point_type === "P")
-                    .map((p) => ({
-                      point_id: p.point_id,
-                      point_num: p.point_num,
-                      driver_phone: driver?.phone || "",
-                    })),
-                  unloading_points: trip.points
-                    .filter((p) => p.point_type === "D")
-                    .map((p) => ({
-                      point_id: p.point_id,
-                      point_num: p.point_num,
-                      driver_phone: driver?.phone || "",
-                    })),
-                })),
-              },
-        ),
+        body: JSON.stringify({
+          phone,
+          driver_phone: phone,
+          corrections: flatCorrections,
+          deletedTrips,
+        }),
       })
 
       const data = await response.json()
@@ -608,14 +582,65 @@ export function TripCorrectionModal({
         setError(data.error || "Ошибка при сохранении данных")
         return { success: false }
       }
-    } catch (error) {
-      console.error("❌ Save error:", error)
-      setError("Ошибка при сохранении данных")
-      return { success: false }
-    } finally {
-      setIsSaving(false)
+    } 
+    // Режим создания - собираем данные всех водителей
+    else {
+      // Собираем все рейсы всех водителей
+      const allTrips = correctionsByDriver.flatMap((driverCorrections, driverIndex) => 
+        driverCorrections.map(trip => ({
+          phone: drivers[driverIndex].phone,
+          trip_identifier: trip.trip_identifier,
+          vehicle_number: trip.vehicle_number,
+          planned_loading_time: trip.planned_loading_time,
+          driver_comment: trip.driver_comment,
+          loading_points: trip.points
+            .filter(p => p.point_type === "P")
+            .map(p => ({
+              point_id: p.point_id,
+              point_num: p.point_num,
+              driver_phone: drivers[driverIndex].phone,
+            })),
+          unloading_points: trip.points
+            .filter(p => p.point_type === "D")
+            .map(p => ({
+              point_id: p.point_id,
+              point_num: p.point_num,
+              driver_phone: drivers[driverIndex].phone,
+            })),
+        }))
+      )
+
+      console.log("All trips to send:", allTrips)
+
+      const response = await fetch("/api/send-messages", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tripData: allTrips }),
+      })
+
+      const data = await response.json()
+
+      if (data.success) {
+        console.log("✅ Save successful:", data)
+        return { success: true, data }
+      } else if (data.error === "trip_already_assigned") {
+        setConflictedTrips(data.conflict_data || [])
+        setError(`Конфликт рейсов: ${data.trip_identifiers?.join(", ") || "неизвестные рейсы"}`)
+        return { success: false, conflict: true }
+      } else {
+        console.error("❌ Save failed:", data.error)
+        setError(data.error || "Ошибка при сохранении данных")
+        return { success: false }
+      }
     }
+  } catch (error) {
+    console.error("❌ Save error:", error)
+    setError("Ошибка при сохранении данных")
+    return { success: false }
+  } finally {
+    setIsSaving(false)
   }
+}
 
   const sendData = async () => {
     console.log("📤 sendData called")
