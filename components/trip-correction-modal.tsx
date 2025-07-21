@@ -534,19 +534,19 @@ export function TripCorrectionModal({
     });
   }
 
-  // Сохранение и отправка
-  const saveCorrections = async () => {
-    console.log("💾 saveCorrections called")
+const saveCorrections = async () => {
+  console.log("💾 saveCorrections called")
 
-    setIsSaving(true)
-    setError(null)
-    setSuccess(null)
-    setConflictedTrips([])
+  setIsSaving(true)
+  setError(null)
+  setSuccess(null)
+  setConflictedTrips([])
 
-    try {
-      const allTrips = assignments.flatMap(assignment => 
-        assignment.trips.flatMap(trip =>
-          trip.points.map(point => ({
+  try {
+    // Собираем все рейсы всех водителей
+    const allTrips = assignments.flatMap(assignment => 
+      assignment.trips.flatMap(trip =>
+        trip.points.map(point => ({
           phone: trip.phone,
           driver_phone: mode === 'edit' ? phone : assignment.driver?.phone || "",
           trip_identifier: trip.trip_identifier,
@@ -562,72 +562,77 @@ export function TripCorrectionModal({
           latitude: point.latitude,
           longitude: point.longitude,
         }))
+      )
+    );
 
-      );
+    console.log("Flat corrections to save:", allTrips) // Исправлено: allTrips вместо flatCorrections
 
-      console.log("Flat corrections to save:", flatCorrections)
+    const endpoint = mode === "edit" 
+      ? `/api/trips/${tripId}/save-corrections` 
+      : "/api/send-messages"
 
-      const endpoint = mode === "edit" ? `/api/trips/${tripId}/save-corrections` : "/api/send-messages"
-
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(
-          mode === "edit"
-            ? {
-                phone,
-                driver_phone: phone,
-                corrections: flatCorrections,
-                deletedTrips,
-              }
-            : {
-                tripData: corrections.map((trip) => ({
-                  phone: driver?.phone || "",
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(
+        mode === "edit"
+          ? {
+              phone,
+              driver_phone: phone,
+              corrections: allTrips, // Исправлено: используем allTrips
+              deletedTrips,
+            }
+          : {
+              // Исправлено: формируем данные на основе assignments
+              tripData: assignments.flatMap(assignment => 
+                assignment.trips.map(trip => ({
+                  phone: assignment.driver?.phone || "",
                   trip_identifier: trip.trip_identifier,
                   vehicle_number: trip.vehicle_number,
                   planned_loading_time: trip.planned_loading_time,
                   driver_comment: trip.driver_comment,
                   loading_points: trip.points
-                    .filter((p) => p.point_type === "P")
-                    .map((p) => ({
+                    .filter(p => p.point_type === "P")
+                    .map(p => ({
                       point_id: p.point_id,
                       point_num: p.point_num,
-                      driver_phone: driver?.phone || "",
+                      driver_phone: assignment.driver?.phone || "",
                     })),
                   unloading_points: trip.points
-                    .filter((p) => p.point_type === "D")
-                    .map((p) => ({
+                    .filter(p => p.point_type === "D")
+                    .map(p => ({
                       point_id: p.point_id,
                       point_num: p.point_num,
-                      driver_phone: driver?.phone || "",
+                      driver_phone: assignment.driver?.phone || "",
                     })),
-                })),
-              },
-        ),
-      })
+                }))
+              ),
+            }
+      ),
+    })
 
-      const data = await response.json()
+    const data = await response.json()
 
-      if (data.success) {
-        console.log("✅ Save successful:", data)
-        return { success: true, data }
-      } else if (data.error === "trip_already_assigned") {
-        setConflictedTrips(data.conflict_data || [])
-        setError(`Конфликт рейсов: ${data.trip_identifiers?.join(", ") || "неизвестные рейсы"}`)
-        return { success: false, conflict: true }
-      } else {
-        console.error("❌ Save failed:", data.error)
-        setError(data.error || "Ошибка при сохранении данных")
-        return { success: false }
-      }
-    } catch (error) {
-      console.error("❌ Save error:", error)
-      setError("Ошибка при сохранении данных")
+    if (data.success) {
+      console.log("✅ Save successful:", data)
+      return { success: true, data }
+    } else if (data.error === "trip_already_assigned") {
+      setConflictedTrips(data.conflict_data || [])
+      setError(`Конфликт рейсов: ${data.trip_identifiers?.join(", ") || "неизвестные рейсы"}`)
+      return { success: false, conflict: true }
+    } else {
+      console.error("❌ Save failed:", data.error)
+      setError(data.error || "Ошибка при сохранении данных")
       return { success: false }
-    } finally {
-      setIsSaving(false)
     }
+  } catch (error) {
+    console.error("❌ Save error:", error)
+    setError("Ошибка при сохранении данных")
+    return { success: false }
+  } finally {
+    setIsSaving(false)
   }
+}
 
   const sendData = async () => {
     console.log("📤 sendData called")
