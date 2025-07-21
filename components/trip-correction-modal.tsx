@@ -530,7 +530,7 @@ export function TripCorrectionModal({
     }
   }
 
-  // Сохранение и отправка
+    // Сохранение и отправка
   const saveCorrections = async () => {
     console.log("💾 saveCorrections called")
 
@@ -540,26 +540,32 @@ export function TripCorrectionModal({
     setConflictedTrips([])
 
     try {
-      const flatCorrections = corrections.flatMap((trip) =>
-        trip.points.map((point) => ({
-          phone: trip.phone,
-          driver_phone: phone || driver?.phone || "",
+      // === ИЗМЕНЕНО: Формируем данные для всех водителей ===
+      const tripData = driverAssignments.flatMap((assignment) =>
+        assignment.corrections.map((trip) => ({
+          phone: assignment.driver?.phone || "",
           trip_identifier: trip.trip_identifier,
-          original_trip_identifier: trip.original_trip_identifier,
           vehicle_number: trip.vehicle_number,
           planned_loading_time: trip.planned_loading_time,
           driver_comment: trip.driver_comment,
-          message_id: trip.message_id,
-          point_type: point.point_type,
-          point_num: point.point_num,
-          point_id: point.point_id,
-          point_name: point.point_name,
-          latitude: point.latitude,
-          longitude: point.longitude,
-        })),
+          loading_points: trip.points
+            .filter((p) => p.point_type === "P")
+            .map((p) => ({
+              point_id: p.point_id,
+              point_num: p.point_num,
+              driver_phone: assignment.driver?.phone || "",
+            })),
+          unloading_points: trip.points
+            .filter((p) => p.point_type === "D")
+            .map((p) => ({
+              point_id: p.point_id,
+              point_num: p.point_num,
+              driver_phone: assignment.driver?.phone || "",
+            })),
+        }))
       )
 
-      console.log("Flat corrections to save:", flatCorrections)
+      console.log("Trip data to save:", tripData)
 
       const endpoint = mode === "edit" ? `/api/trips/${tripId}/save-corrections` : "/api/send-messages"
 
@@ -571,32 +577,27 @@ export function TripCorrectionModal({
             ? {
                 phone,
                 driver_phone: phone,
-                corrections: flatCorrections,
+                corrections: driverAssignments[0].corrections.flatMap((trip) =>
+                  trip.points.map((point) => ({
+                    phone: trip.phone,
+                    driver_phone: phone || driverAssignments[0].driver?.phone || "",
+                    trip_identifier: trip.trip_identifier,
+                    original_trip_identifier: trip.original_trip_identifier,
+                    vehicle_number: trip.vehicle_number,
+                    planned_loading_time: trip.planned_loading_time,
+                    driver_comment: trip.driver_comment,
+                    message_id: trip.message_id,
+                    point_type: point.point_type,
+                    point_num: point.point_num,
+                    point_id: point.point_id,
+                    point_name: point.point_name,
+                    latitude: point.latitude,
+                    longitude: point.longitude,
+                  })),
+                ),
                 deletedTrips,
               }
-            : {
-                tripData: corrections.map((trip) => ({
-                  phone: driver?.phone || "",
-                  trip_identifier: trip.trip_identifier,
-                  vehicle_number: trip.vehicle_number,
-                  planned_loading_time: trip.planned_loading_time,
-                  driver_comment: trip.driver_comment,
-                  loading_points: trip.points
-                    .filter((p) => p.point_type === "P")
-                    .map((p) => ({
-                      point_id: p.point_id,
-                      point_num: p.point_num,
-                      driver_phone: driver?.phone || "",
-                    })),
-                  unloading_points: trip.points
-                    .filter((p) => p.point_type === "D")
-                    .map((p) => ({
-                      point_id: p.point_id,
-                      point_num: p.point_num,
-                      driver_phone: driver?.phone || "",
-                    })),
-                })),
-              },
+            : { tripData }
         ),
       })
 
