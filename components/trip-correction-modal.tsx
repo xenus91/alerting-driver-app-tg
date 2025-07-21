@@ -75,8 +75,8 @@ export function TripCorrectionModal({
   onAssignmentSent,
   onOpenConflictTrip,
 }: TripCorrectionModalProps) {
-  const [drivers, setDrivers] = useState<Driver[]>([])
-  const [correctionsByDriver, setCorrectionsByDriver] = useState<CorrectionData[]>([])
+  const [driver, setDriver] = useState<Driver | null>(null)
+  const [corrections, setCorrections] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<
     Array<{
@@ -102,46 +102,6 @@ export function TripCorrectionModal({
   >([])
   const [driverSearchOpen, setDriverSearchOpen] = useState(false)
   const [driverSearchValue, setDriverSearchValue] = useState("")
-  const [driversList, setDriversList] = useState<Driver[]>([])
-
-  // === НОВАЯ ФУНКЦИЯ: Добавление нового водителя ===
-  const addDriver = () => {
-    console.log("➕ addDriver called")
-    const newDriver = createEmptyDriver()
-    setDrivers(prev => [...prev, newDriver])
-    setCorrectionsByDriver(prev => [...prev, [createEmptyTrip(newDriver.phone)]])
-  }
-
-  // === НОВАЯ ФУНКЦИЯ: Удаление водителя ===
-  const removeDriver = (driverIndex: number) => {
-    console.log(`🗑️ removeDriver called: driverIndex=${driverIndex}`)
-    setDrivers(prev => prev.filter((_, i) => i !== driverIndex))
-    setCorrectionsByDriver(prev => prev.filter((_, i) => i !== driverIndex))
-  }
-
-  // === НОВАЯ ФУНКЦИЯ: Обновление данных водителя ===
-  const updateDriver = (driverIndex: number, field: keyof Driver, value: any) => {
-    setDrivers(prev => {
-      const updated = [...prev]
-      updated[driverIndex] = { ...updated[driverIndex], [field]: value }
-      
-      // Обновляем phone во всех рейсах этого водителя
-      if (field === "phone") {
-        setCorrectionsByDriver(prevCorrections => {
-          const updatedCorrections = [...prevCorrections]
-          updatedCorrections[driverIndex] = updatedCorrections[driverIndex].map(trip => ({
-            ...trip,
-            phone: value
-          }))
-          return updatedCorrections
-        })
-      }
-      
-      return updated
-    })
-  }
-
-
 
   useEffect(() => {
     console.log("TripCorrectionModal useEffect:", {
@@ -168,43 +128,47 @@ export function TripCorrectionModal({
           return
         }
 
-         setDrivers([
-        {
+        setDriver({
           phone: phone,
           name: driverName || "Неизвестный",
           first_name: driverName,
           full_name: driverName,
-        }
-      ]);
+        })
         loadDriverDetails()
       } else {
         console.log("Initializing create mode")
 
-       // === ИЗМЕНЕНО: Инициализация массивов для водителей ===
         if (initialDriver) {
           console.log("Using initial driver:", initialDriver)
-          setDrivers([initialDriver])
-          setCorrectionsByDriver([
-            initialTrips && initialTrips.length > 0 
-              ? initialTrips.map(trip => ({
-                  ...trip,
-                  phone: initialDriver.phone,
-                  points: trip.points || [createEmptyPoint()]
-                }))
-              : [createEmptyTrip(initialDriver.phone)]
-          ])
+          setDriver(initialDriver)
         } else {
           console.log("Creating empty driver")
-          const emptyDriver = createEmptyDriver()
-          setDrivers([emptyDriver])
-          setCorrectionsByDriver([[createEmptyTrip(emptyDriver.phone)]])
+          setDriver(createEmptyDriver())
+        }
+
+        if (initialTrips && initialTrips.length > 0) {
+          console.log("Using initial trips:", initialTrips)
+          setCorrections(
+            initialTrips.map((trip) => ({
+              phone: initialDriver?.phone || "",
+              trip_identifier: trip.trip_identifier,
+              original_trip_identifier: trip.trip_identifier,
+              vehicle_number: trip.vehicle_number,
+              planned_loading_time: trip.planned_loading_time,
+              driver_comment: trip.driver_comment || "",
+              message_id: 0,
+              points: trip.points || [createEmptyPoint()],
+            })),
+          )
+        } else {
+          console.log("Creating empty trip")
+          setCorrections([createEmptyTrip()])
         }
       }
 
       loadAvailablePoints()
     }
   }, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
-
 
   // Вспомогательные функции
   const createEmptyDriver = (): Driver => ({
@@ -372,66 +336,64 @@ export function TripCorrectionModal({
   }, [])
 
   const loadDriverDetails = async () => {
-  if (!phone || !tripId) {
-    console.error("Cannot load driver details - phone or tripId missing");
-    return;
-  }
-
-  console.log(`Loading driver details for trip ${tripId}, phone ${phone}`);
-
-  setIsLoading(true);
-  setError(null);
-  try {
-    const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`);
-    console.log("API response status:", response.status);
-
-    const data = await response.json();
-    console.log("API response data:", data);
-
-    if (data.success) {
-      console.log("Successfully loaded driver details");
-      const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
-        const key = item.trip_identifier;
-        if (!acc[key]) {
-          acc[key] = {
-            phone: item.phone,
-            trip_identifier: item.trip_identifier,
-            original_trip_identifier: item.trip_identifier,
-            vehicle_number: item.vehicle_number,
-            planned_loading_time: item.planned_loading_time,
-            driver_comment: item.driver_comment,
-            message_id: item.message_id,
-            points: [],
-          };
-        }
-        acc[key].points.push({
-          point_type: item.point_type,
-          point_num: item.point_num,
-          point_id: item.point_id,
-          point_name: item.point_name,
-          latitude: item.latitude,
-          longitude: item.longitude,
-        });
-        return acc;
-      }, {});
-
-      console.log("Grouped driver data:", grouped);
-      
-      // Используем setCorrectionsByDriver вместо setCorrections
-      setCorrectionsByDriver([Object.values(grouped)]);
-    } else {
-      console.error("API error:", data.error);
-      setError(data.error || "Не удалось загрузить данные водителя");
+    if (!phone || !tripId) {
+      console.error("Cannot load driver details - phone or tripId missing")
+      return
     }
-  } catch (error) {
-    console.error("Error loading driver details:", error);
-    setError("Ошибка при загрузке данных водителя");
-  } finally {
-    console.log("Finished loading driver details");
-    setIsLoading(false);
-    setDeletedTrips([]);
+
+    console.log(`Loading driver details for trip ${tripId}, phone ${phone}`)
+
+    setIsLoading(true)
+    setError(null)
+    try {
+      const response = await fetch(`/api/trips/${tripId}/driver-details?phone=${phone}`)
+      console.log("API response status:", response.status)
+
+      const data = await response.json()
+      console.log("API response data:", data)
+
+      if (data.success) {
+        console.log("Successfully loaded driver details")
+        const grouped = data.data.reduce((acc: Record<string, CorrectionData>, item: any) => {
+          const key = item.trip_identifier
+          if (!acc[key]) {
+            acc[key] = {
+              phone: item.phone,
+              trip_identifier: item.trip_identifier,
+              original_trip_identifier: item.trip_identifier,
+              vehicle_number: item.vehicle_number,
+              planned_loading_time: item.planned_loading_time,
+              driver_comment: item.driver_comment,
+              message_id: item.message_id,
+              points: [],
+            }
+          }
+          acc[key].points.push({
+            point_type: item.point_type,
+            point_num: item.point_num,
+            point_id: item.point_id,
+            point_name: item.point_name,
+            latitude: item.latitude,
+            longitude: item.longitude,
+          })
+          return acc
+        }, {})
+
+        console.log("Grouped driver data:", grouped)
+        setCorrections(Object.values(grouped))
+      } else {
+        console.error("API error:", data.error)
+        setError(data.error || "Не удалось загрузить данные водителя")
+      }
+    } catch (error) {
+      console.error("Error loading driver details:", error)
+      setError("Ошибка при загрузке данных водителя")
+    } finally {
+      console.log("Finished loading driver details")
+      setIsLoading(false)
+      setDeletedTrips([])
+    }
   }
-};
 
   const loadAvailablePoints = async () => {
     try {
@@ -454,92 +416,90 @@ export function TripCorrectionModal({
   }
 
   // Работа с рейсами и точками
-  const updateTrip = useCallback((driverIndex: number, tripIndex: number, field: keyof CorrectionData, value: any) => {
-    setCorrectionsByDriver(prev => {
+  const updateTrip = useCallback((tripIndex: number, field: keyof CorrectionData, value: any) => {
+    setCorrections((prev) => {
       const updated = [...prev]
-      updated[driverIndex] = [...updated[driverIndex]]
-      updated[driverIndex][tripIndex] = { ...updated[driverIndex][tripIndex], [field]: value }
+      updated[tripIndex] = { ...updated[tripIndex], [field]: value }
       return updated
     })
   }, [])
 
-  const updatePoint = useCallback((driverIndex: number, tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
-    setCorrectionsByDriver(prev => {
+  const updatePoint = useCallback((tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
+    console.log(
+      `📝 updatePoint called: tripIndex=${tripIndex}, pointIndex=${pointIndex}, field=${field}, value=${value}`,
+    )
+    setCorrections((prev) => {
       const updated = [...prev]
-      updated[driverIndex] = [...updated[driverIndex]]
-      updated[driverIndex][tripIndex] = { ...updated[driverIndex][tripIndex] }
-      updated[driverIndex][tripIndex].points = [...updated[driverIndex][tripIndex].points]
-      updated[driverIndex][tripIndex].points[pointIndex] = { 
-        ...updated[driverIndex][tripIndex].points[pointIndex], 
-        [field]: value 
-      }
+      updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
       return updated
     })
   }, [])
 
-  const addNewPoint = (driverIndex: number, tripIndex: number) => {
-    setCorrectionsByDriver(prev => {
+  const addNewPoint = (tripIndex: number) => {
+    console.log(`➕ addNewPoint called: tripIndex=${tripIndex}`)
+
+    const currentPoints = corrections[tripIndex].points
+    const maxPointNum = currentPoints.length > 0 ? Math.max(...currentPoints.map((p) => p.point_num || 0)) : 0
+
+    console.log(`Current points count: ${currentPoints.length}, maxPointNum: ${maxPointNum}`)
+
+    const newPoint: PointData = {
+      point_type: "P",
+      point_num: maxPointNum + 1,
+      point_id: "",
+      point_name: "",
+      latitude: "",
+      longitude: "",
+    }
+
+    console.log("Adding new point:", newPoint)
+
+    setCorrections((prev) => {
       const updated = [...prev]
-      updated[driverIndex] = [...updated[driverIndex]]
-      
-      const currentPoints = updated[driverIndex][tripIndex].points
-      const maxPointNum = currentPoints.length > 0 
-        ? Math.max(...currentPoints.map(p => p.point_num || 0)) 
-        : 0
-      
-      updated[driverIndex][tripIndex] = {
-        ...updated[driverIndex][tripIndex],
-        points: [
-          ...currentPoints,
-          {
-            point_type: "P",
-            point_num: maxPointNum + 1,
-            point_id: "",
-            point_name: "",
-            latitude: "",
-            longitude: "",
-          }
-        ]
-      }
-      
+      updated[tripIndex].points = [...updated[tripIndex].points, newPoint]
       return updated
     })
   }
 
-   const addNewTrip = (driverIndex: number) => {
-    console.log("➕ addNewTrip called for driver:", driverIndex)
-    
-    setCorrectionsByDriver(prev => {
-      const updated = [...prev]
-      updated[driverIndex] = [
-        ...updated[driverIndex],
-        createEmptyTrip(drivers[driverIndex].phone)
-      ]
-      return updated
-    })
+  const addNewTrip = () => {
+    console.log("➕ addNewTrip called")
+
+    const newTrip: CorrectionData = {
+      phone: driver?.phone || "",
+      trip_identifier: "",
+      vehicle_number: "",
+      planned_loading_time: new Date().toISOString(),
+      driver_comment: "",
+      message_id: 0,
+      points: [createEmptyPoint()],
+    }
+
+    console.log("Adding new trip:", newTrip)
+    setCorrections([...corrections, newTrip])
   }
 
-  const removeTrip = (driverIndex: number, tripIndex: number) => {
-    setCorrectionsByDriver(prev => {
-      const updated = [...prev]
-      updated[driverIndex] = updated[driverIndex].filter((_, i) => i !== tripIndex)
-      return updated
-    })
+  const removeTrip = (tripIndex: number) => {
+    console.log(`🗑️ removeTrip called: tripIndex=${tripIndex}`)
+
+    const tripIdentifier = corrections[tripIndex].original_trip_identifier || corrections[tripIndex].trip_identifier
+    console.log(`Removing trip: ${tripIdentifier}`)
+
+    setCorrections((prev) => prev.filter((_, i) => i !== tripIndex))
+    if (tripIdentifier) {
+      setDeletedTrips((prev) => [...prev, tripIdentifier])
+    }
   }
 
+  // Сохранение и отправка
+  const saveCorrections = async () => {
+    console.log("💾 saveCorrections called")
 
- // Сохранение и отправка
-const saveCorrections = async () => {
-  console.log("💾 saveCorrections called")
+    setIsSaving(true)
+    setError(null)
+    setSuccess(null)
+    setConflictedTrips([])
 
-  setIsSaving(true)
-  setError(null)
-  setSuccess(null)
-  setConflictedTrips([])
-
-  try {
-    // Режим редактирования - остается как было
-    if (mode === "edit") {
+    try {
       const flatCorrections = corrections.flatMap((trip) =>
         trip.points.map((point) => ({
           phone: trip.phone,
@@ -561,15 +521,43 @@ const saveCorrections = async () => {
 
       console.log("Flat corrections to save:", flatCorrections)
 
-      const response = await fetch(`/api/trips/${tripId}/save-corrections`, {
+      const endpoint = mode === "edit" ? `/api/trips/${tripId}/save-corrections` : "/api/send-messages"
+
+      const response = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          phone,
-          driver_phone: phone,
-          corrections: flatCorrections,
-          deletedTrips,
-        }),
+        body: JSON.stringify(
+          mode === "edit"
+            ? {
+                phone,
+                driver_phone: phone,
+                corrections: flatCorrections,
+                deletedTrips,
+              }
+            : {
+                tripData: corrections.map((trip) => ({
+                  phone: driver?.phone || "",
+                  trip_identifier: trip.trip_identifier,
+                  vehicle_number: trip.vehicle_number,
+                  planned_loading_time: trip.planned_loading_time,
+                  driver_comment: trip.driver_comment,
+                  loading_points: trip.points
+                    .filter((p) => p.point_type === "P")
+                    .map((p) => ({
+                      point_id: p.point_id,
+                      point_num: p.point_num,
+                      driver_phone: driver?.phone || "",
+                    })),
+                  unloading_points: trip.points
+                    .filter((p) => p.point_type === "D")
+                    .map((p) => ({
+                      point_id: p.point_id,
+                      point_num: p.point_num,
+                      driver_phone: driver?.phone || "",
+                    })),
+                })),
+              },
+        ),
       })
 
       const data = await response.json()
@@ -586,65 +574,14 @@ const saveCorrections = async () => {
         setError(data.error || "Ошибка при сохранении данных")
         return { success: false }
       }
-    } 
-    // Режим создания - собираем данные всех водителей
-    else {
-      // Собираем все рейсы всех водителей
-      const allTrips = correctionsByDriver.flatMap((driverCorrections, driverIndex) => 
-        driverCorrections.map(trip => ({
-          phone: drivers[driverIndex].phone,
-          trip_identifier: trip.trip_identifier,
-          vehicle_number: trip.vehicle_number,
-          planned_loading_time: trip.planned_loading_time,
-          driver_comment: trip.driver_comment,
-          loading_points: trip.points
-            .filter(p => p.point_type === "P")
-            .map(p => ({
-              point_id: p.point_id,
-              point_num: p.point_num,
-              driver_phone: drivers[driverIndex].phone,
-            })),
-          unloading_points: trip.points
-            .filter(p => p.point_type === "D")
-            .map(p => ({
-              point_id: p.point_id,
-              point_num: p.point_num,
-              driver_phone: drivers[driverIndex].phone,
-            })),
-        }))
-      )
-
-      console.log("All trips to send:", allTrips)
-
-      const response = await fetch("/api/send-messages", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tripData: allTrips }),
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        console.log("✅ Save successful:", data)
-        return { success: true, data }
-      } else if (data.error === "trip_already_assigned") {
-        setConflictedTrips(data.conflict_data || [])
-        setError(`Конфликт рейсов: ${data.trip_identifiers?.join(", ") || "неизвестные рейсы"}`)
-        return { success: false, conflict: true }
-      } else {
-        console.error("❌ Save failed:", data.error)
-        setError(data.error || "Ошибка при сохранении данных")
-        return { success: false }
-      }
+    } catch (error) {
+      console.error("❌ Save error:", error)
+      setError("Ошибка при сохранении данных")
+      return { success: false }
+    } finally {
+      setIsSaving(false)
     }
-  } catch (error) {
-    console.error("❌ Save error:", error)
-    setError("Ошибка при сохранении данных")
-    return { success: false }
-  } finally {
-    setIsSaving(false)
   }
-}
 
   const sendData = async () => {
     console.log("📤 sendData called")
@@ -777,7 +714,7 @@ const saveCorrections = async () => {
   }, [])
 
   // Выбор водителя
-  //const [driversList, setDriversList] = useState<Driver[]>([])
+  const [driversList, setDriversList] = useState<Driver[]>([])
 
   useEffect(() => {
     if (mode === "create" && isOpen) {
@@ -819,237 +756,188 @@ const saveCorrections = async () => {
   }
 
   return (
-  <Dialog open={isOpen} onOpenChange={onClose}>
-    <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-      <DialogHeader>
-        <DialogTitle>
-          {mode === "edit" ? `Корректировка рейсов для ${driverName}` : "Создание новых рейсов"}
-        </DialogTitle>
-      </DialogHeader>
+    <Dialog open={isOpen} onOpenChange={onClose}>
+      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {mode === "edit" ? `Корректировка рейсов для ${driverName}` : "Создание новых рейсов"}
+          </DialogTitle>
+        </DialogHeader>
 
-      {mode === "edit" && (
-        <Alert className="border-orange-200 bg-orange-50">
-          <AlertTriangle className="h-4 w-4 text-orange-600" />
-          <AlertDescription className="text-orange-800">
-            <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен.
-          </AlertDescription>
-        </Alert>
-      )}
+        {mode === "edit" && (
+          <Alert className="border-orange-200 bg-orange-50">
+            <AlertTriangle className="h-4 w-4 text-orange-600" />
+            <AlertDescription className="text-orange-800">
+              <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен.
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      )}
+        {error && (
+          <Alert variant="destructive">
+            <AlertDescription>{error}</AlertDescription>
+          </Alert>
+        )}
 
-      {conflictedTrips.length > 0 && (
-        <Alert variant="destructive" className="mb-4">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertDescription>
-            <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
-            <ul className="list-disc pl-5 mt-2">
-              {conflictedTrips.map((conflict) => (
-                <li key={conflict.trip_identifier} className="font-mono flex items-center justify-between">
-                  <span>
-                    {conflict.trip_identifier} (Водитель: {conflict.driver_name})
-                  </span>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    className="ml-2 bg-transparent"
-                    onClick={() => openConflictTripModal(conflict)}
-                  >
-                    Просмотреть рейс
-                  </Button>
-                </li>
-              ))}
-            </ul>
-          </AlertDescription>
-        </Alert>
-      )}
+        {conflictedTrips.length > 0 && (
+          <Alert variant="destructive" className="mb-4">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription>
+              <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
+              <ul className="list-disc pl-5 mt-2">
+                {conflictedTrips.map((conflict) => (
+                  <li key={conflict.trip_identifier} className="font-mono flex items-center justify-between">
+                    <span>
+                      {conflict.trip_identifier} (Водитель: {conflict.driver_name})
+                    </span>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="ml-2 bg-transparent"
+                      onClick={() => openConflictTripModal(conflict)}
+                    >
+                      Просмотреть рейс
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </AlertDescription>
+          </Alert>
+        )}
 
-      {success && (
-        <Alert>
-          <AlertDescription className="text-green-600">{success}</AlertDescription>
-        </Alert>
-      )}
+        {success && (
+          <Alert>
+            <AlertDescription className="text-green-600">{success}</AlertDescription>
+          </Alert>
+        )}
 
-      {isLoading ? (
-        <div className="flex items-center justify-center p-8">
-          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-          Загрузка данных...
-        </div>
-      ) : (
-        <div className="space-y-8">
-          {/* Кнопка добавления водителя (только в режиме создания) */}
-          {mode === "create" && (
-            <div className="flex justify-start">
-              <Button onClick={addDriver} variant="outline" className="text-blue-600 bg-transparent">
+        {isLoading ? (
+          <div className="flex items-center justify-center p-8">
+            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+            Загрузка данных...
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {mode === "create" && (
+              <div className="border rounded-lg p-4 bg-blue-50 mb-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <User className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-medium text-blue-900">Выбор водителя</h3>
+                </div>
+
+                <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="outline"
+                      role="combobox"
+                      aria-expanded={driverSearchOpen}
+                      className="w-full justify-between bg-transparent"
+                    >
+                      {driver?.phone
+                        ? `${getDriverDisplayName(driver)} (${formatPhone(driver.phone)})`
+                        : "Выберите водителя"}
+                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-full p-0" align="start">
+                    <Command>
+                      <CommandInput
+                        placeholder="Поиск по имени или телефону..."
+                        value={driverSearchValue}
+                        onValueChange={setDriverSearchValue}
+                      />
+                      <CommandList>
+                        <CommandEmpty>Водители не найдены</CommandEmpty>
+                        <CommandGroup className="max-h-[300px] overflow-auto">
+                          {filteredDrivers.map((driver) => (
+                            <CommandItem
+                              key={driver.phone}
+                              value={`${getDriverDisplayName(driver)} ${driver.phone}`}
+                              onSelect={() => {
+                                setDriver(driver)
+                                setDriverSearchOpen(false)
+                                // Обновляем phone во всех рейсах
+                                setCorrections((prev) =>
+                                  prev.map((trip) => ({
+                                    ...trip,
+                                    phone: driver.phone,
+                                  })),
+                                )
+                              }}
+                            >
+                              <div className="flex flex-col">
+                                <span>{getDriverDisplayName(driver)}</span>
+                                <span className="text-sm text-gray-500">{formatPhone(driver.phone)}</span>
+                              </div>
+                            </CommandItem>
+                          ))}
+                        </CommandGroup>
+                      </CommandList>
+                    </Command>
+                  </PopoverContent>
+                </Popover>
+              </div>
+            )}
+
+            <div className="flex justify-end">
+              <Button onClick={addNewTrip} variant="outline" className="text-green-600 bg-transparent">
                 <Plus className="h-4 w-4 mr-2" />
-                Добавить водителя
+                Добавить новый рейс
               </Button>
             </div>
-          )}
 
-          {/* Блоки для каждого водителя */}
-          {drivers.map((driver, driverIndex) => (
-            <div 
-              key={`driver-${driverIndex}`} 
-              className="border rounded-lg p-4 bg-blue-50 relative"
-            >
-              {/* Заголовок блока водителя */}
-              <div className="flex justify-between items-center mb-4">
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-blue-600" />
-                  <h3 className="font-medium text-blue-900">
-                    Водитель {driverIndex + 1}
-                  </h3>
-                </div>
-                
-                {/* Кнопка удаления водителя (если больше одного) */}
-                {mode === "create" && drivers.length > 1 && (
-                  <Button 
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => removeDriver(driverIndex)}
-                    className="text-red-600 hover:bg-red-100 absolute top-2 right-2"
-                  >
-                    <Trash className="h-4 w-4" />
-                  </Button>
+            {corrections.map((trip, tripIndex) => (
+              <TripRow
+                key={trip.original_trip_identifier || `trip-${tripIndex}`}
+                trip={trip}
+                tripIndex={tripIndex}
+                availablePoints={availablePoints}
+                pointSearchStates={pointSearchStates}
+                handleSearchStateChange={handleSearchStateChange}
+                updateTrip={updateTrip}
+                movePointUp={movePointUp}
+                movePointDown={movePointDown}
+                updatePoint={updatePoint}
+                addNewPoint={addNewPoint}
+                removePoint={removePoint}
+                removeTrip={removeTrip}
+                correctionsLength={corrections.length}
+                formatDateTime={formatDateTime}
+                formatDateTimeForSave={formatDateTimeForSave}
+              />
+            ))}
+
+            <div className="flex gap-4 justify-end">
+              <Button onClick={onClose} variant="outline">
+                Отмена
+              </Button>
+              <Button
+                onClick={sendData}
+                disabled={isSending || isSaving || conflictedTrips.length > 0 || (mode === "create" && !driver?.phone)}
+                title={
+                  conflictedTrips.length > 0
+                    ? "Сначала разрешите конфликты рейсов"
+                    : mode === "create" && !driver?.phone
+                      ? "Выберите водителя"
+                      : ""
+                }
+              >
+                {isSending ? (
+                  <>
+                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    {mode === "edit" ? "Отправка..." : "Создание..."}
+                  </>
+                ) : (
+                  <>
+                    <Send className="h-4 w-4 mr-2" />
+                    {mode === "edit" ? "Отправить корректировку" : "Создать рейсы"}
+                  </>
                 )}
-              </div>
-
-              {/* Поле выбора водителя (только в режиме создания) */}
-              {mode === "create" && (
-                <div className="mb-6">
-                  <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
-                    <PopoverTrigger asChild>
-                      <Button
-                        variant="outline"
-                        role="combobox"
-                        aria-expanded={driverSearchOpen}
-                        className="w-full justify-between bg-transparent"
-                      >
-                        {driver.phone
-                          ? `${getDriverDisplayName(driver)} (${formatPhone(driver.phone)})`
-                          : "Выберите водителя"}
-                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-full p-0" align="start">
-                      <Command>
-                        <CommandInput
-                          placeholder="Поиск по имени или телефону..."
-                          value={driverSearchValue}
-                          onValueChange={setDriverSearchValue}
-                        />
-                        <CommandList>
-                          <CommandEmpty>Водители не найдены</CommandEmpty>
-                          <CommandGroup className="max-h-[300px] overflow-auto">
-                            {filteredDrivers.map((d) => (
-                              <CommandItem
-                                key={d.phone}
-                                value={`${getDriverDisplayName(d)} ${d.phone}`}
-                                onSelect={() => {
-                                  updateDriver(driverIndex, "phone", d.phone)
-                                  updateDriver(driverIndex, "name", d.name)
-                                  updateDriver(driverIndex, "first_name", d.first_name)
-                                  updateDriver(driverIndex, "full_name", d.full_name)
-                                  updateDriver(driverIndex, "telegram_id", d.telegram_id)
-                                  updateDriver(driverIndex, "verified", d.verified)
-                                  setDriverSearchOpen(false)
-                                }}
-                              >
-                                <div className="flex flex-col">
-                                  <span>{getDriverDisplayName(d)}</span>
-                                  <span className="text-sm text-gray-500">{formatPhone(d.phone)}</span>
-                                </div>
-                              </CommandItem>
-                            ))}
-                          </CommandGroup>
-                        </CommandList>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
-                </div>
-              )}
-
-              {/* Блок рейсов для водителя */}
-              <div className="space-y-6">
-                {correctionsByDriver[driverIndex]?.map((trip, tripIndex) => (
-                  <TripRow
-                    key={trip.original_trip_identifier || `trip-${driverIndex}-${tripIndex}`}
-                    trip={trip}
-                    tripIndex={tripIndex}
-                    driverIndex={driverIndex}
-                    availablePoints={availablePoints}
-                    pointSearchStates={pointSearchStates}
-                    handleSearchStateChange={handleSearchStateChange}
-                    updateTrip={updateTrip}
-                    movePointUp={movePointUp}
-                    movePointDown={movePointDown}
-                    updatePoint={updatePoint}
-                    addNewPoint={addNewPoint}
-                    removePoint={removePoint}
-                    removeTrip={removeTrip}
-                    correctionsLength={correctionsByDriver[driverIndex].length}
-                    formatDateTime={formatDateTime}
-                    formatDateTimeForSave={formatDateTimeForSave}
-                  />
-                ))}
-
-                {/* Кнопка добавления рейса для этого водителя */}
-                <div className="flex justify-end">
-                  <Button 
-                    onClick={() => addNewTrip(driverIndex)} 
-                    variant="outline" 
-                    className="text-green-600 bg-transparent"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Добавить рейс этому водителю
-                  </Button>
-                </div>
-              </div>
+              </Button>
             </div>
-          ))}
-
-          {/* Кнопки отправки и отмены */}
-          <div className="flex gap-4 justify-end">
-            <Button onClick={onClose} variant="outline">
-              Отмена
-            </Button>
-            <Button
-              onClick={sendData}
-              disabled={
-                isSending || 
-                isSaving || 
-                conflictedTrips.length > 0 || 
-                (mode === "create" && drivers.some(d => !d.phone))
-              }
-              title={
-                conflictedTrips.length > 0
-                  ? "Сначала разрешите конфликты рейсов"
-                  : mode === "create" && drivers.some(d => !d.phone)
-                    ? "Выберите водителя для всех блоков"
-                    : ""
-              }
-            >
-              {isSending ? (
-                <>
-                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                  {mode === "edit" ? "Отправка..." : "Создание..."}
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  {mode === "edit" ? "Отправить корректировку" : "Создать рейсы"}
-                </>
-              )}
-            </Button>
           </div>
-        </div>
-      )}
-    </DialogContent>
-  </Dialog>
-)
+        )}
+      </DialogContent>
+    </Dialog>
+  )
 }
