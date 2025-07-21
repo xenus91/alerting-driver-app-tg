@@ -465,10 +465,10 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  const addNewPoint = (tripIndex: number) => {
-    console.log(`➕ addNewPoint called: tripIndex=${tripIndex}`)
+ const addNewPoint = (driverIndex: number, tripIndex: number) => {
+    console.log(`➕ addNewPoint called: driverIndex=${driverIndex}, tripIndex=${tripIndex}`)
 
-    const currentPoints = corrections[tripIndex].points
+    const currentPoints = driverAssignments[driverIndex].corrections[tripIndex].points
     const maxPointNum = currentPoints.length > 0 ? Math.max(...currentPoints.map((p) => p.point_num || 0)) : 0
 
     console.log(`Current points count: ${currentPoints.length}, maxPointNum: ${maxPointNum}`)
@@ -484,9 +484,9 @@ export function TripCorrectionModal({
 
     console.log("Adding new point:", newPoint)
 
-    setCorrections((prev) => {
+    setDriverAssignments((prev) => {
       const updated = [...prev]
-      updated[tripIndex].points = [...updated[tripIndex].points, newPoint]
+      updated[driverIndex].corrections[tripIndex].points = [...updated[driverIndex].corrections[tripIndex].points, newPoint]
       return updated
     })
   }
