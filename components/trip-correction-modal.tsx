@@ -75,8 +75,8 @@ export function TripCorrectionModal({
   onAssignmentSent,
   onOpenConflictTrip,
 }: TripCorrectionModalProps) {
-  const [driver, setDriver] = useState<Driver | null>(null)
-  const [corrections, setCorrections] = useState<CorrectionData[]>([])
+  const [drivers, setDrivers] = useState<Driver | null>(null)
+  const [correctionsByDriver, setCorrectionsByDriver] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<
     Array<{
@@ -102,6 +102,46 @@ export function TripCorrectionModal({
   >([])
   const [driverSearchOpen, setDriverSearchOpen] = useState(false)
   const [driverSearchValue, setDriverSearchValue] = useState("")
+  const [driversList, setDriversList] = useState<Driver[]>([])
+
+  // === НОВАЯ ФУНКЦИЯ: Добавление нового водителя ===
+  const addDriver = () => {
+    console.log("➕ addDriver called")
+    const newDriver = createEmptyDriver()
+    setDrivers(prev => [...prev, newDriver])
+    setCorrectionsByDriver(prev => [...prev, [createEmptyTrip(newDriver.phone)]])
+  }
+
+  // === НОВАЯ ФУНКЦИЯ: Удаление водителя ===
+  const removeDriver = (driverIndex: number) => {
+    console.log(`🗑️ removeDriver called: driverIndex=${driverIndex}`)
+    setDrivers(prev => prev.filter((_, i) => i !== driverIndex))
+    setCorrectionsByDriver(prev => prev.filter((_, i) => i !== driverIndex))
+  }
+
+  // === НОВАЯ ФУНКЦИЯ: Обновление данных водителя ===
+  const updateDriver = (driverIndex: number, field: keyof Driver, value: any) => {
+    setDrivers(prev => {
+      const updated = [...prev]
+      updated[driverIndex] = { ...updated[driverIndex], [field]: value }
+      
+      // Обновляем phone во всех рейсах этого водителя
+      if (field === "phone") {
+        setCorrectionsByDriver(prevCorrections => {
+          const updatedCorrections = [...prevCorrections]
+          updatedCorrections[driverIndex] = updatedCorrections[driverIndex].map(trip => ({
+            ...trip,
+            phone: value
+          }))
+          return updatedCorrections
+        })
+      }
+      
+      return updated
+    })
+  }
+
+
 
   useEffect(() => {
     console.log("TripCorrectionModal useEffect:", {
