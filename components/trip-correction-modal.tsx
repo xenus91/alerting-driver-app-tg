@@ -495,15 +495,9 @@ export function TripCorrectionModal({
  const addNewTrip = (driverIndex: number) => {
     console.log(`➕ addNewTrip called: driverIndex=${driverIndex}`)
 
-    const newTrip: CorrectionData = {
-      phone: driverAssignments[driverIndex].driver?.phone || "",
-      trip_identifier: "",
-      vehicle_number: "",
-      planned_loading_time: new Date().toISOString(),
-      driver_comment: "",
-      message_id: 0,
-      points: [createEmptyPoint()],
-    }
+    // === ИСПРАВЛЕНО: Передаем phone водителя из driverAssignments ===
+    const driverPhone = driverAssignments[driverIndex].driver?.phone || ""
+    const newTrip: CorrectionData = createEmptyTrip(driverPhone)
 
     console.log("Adding new trip:", newTrip)
     setDriverAssignments((prev) => {
@@ -512,6 +506,7 @@ export function TripCorrectionModal({
       return updated
     })
   }
+
 
 
   const removeTrip = (driverIndex: number, tripIndex: number) => {
