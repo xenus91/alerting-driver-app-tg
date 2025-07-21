@@ -178,38 +178,30 @@ export function TripCorrectionModal({
       } else {
         console.log("Initializing create mode")
 
+       // === ИЗМЕНЕНО: Инициализация массивов для водителей ===
         if (initialDriver) {
           console.log("Using initial driver:", initialDriver)
-          setDriver(initialDriver)
+          setDrivers([initialDriver])
+          setCorrectionsByDriver([
+            initialTrips && initialTrips.length > 0 
+              ? initialTrips.map(trip => ({
+                  ...trip,
+                  phone: initialDriver.phone,
+                  points: trip.points || [createEmptyPoint()]
+                }))
+              : [createEmptyTrip(initialDriver.phone)]
+          ])
         } else {
           console.log("Creating empty driver")
-          setDriver(createEmptyDriver())
-        }
-
-        if (initialTrips && initialTrips.length > 0) {
-          console.log("Using initial trips:", initialTrips)
-          setCorrections(
-            initialTrips.map((trip) => ({
-              phone: initialDriver?.phone || "",
-              trip_identifier: trip.trip_identifier,
-              original_trip_identifier: trip.trip_identifier,
-              vehicle_number: trip.vehicle_number,
-              planned_loading_time: trip.planned_loading_time,
-              driver_comment: trip.driver_comment || "",
-              message_id: 0,
-              points: trip.points || [createEmptyPoint()],
-            })),
-          )
-        } else {
-          console.log("Creating empty trip")
-          setCorrections([createEmptyTrip()])
+          const emptyDriver = createEmptyDriver()
+          setDrivers([emptyDriver])
+          setCorrectionsByDriver([[createEmptyTrip(emptyDriver.phone)]])
         }
       }
 
       loadAvailablePoints()
     }
   }, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
-
   // Вспомогательные функции
   const createEmptyDriver = (): Driver => ({
     phone: "",
