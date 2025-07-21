@@ -196,8 +196,9 @@ export function TripCorrectionModal({
     longitude: "",
   })
 
-  const createEmptyTrip = (): CorrectionData => ({
-    phone: driver?.phone || "",
+ // === ИСПРАВЛЕНО: Удалена ссылка на driver, добавлен параметр phone ===
+  const createEmptyTrip = (phone: string = ""): CorrectionData => ({
+    phone,
     trip_identifier: "",
     vehicle_number: "",
     planned_loading_time: new Date().toISOString(),
