@@ -75,7 +75,7 @@ export function TripCorrectionModal({
   onAssignmentSent,
   onOpenConflictTrip,
 }: TripCorrectionModalProps) {
-  const [drivers, setDrivers] = useState<Driver | null>(null)
+  const [drivers, setDrivers] = useState<Driver[]>([])
   const [correctionsByDriver, setCorrectionsByDriver] = useState<CorrectionData[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<
