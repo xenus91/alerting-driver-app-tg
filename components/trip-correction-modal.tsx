@@ -206,6 +206,26 @@ export function TripCorrectionModal({
     points: [createEmptyPoint()],
   })
 
+  // === НОВАЯ ФУНКЦИЯ: Добавление нового водителя ===
+  const addNewDriver = () => {
+    console.log("➕ addNewDriver called")
+    setDriverAssignments([...driverAssignments, {
+      driver: null,
+      corrections: [createEmptyTrip()]
+    }])
+  }
+
+  // === НОВАЯ ФУНКЦИЯ: Удаление водителя ===
+  const removeDriver = (driverIndex: number) => {
+    console.log(`🗑️ removeDriver called: driverIndex=${driverIndex}`)
+    setDriverAssignments((prev) => prev.filter((_, i) => i !== driverIndex))
+    // Добавляем trip_identifier удаленных рейсов в deletedTrips
+    const deletedTripIdentifiers = driverAssignments[driverIndex].corrections
+      .map(trip => trip.original_trip_identifier || trip.trip_identifier)
+      .filter(id => id);
+    setDeletedTrips((prev) => [...prev, ...deletedTripIdentifiers]);
+  }
+
   // Функции перемещения точек - правильная логика
   const movePointUp = useCallback((tripIndex: number, pointIndex: number) => {
     console.log(`🔼 movePointUp called: tripIndex=${tripIndex}, pointIndex=${pointIndex}`)
