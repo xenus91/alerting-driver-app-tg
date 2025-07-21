@@ -561,7 +561,8 @@ export function TripCorrectionModal({
           point_name: point.point_name,
           latitude: point.latitude,
           longitude: point.longitude,
-        })),
+        }))
+
       );
 
       console.log("Flat corrections to save:", flatCorrections)
