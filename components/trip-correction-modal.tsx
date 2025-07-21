@@ -769,14 +769,14 @@ export function TripCorrectionModal({
     }
   }, [mode, isOpen])
 
-  const filteredDrivers = driversList.filter((driver) => {
+  /*const filteredDrivers = driversList.filter((driver) => {
     const search = driverSearchValue.toLowerCase()
     return (
       driver.phone.toLowerCase().includes(search) ||
       (driver.full_name || "").toLowerCase().includes(search) ||
       (driver.first_name || "").toLowerCase().includes(search)
     )
-  })
+  })*/
 
   const getDriverDisplayName = (driver: Driver) => {
     return driver.full_name || driver.first_name || driver.name || `ID: ${driver.telegram_id}`
