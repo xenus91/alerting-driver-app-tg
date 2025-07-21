@@ -451,13 +451,16 @@ export function TripCorrectionModal({
     })
   }, [])
 
-  const updatePoint = useCallback((tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
+ const updatePoint = useCallback((driverIndex: number, tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => {
     console.log(
-      `📝 updatePoint called: tripIndex=${tripIndex}, pointIndex=${pointIndex}, field=${field}, value=${value}`,
+      `📝 updatePoint called: driverIndex=${driverIndex}, tripIndex=${tripIndex}, pointIndex=${pointIndex}, field=${field}, value=${value}`,
     )
-    setCorrections((prev) => {
+    setDriverAssignments((prev) => {
       const updated = [...prev]
-      updated[tripIndex].points[pointIndex] = { ...updated[tripIndex].points[pointIndex], [field]: value }
+      updated[driverIndex].corrections[tripIndex].points[pointIndex] = {
+        ...updated[driverIndex].corrections[tripIndex].points[pointIndex],
+        [field]: value
+      }
       return updated
     })
   }, [])
