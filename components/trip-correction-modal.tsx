@@ -397,7 +397,15 @@ export function TripCorrectionModal({
         }, {})
 
         console.log("Grouped driver data:", grouped)
-        setCorrections(Object.values(grouped))
+        setDriverAssignments([{
+          driver: {
+            phone: phone,
+            name: driverName || "Неизвестный",
+            first_name: driverName,
+            full_name: driverName,
+          },
+          corrections: Object.values(grouped)
+        }])
       } else {
         console.error("API error:", data.error)
         setError(data.error || "Не удалось загрузить данные водителя")
@@ -411,7 +419,6 @@ export function TripCorrectionModal({
       setDeletedTrips([])
     }
   }
-
   const loadAvailablePoints = async () => {
     try {
       const response = await fetch("/api/points")
