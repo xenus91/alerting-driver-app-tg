@@ -38,6 +38,14 @@ interface Driver {
   verified?: boolean
 }
 
+// === НОВЫЙ ИНТЕРФЕЙС ===
+// Интерфейс для хранения данных водителя и его рейсов
+interface DriverAssignment {
+  driver: Driver | null
+  corrections: CorrectionData[]
+}
+
+
 interface TripData {
   trip_identifier: string
   vehicle_number: string
@@ -75,8 +83,8 @@ export function TripCorrectionModal({
   onAssignmentSent,
   onOpenConflictTrip,
 }: TripCorrectionModalProps) {
-  const [driver, setDriver] = useState<Driver | null>(null)
-  const [corrections, setCorrections] = useState<CorrectionData[]>([])
+  // === ИЗМЕНЕНО: Используем массив driverAssignments вместо driver и corrections ===
+  const [driverAssignments, setDriverAssignments] = useState<DriverAssignment[]>([])
   const [deletedTrips, setDeletedTrips] = useState<string[]>([])
   const [availablePoints, setAvailablePoints] = useState<
     Array<{
@@ -100,8 +108,8 @@ export function TripCorrectionModal({
       trip_id: number
     }>
   >([])
-  const [driverSearchOpen, setDriverSearchOpen] = useState(false)
-  const [driverSearchValue, setDriverSearchValue] = useState("")
+ // === НОВОЕ: Состояния для каждого водителя ===
+  const [driverSearchStates, setDriverSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
 
   useEffect(() => {
     console.log("TripCorrectionModal useEffect:", {
@@ -128,29 +136,27 @@ export function TripCorrectionModal({
           return
         }
 
-        setDriver({
-          phone: phone,
-          name: driverName || "Неизвестный",
-          first_name: driverName,
-          full_name: driverName,
-        })
+        // === ИЗМЕНЕНО: Инициализация для режима edit ===
+        setDriverAssignments([{
+          driver: {
+            phone: phone,
+            name: driverName || "Неизвестный",
+            first_name: driverName,
+            full_name: driverName,
+          },
+          corrections: []
+        }])
         loadDriverDetails()
       } else {
         console.log("Initializing create mode")
 
-        if (initialDriver) {
-          console.log("Using initial driver:", initialDriver)
-          setDriver(initialDriver)
-        } else {
-          console.log("Creating empty driver")
-          setDriver(createEmptyDriver())
-        }
-
-        if (initialTrips && initialTrips.length > 0) {
-          console.log("Using initial trips:", initialTrips)
-          setCorrections(
-            initialTrips.map((trip) => ({
-              phone: initialDriver?.phone || "",
+        // === ИЗМЕНЕНО: Инициализация для режима create ===
+        if (initialDriver && initialTrips && initialTrips.length > 0) {
+          console.log("Using initial driver and trips:", initialDriver, initialTrips)
+          setDriverAssignments([{
+            driver: initialDriver,
+            corrections: initialTrips.map((trip) => ({
+              phone: initialDriver.phone || "",
               trip_identifier: trip.trip_identifier,
               original_trip_identifier: trip.trip_identifier,
               vehicle_number: trip.vehicle_number,
@@ -158,11 +164,14 @@ export function TripCorrectionModal({
               driver_comment: trip.driver_comment || "",
               message_id: 0,
               points: trip.points || [createEmptyPoint()],
-            })),
-          )
+            }))
+          }])
         } else {
-          console.log("Creating empty trip")
-          setCorrections([createEmptyTrip()])
+          console.log("Creating empty driver assignment")
+          setDriverAssignments([{
+            driver: null,
+            corrections: [createEmptyTrip()]
+          }])
         }
       }
 
