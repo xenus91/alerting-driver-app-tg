@@ -790,188 +790,237 @@ export function TripCorrectionModal({
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
-      <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {mode === "edit" ? `Корректировка рейсов для ${driverName}` : "Создание новых рейсов"}
-          </DialogTitle>
-        </DialogHeader>
+  <Dialog open={isOpen} onOpenChange={onClose}>
+    <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
+      <DialogHeader>
+        <DialogTitle>
+          {mode === "edit" ? `Корректировка рейсов для ${driverName}` : "Создание новых рейсов"}
+        </DialogTitle>
+      </DialogHeader>
 
-        {mode === "edit" && (
-          <Alert className="border-orange-200 bg-orange-50">
-            <AlertTriangle className="h-4 w-4 text-orange-600" />
-            <AlertDescription className="text-orange-800">
-              <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен.
-            </AlertDescription>
-          </Alert>
-        )}
+      {mode === "edit" && (
+        <Alert className="border-orange-200 bg-orange-50">
+          <AlertTriangle className="h-4 w-4 text-orange-600" />
+          <AlertDescription className="text-orange-800">
+            <strong>Внимание:</strong> При отправке корректировки статус подтверждения рейсов будет сброшен.
+          </AlertDescription>
+        </Alert>
+      )}
 
-        {error && (
-          <Alert variant="destructive">
-            <AlertDescription>{error}</AlertDescription>
-          </Alert>
-        )}
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
 
-        {conflictedTrips.length > 0 && (
-          <Alert variant="destructive" className="mb-4">
-            <AlertTriangle className="h-4 w-4" />
-            <AlertDescription>
-              <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
-              <ul className="list-disc pl-5 mt-2">
-                {conflictedTrips.map((conflict) => (
-                  <li key={conflict.trip_identifier} className="font-mono flex items-center justify-between">
-                    <span>
-                      {conflict.trip_identifier} (Водитель: {conflict.driver_name})
-                    </span>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="ml-2 bg-transparent"
-                      onClick={() => openConflictTripModal(conflict)}
-                    >
-                      Просмотреть рейс
-                    </Button>
-                  </li>
-                ))}
-              </ul>
-            </AlertDescription>
-          </Alert>
-        )}
+      {conflictedTrips.length > 0 && (
+        <Alert variant="destructive" className="mb-4">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertDescription>
+            <strong>Конфликт рейсов:</strong> Следующие рейсы уже назначены другим водителям:
+            <ul className="list-disc pl-5 mt-2">
+              {conflictedTrips.map((conflict) => (
+                <li key={conflict.trip_identifier} className="font-mono flex items-center justify-between">
+                  <span>
+                    {conflict.trip_identifier} (Водитель: {conflict.driver_name})
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="ml-2 bg-transparent"
+                    onClick={() => openConflictTripModal(conflict)}
+                  >
+                    Просмотреть рейс
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </AlertDescription>
+        </Alert>
+      )}
 
-        {success && (
-          <Alert>
-            <AlertDescription className="text-green-600">{success}</AlertDescription>
-          </Alert>
-        )}
+      {success && (
+        <Alert>
+          <AlertDescription className="text-green-600">{success}</AlertDescription>
+        </Alert>
+      )}
 
-        {isLoading ? (
-          <div className="flex items-center justify-center p-8">
-            <RefreshCw className="h-6 w-6 animate-spin mr-2" />
-            Загрузка данных...
-          </div>
-        ) : (
-          <div className="space-y-6">
-            {mode === "create" && (
-              <div className="border rounded-lg p-4 bg-blue-50 mb-4">
-                <div className="flex items-center gap-2 mb-3">
-                  <User className="h-4 w-4 text-blue-600" />
-                  <h3 className="font-medium text-blue-900">Выбор водителя</h3>
-                </div>
-
-                <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      role="combobox"
-                      aria-expanded={driverSearchOpen}
-                      className="w-full justify-between bg-transparent"
-                    >
-                      {driver?.phone
-                        ? `${getDriverDisplayName(driver)} (${formatPhone(driver.phone)})`
-                        : "Выберите водителя"}
-                      <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-full p-0" align="start">
-                    <Command>
-                      <CommandInput
-                        placeholder="Поиск по имени или телефону..."
-                        value={driverSearchValue}
-                        onValueChange={setDriverSearchValue}
-                      />
-                      <CommandList>
-                        <CommandEmpty>Водители не найдены</CommandEmpty>
-                        <CommandGroup className="max-h-[300px] overflow-auto">
-                          {filteredDrivers.map((driver) => (
-                            <CommandItem
-                              key={driver.phone}
-                              value={`${getDriverDisplayName(driver)} ${driver.phone}`}
-                              onSelect={() => {
-                                setDriver(driver)
-                                setDriverSearchOpen(false)
-                                // Обновляем phone во всех рейсах
-                                setCorrections((prev) =>
-                                  prev.map((trip) => ({
-                                    ...trip,
-                                    phone: driver.phone,
-                                  })),
-                                )
-                              }}
-                            >
-                              <div className="flex flex-col">
-                                <span>{getDriverDisplayName(driver)}</span>
-                                <span className="text-sm text-gray-500">{formatPhone(driver.phone)}</span>
-                              </div>
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </CommandList>
-                    </Command>
-                  </PopoverContent>
-                </Popover>
-              </div>
-            )}
-
-            <div className="flex justify-end">
-              <Button onClick={addNewTrip} variant="outline" className="text-green-600 bg-transparent">
+      {isLoading ? (
+        <div className="flex items-center justify-center p-8">
+          <RefreshCw className="h-6 w-6 animate-spin mr-2" />
+          Загрузка данных...
+        </div>
+      ) : (
+        <div className="space-y-8">
+          {/* Кнопка добавления водителя (только в режиме создания) */}
+          {mode === "create" && (
+            <div className="flex justify-start">
+              <Button onClick={addDriver} variant="outline" className="text-blue-600 bg-transparent">
                 <Plus className="h-4 w-4 mr-2" />
-                Добавить новый рейс
+                Добавить водителя
               </Button>
             </div>
+          )}
 
-            {corrections.map((trip, tripIndex) => (
-              <TripRow
-                key={trip.original_trip_identifier || `trip-${tripIndex}`}
-                trip={trip}
-                tripIndex={tripIndex}
-                availablePoints={availablePoints}
-                pointSearchStates={pointSearchStates}
-                handleSearchStateChange={handleSearchStateChange}
-                updateTrip={updateTrip}
-                movePointUp={movePointUp}
-                movePointDown={movePointDown}
-                updatePoint={updatePoint}
-                addNewPoint={addNewPoint}
-                removePoint={removePoint}
-                removeTrip={removeTrip}
-                correctionsLength={corrections.length}
-                formatDateTime={formatDateTime}
-                formatDateTimeForSave={formatDateTimeForSave}
-              />
-            ))}
-
-            <div className="flex gap-4 justify-end">
-              <Button onClick={onClose} variant="outline">
-                Отмена
-              </Button>
-              <Button
-                onClick={sendData}
-                disabled={isSending || isSaving || conflictedTrips.length > 0 || (mode === "create" && !driver?.phone)}
-                title={
-                  conflictedTrips.length > 0
-                    ? "Сначала разрешите конфликты рейсов"
-                    : mode === "create" && !driver?.phone
-                      ? "Выберите водителя"
-                      : ""
-                }
-              >
-                {isSending ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    {mode === "edit" ? "Отправка..." : "Создание..."}
-                  </>
-                ) : (
-                  <>
-                    <Send className="h-4 w-4 mr-2" />
-                    {mode === "edit" ? "Отправить корректировку" : "Создать рейсы"}
-                  </>
+          {/* Блоки для каждого водителя */}
+          {drivers.map((driver, driverIndex) => (
+            <div 
+              key={`driver-${driverIndex}`} 
+              className="border rounded-lg p-4 bg-blue-50 relative"
+            >
+              {/* Заголовок блока водителя */}
+              <div className="flex justify-between items-center mb-4">
+                <div className="flex items-center gap-2">
+                  <User className="h-4 w-4 text-blue-600" />
+                  <h3 className="font-medium text-blue-900">
+                    Водитель {driverIndex + 1}
+                  </h3>
+                </div>
+                
+                {/* Кнопка удаления водителя (если больше одного) */}
+                {mode === "create" && drivers.length > 1 && (
+                  <Button 
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => removeDriver(driverIndex)}
+                    className="text-red-600 hover:bg-red-100 absolute top-2 right-2"
+                  >
+                    <Trash className="h-4 w-4" />
+                  </Button>
                 )}
-              </Button>
+              </div>
+
+              {/* Поле выбора водителя (только в режиме создания) */}
+              {mode === "create" && (
+                <div className="mb-6">
+                  <Popover open={driverSearchOpen} onOpenChange={setDriverSearchOpen}>
+                    <PopoverTrigger asChild>
+                      <Button
+                        variant="outline"
+                        role="combobox"
+                        aria-expanded={driverSearchOpen}
+                        className="w-full justify-between bg-transparent"
+                      >
+                        {driver.phone
+                          ? `${getDriverDisplayName(driver)} (${formatPhone(driver.phone)})`
+                          : "Выберите водителя"}
+                        <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                      </Button>
+                    </PopoverTrigger>
+                    <PopoverContent className="w-full p-0" align="start">
+                      <Command>
+                        <CommandInput
+                          placeholder="Поиск по имени или телефону..."
+                          value={driverSearchValue}
+                          onValueChange={setDriverSearchValue}
+                        />
+                        <CommandList>
+                          <CommandEmpty>Водители не найдены</CommandEmpty>
+                          <CommandGroup className="max-h-[300px] overflow-auto">
+                            {filteredDrivers.map((d) => (
+                              <CommandItem
+                                key={d.phone}
+                                value={`${getDriverDisplayName(d)} ${d.phone}`}
+                                onSelect={() => {
+                                  updateDriver(driverIndex, "phone", d.phone)
+                                  updateDriver(driverIndex, "name", d.name)
+                                  updateDriver(driverIndex, "first_name", d.first_name)
+                                  updateDriver(driverIndex, "full_name", d.full_name)
+                                  updateDriver(driverIndex, "telegram_id", d.telegram_id)
+                                  updateDriver(driverIndex, "verified", d.verified)
+                                  setDriverSearchOpen(false)
+                                }}
+                              >
+                                <div className="flex flex-col">
+                                  <span>{getDriverDisplayName(d)}</span>
+                                  <span className="text-sm text-gray-500">{formatPhone(d.phone)}</span>
+                                </div>
+                              </CommandItem>
+                            ))}
+                          </CommandGroup>
+                        </CommandList>
+                      </Command>
+                    </PopoverContent>
+                  </Popover>
+                </div>
+              )}
+
+              {/* Блок рейсов для водителя */}
+              <div className="space-y-6">
+                {correctionsByDriver[driverIndex]?.map((trip, tripIndex) => (
+                  <TripRow
+                    key={trip.original_trip_identifier || `trip-${driverIndex}-${tripIndex}`}
+                    trip={trip}
+                    tripIndex={tripIndex}
+                    driverIndex={driverIndex}
+                    availablePoints={availablePoints}
+                    pointSearchStates={pointSearchStates}
+                    handleSearchStateChange={handleSearchStateChange}
+                    updateTrip={updateTrip}
+                    movePointUp={movePointUp}
+                    movePointDown={movePointDown}
+                    updatePoint={updatePoint}
+                    addNewPoint={addNewPoint}
+                    removePoint={removePoint}
+                    removeTrip={removeTrip}
+                    correctionsLength={correctionsByDriver[driverIndex].length}
+                    formatDateTime={formatDateTime}
+                    formatDateTimeForSave={formatDateTimeForSave}
+                  />
+                ))}
+
+                {/* Кнопка добавления рейса для этого водителя */}
+                <div className="flex justify-end">
+                  <Button 
+                    onClick={() => addNewTrip(driverIndex)} 
+                    variant="outline" 
+                    className="text-green-600 bg-transparent"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Добавить рейс этому водителю
+                  </Button>
+                </div>
+              </div>
             </div>
+          ))}
+
+          {/* Кнопки отправки и отмены */}
+          <div className="flex gap-4 justify-end">
+            <Button onClick={onClose} variant="outline">
+              Отмена
+            </Button>
+            <Button
+              onClick={sendData}
+              disabled={
+                isSending || 
+                isSaving || 
+                conflictedTrips.length > 0 || 
+                (mode === "create" && drivers.some(d => !d.phone))
+              }
+              title={
+                conflictedTrips.length > 0
+                  ? "Сначала разрешите конфликты рейсов"
+                  : mode === "create" && drivers.some(d => !d.phone)
+                    ? "Выберите водителя для всех блоков"
+                    : ""
+              }
+            >
+              {isSending ? (
+                <>
+                  <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                  {mode === "edit" ? "Отправка..." : "Создание..."}
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  {mode === "edit" ? "Отправить корректировку" : "Создать рейсы"}
+                </>
+              )}
+            </Button>
           </div>
-        )}
-      </DialogContent>
-    </Dialog>
-  )
+        </div>
+      )}
+    </DialogContent>
+  </Dialog>
+)
 }
