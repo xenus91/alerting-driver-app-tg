@@ -41,7 +41,7 @@ async function sendTelegramMessage(chatId: string, message: string) {
 export async function POST(request: NextRequest) {
   try {
     // Проверяем авторизацию через секретный ключ
-    const authHeader = request.headers.get("authorization")
+    const authHeader = request.headers.get("X-Cron-Secret")
     const cronSecret = process.env.CRON_SECRET_KEY
 
     if (!cronSecret) {
