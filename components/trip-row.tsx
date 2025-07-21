@@ -1,17 +1,14 @@
 "use client"
 
-import type React from "react"
-
-import { memo, useCallback, useEffect, useRef } from "react"
-import { Button } from "@/components/ui/button"
+import { memo, useCallback } from "react"
 import { Input } from "@/components/ui/input"
+import { Button } from "@/components/ui/button"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Badge } from "@/components/ui/badge"
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
-import { Plus, Trash2, Check, ChevronsUpDown, Search } from "lucide-react"
+import { Plus, Trash2, Check, ChevronsUpDown, Search, ChevronUp, ChevronDown } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { ChevronUp, ChevronDown } from "lucide-react"
 
 interface PointData {
   point_type: "P" | "D"
@@ -31,6 +28,26 @@ interface CorrectionData {
   driver_comment?: string
   message_id: number
   points: PointData[]
+}
+
+// === НОВОЕ: Обновленный интерфейс пропсов с добавлением driverIndex ===
+interface TripRowProps {
+  trip: CorrectionData
+  tripIndex: number
+  driverIndex: number // Добавляем driverIndex
+  availablePoints: Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>
+  pointSearchStates: Record<string, { open: boolean; search: string }>
+  handleSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
+  updateTrip: (driverIndex: number, tripIndex: number, field: keyof CorrectionData, value: any) => void
+  updatePoint: (driverIndex: number, tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => void
+  movePointUp: (driverIndex: number, tripIndex: number, pointIndex: number) => void
+  movePointDown: (driverIndex: number, tripIndex: number, pointIndex: number) => void
+  addNewPoint: (driverIndex: number, tripIndex: number) => void
+  removePoint: (driverIndex: number, tripIndex: number, pointIndex: number) => void
+  removeTrip: (driverIndex: number, tripIndex: number) => void
+  correctionsLength: number
+  formatDateTime: (dateString: string) => string
+  formatDateTimeForSave: (dateString: string) => string
 }
 
 interface PointSelectorProps {
@@ -61,19 +78,14 @@ const PointSelector = memo(
 
     const handleOpenChange = useCallback(
       (open: boolean) => {
-        if (open) {
-          onSearchStateChange(pointKey, { open: true, search: "" })
-        } else {
-          onSearchStateChange(pointKey, { open: false, search: "" })
-        }
+        onSearchStateChange(pointKey, { open, search: open ? searchState.search : "" })
       },
-      [pointKey, onSearchStateChange],
+      [pointKey, onSearchStateChange, searchState.search],
     )
 
     const handleSearchChange = useCallback(
       (e: React.ChangeEvent<HTMLInputElement>) => {
-        const newSearch = e.target.value
-        onSearchStateChange(pointKey, { search: newSearch })
+        onSearchStateChange(pointKey, { search: e.target.value })
       },
       [pointKey, onSearchStateChange],
     )
@@ -152,6 +164,7 @@ export const TripRow = memo(
   ({
     trip,
     tripIndex,
+    driverIndex, // Добавляем driverIndex
     availablePoints,
     pointSearchStates,
     handleSearchStateChange,
@@ -165,100 +178,62 @@ export const TripRow = memo(
     correctionsLength,
     formatDateTime,
     formatDateTimeForSave,
-  }: {
-    trip: CorrectionData
-    tripIndex: number
-    availablePoints: Array<{ point_id: string; point_name: string; latitude?: string; longitude?: string }>
-    pointSearchStates: Record<string, { open: boolean; search: string }>
-    handleSearchStateChange: (key: string, state: { open?: boolean; search?: string }) => void
-    updateTrip: (tripIndex: number, field: keyof CorrectionData, value: any) => void
-    updatePoint: (tripIndex: number, pointIndex: number, field: keyof PointData, value: any) => void
-    movePointUp?: (tripIndex: number, pointIndex: number) => void
-    movePointDown?: (tripIndex: number, pointIndex: number) => void
-    addNewPoint: (tripIndex: number) => void
-    removePoint: (tripIndex: number, pointIndex: number) => void
-    removeTrip: (tripIndex: number) => void
-    correctionsLength: number
-    formatDateTime: (dateString: string) => string
-    formatDateTimeForSave: (dateString: string) => string
-  }) => {
-    const inputRef = useRef<HTMLInputElement>(null)
-
-    // Сортируем точки только по point_num по возрастанию
+  }: TripRowProps) => {
+    // === ИЗМЕНЕНО: Удален неиспользуемый useRef и useEffect ===
+    // Сортировка точек по point_num
     const sortedPoints = [...trip.points].sort((a, b) => a.point_num - b.point_num)
 
-    console.log(`🔍 TripRow render for trip ${trip.trip_identifier}:`)
-    console.log(
-      "Original points:",
-      trip.points.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
-    )
-    console.log(
-      "Sorted points:",
-      sortedPoints.map((p) => ({ point_num: p.point_num, point_id: p.point_id, point_type: p.point_type })),
+    // === НОВОЕ: Уникальный ключ для точки ===
+    const getPointKey = useCallback(
+      (point: PointData, index: number) =>
+        `${driverIndex}-${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}-${point.point_id}-${index}`,
+      [driverIndex, trip.original_trip_identifier, tripIndex],
     )
 
-    useEffect(() => {
-      if (inputRef.current && document.activeElement === inputRef.current) {
-        inputRef.current.focus()
-      }
-    }, [trip.trip_identifier])
+    // === ИЗМЕНЕНО: Упрощенная функция для получения оригинального индекса ===
+    const getOriginalIndex = useCallback(
+      (sortedIndex: number) => {
+        const sortedPoint = sortedPoints[sortedIndex]
+        const originalIndex = trip.points.findIndex(
+          (p) =>
+            p.point_num === sortedPoint.point_num &&
+            p.point_id === sortedPoint.point_id &&
+            p.point_type === sortedPoint.point_type,
+        )
+        console.log(`📍 getOriginalIndex: sortedIndex=${sortedIndex} -> originalIndex=${originalIndex}`)
+        return originalIndex !== -1 ? originalIndex : sortedIndex
+      },
+      [sortedPoints, trip.points],
+    )
 
-    const getPointKey = (point: PointData, index: number) =>
-      `${trip.original_trip_identifier || `trip-${tripIndex}`}-${point.point_type}-${point.point_num}-${point.point_id}-${index}`
+    // === ИЗМЕНЕНО: Упрощенные функции проверки перемещения ===
+    const canMoveUp = useCallback(
+      (sortedIndex: number) => {
+        const point = sortedPoints[sortedIndex]
+        return point.point_num > 1
+      },
+      [sortedPoints],
+    )
 
-    // Функция для получения оригинального индекса точки в несортированном массиве
-    const getOriginalIndex = (sortedIndex: number) => {
-      const sortedPoint = sortedPoints[sortedIndex]
-      const originalIndex = trip.points.findIndex(
-        (point) =>
-          point.point_type === sortedPoint.point_type &&
-          point.point_num === sortedPoint.point_num &&
-          point.point_id === sortedPoint.point_id,
-      )
-
-      console.log(`📍 getOriginalIndex: sortedIndex=${sortedIndex} -> originalIndex=${originalIndex}`)
-      console.log(
-        `   Sorted point: ${sortedPoint.point_id} (${sortedPoint.point_type}) point_num=${sortedPoint.point_num}`,
-      )
-
-      return originalIndex
-    }
-
-    // Функция для проверки возможности перемещения вверх
-    const canMoveUp = (sortedIndex: number) => {
-      const currentPoint = sortedPoints[sortedIndex]
-      const targetPointNum = currentPoint.point_num - 1
-      const canMove = trip.points.some((p) => p.point_num === targetPointNum)
-
-      console.log(
-        `⬆️ canMoveUp check: point_num=${currentPoint.point_num}, target=${targetPointNum}, canMove=${canMove}`,
-      )
-      return canMove
-    }
-
-    // Функция для проверки возможности перемещения вниз
-    const canMoveDown = (sortedIndex: number) => {
-      const currentPoint = sortedPoints[sortedIndex]
-      const targetPointNum = currentPoint.point_num + 1
-      const canMove = trip.points.some((p) => p.point_num === targetPointNum)
-
-      console.log(
-        `⬇️ canMoveDown check: point_num=${currentPoint.point_num}, target=${targetPointNum}, canMove=${canMove}`,
-      )
-      return canMove
-    }
+    const canMoveDown = useCallback(
+      (sortedIndex: number) => {
+        const point = sortedPoints[sortedIndex]
+        return point.point_num < sortedPoints.length
+      },
+      [sortedPoints],
+    )
 
     return (
       <div key={trip.original_trip_identifier || `trip-${tripIndex}`} className="border rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Рейс {trip.trip_identifier || `Новый ${tripIndex + 1}`}</h3>
           <div className="flex gap-2">
-            <Button onClick={() => addNewPoint(tripIndex)} variant="outline" size="sm" className="text-blue-600">
+            <Button onClick={() => addNewPoint(driverIndex, tripIndex)} variant="outline" size="sm" className="text-blue-600">
               <Plus className="h-4 w-4 mr-2" />
               Добавить точку
             </Button>
             {correctionsLength > 1 && (
-              <Button onClick={() => removeTrip(tripIndex)} variant="outline" size="sm" className="text-red-600">
+              <Button onClick={() => removeTrip(driverIndex, tripIndex)} variant="outline" size="sm" className="text-red-600">
                 <Trash2 className="h-4 w-4 mr-2" />
                 Удалить рейс
               </Button>
@@ -270,18 +245,15 @@ export const TripRow = memo(
           <div>
             <label className="text-sm font-medium">Номер рейса</label>
             <Input
-              ref={inputRef}
               value={trip.trip_identifier || ""}
-              onChange={(e) => {
-                updateTrip(tripIndex, "trip_identifier", e.target.value)
-              }}
+              onChange={(e) => updateTrip(driverIndex, tripIndex, "trip_identifier", e.target.value)}
             />
           </div>
           <div>
             <label className="text-sm font-medium">Транспорт</label>
             <Input
               value={trip.vehicle_number || ""}
-              onChange={(e) => updateTrip(tripIndex, "vehicle_number", e.target.value)}
+              onChange={(e) => updateTrip(driverIndex, tripIndex, "vehicle_number", e.target.value)}
             />
           </div>
           <div>
@@ -289,14 +261,14 @@ export const TripRow = memo(
             <Input
               type="datetime-local"
               value={formatDateTime(trip.planned_loading_time || "")}
-              onChange={(e) => updateTrip(tripIndex, "planned_loading_time", formatDateTimeForSave(e.target.value))}
+              onChange={(e) => updateTrip(driverIndex, tripIndex, "planned_loading_time", formatDateTimeForSave(e.target.value))}
             />
           </div>
           <div>
             <label className="text-sm font-medium">Комментарий</label>
             <Input
               value={trip.driver_comment || ""}
-              onChange={(e) => updateTrip(tripIndex, "driver_comment", e.target.value)}
+              onChange={(e) => updateTrip(driverIndex, tripIndex, "driver_comment", e.target.value)}
             />
           </div>
         </div>
@@ -321,7 +293,7 @@ export const TripRow = memo(
                   <TableCell>
                     <Select
                       value={point.point_type}
-                      onValueChange={(value: "P" | "D") => updatePoint(tripIndex, originalIndex, "point_type", value)}
+                      onValueChange={(value: "P" | "D") => updatePoint(driverIndex, tripIndex, originalIndex, "point_type", value)}
                     >
                       <SelectTrigger className="w-20">
                         <SelectValue />
@@ -349,10 +321,10 @@ export const TripRow = memo(
                     <PointSelector
                       value={point.point_id}
                       onChange={(selectedPoint) => {
-                        updatePoint(tripIndex, originalIndex, "point_id", selectedPoint.point_id)
-                        updatePoint(tripIndex, originalIndex, "point_name", selectedPoint.point_name)
-                        updatePoint(tripIndex, originalIndex, "latitude", selectedPoint.latitude)
-                        updatePoint(tripIndex, originalIndex, "longitude", selectedPoint.longitude)
+                        updatePoint(driverIndex, tripIndex, originalIndex, "point_id", selectedPoint.point_id)
+                        updatePoint(driverIndex, tripIndex, originalIndex, "point_name", selectedPoint.point_name)
+                        updatePoint(driverIndex, tripIndex, originalIndex, "latitude", selectedPoint.latitude)
+                        updatePoint(driverIndex, tripIndex, originalIndex, "longitude", selectedPoint.longitude)
                       }}
                       pointKey={pointKey}
                       availablePoints={availablePoints}
@@ -366,12 +338,7 @@ export const TripRow = memo(
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => {
-                            console.log(
-                              `🔼 Move up clicked: sortedIndex=${sortedIndex}, originalIndex=${originalIndex}`,
-                            )
-                            movePointUp && movePointUp(tripIndex, originalIndex)
-                          }}
+                          onClick={() => movePointUp(driverIndex, tripIndex, originalIndex)}
                           title="Переместить вверх"
                         >
                           <ChevronUp className="h-4 w-4" />
@@ -381,12 +348,7 @@ export const TripRow = memo(
                         <Button
                           variant="outline"
                           size="icon"
-                          onClick={() => {
-                            console.log(
-                              `🔽 Move down clicked: sortedIndex=${sortedIndex}, originalIndex=${originalIndex}`,
-                            )
-                            movePointDown && movePointDown(tripIndex, originalIndex)
-                          }}
+                          onClick={() => movePointDown(driverIndex, tripIndex, originalIndex)}
                           title="Переместить вниз"
                         >
                           <ChevronDown className="h-4 w-4" />
@@ -396,7 +358,7 @@ export const TripRow = memo(
                   </TableCell>
                   <TableCell>
                     <Button
-                      onClick={() => removePoint(tripIndex, originalIndex)}
+                      onClick={() => removePoint(driverIndex, tripIndex, originalIndex)}
                       variant="outline"
                       size="sm"
                       className="text-red-600"
