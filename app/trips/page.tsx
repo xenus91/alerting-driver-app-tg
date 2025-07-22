@@ -746,7 +746,7 @@ export default function TripsPage() {
           setShowCreateTripModal(false)
         }}
         // onOpenConflictTrip не требуется в режиме создания, так как конфликты обрабатываются внутри модалки
-        onOpenConflictTrip={() => {}} // Пустая функция, чтобы удовлетворить тип
+        onOpenConflictTrip={handleOpenConflictTrip} // Пустая функция, чтобы удовлетворить тип
       />
     </div>
   )
