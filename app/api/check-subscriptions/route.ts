@@ -9,6 +9,7 @@ export async function POST(request: NextRequest) {
     console.log("=== CHECKING SUBSCRIPTIONS ===")
 
     // Получаем все активные подписки, которые нужно проверить
+    // === ИЗМЕНЕНО: Переименовано declined_trips в declinedResponses ===
     const subscriptions = await sql`
       SELECT 
         ts.*,
@@ -17,7 +18,8 @@ export async function POST(request: NextRequest) {
         COUNT(CASE WHEN tm.status = 'sent' THEN 1 END) as sent_messages,
         COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
         COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
-        COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses
+        COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
+        COUNT(CASE WHEN t.status = 'declined' THEN 1 END) as declinedResponses
       FROM trip_subscriptions ts
       JOIN trips t ON ts.trip_id = t.id
       LEFT JOIN trip_messages tm ON t.id = tm.trip_id
@@ -41,8 +43,11 @@ export async function POST(request: NextRequest) {
         const confirmedResponses = Number(subscription.confirmed_responses)
         const rejectedResponses = Number(subscription.rejected_responses)
         const pendingResponses = Number(subscription.pending_responses)
+        // === ИЗМЕНЕНО: Переименовано declined_trips в declinedResponses ===
+        const declinedResponses = Number(subscription.declinedResponses)
 
-        const totalResponses = confirmedResponses + rejectedResponses
+        // === ИЗМЕНЕНО: Добавлено declinedResponses в расчет totalResponses ===
+        const totalResponses = confirmedResponses + rejectedResponses + declinedResponses
         const responsePercentage = sentMessages > 0 ? Math.round((totalResponses / sentMessages) * 100) : 0
 
         // Формируем сообщение с прогрессом
@@ -53,7 +58,8 @@ export async function POST(request: NextRequest) {
 
         message += `✅ Подтверждено: ${confirmedResponses}\n`
         message += `❌ Отклонено: ${rejectedResponses}\n`
-        message += `⏳ Ожидают: ${pendingResponses}\n\n`
+        message += `⏳ Ожидают: ${pendingResponses}\n`
+        message += `🚫 Отменено: ${declinedResponses}\n\n`
 
         // Определяем статус
         if (totalResponses === sentMessages && sentMessages === totalMessages) {
