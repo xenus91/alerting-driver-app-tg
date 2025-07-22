@@ -390,6 +390,17 @@ export default function TripsPage() {
     }
   }
 
+  const handleOpenConflictTrip = (tripId: number, driverPhone: string, driverName: string) => {
+    console.log("handleOpenConflictTrip called:", { tripId, driverPhone, driverName })
+    setModalState({
+      isOpen: true,
+      mode: "edit",
+      tripId,
+      phone: driverPhone,
+      driverName,
+    })
+  }
+
   return (
     <div className="flex flex-col h-screen">
       {/* Фиксированная верхняя часть */}
@@ -759,7 +770,7 @@ export default function TripsPage() {
           setShowCreateTripModal(false)
         }}
         // onOpenConflictTrip не требуется в режиме создания, так как конфликты обрабатываются внутри модалки
-        onOpenConflictTrip={handleOpenConflictTrip} // Пустая функция, чтобы удовлетворить тип
+        onOpenConflictTrip={handleOpenConflictTrip}// Пустая функция, чтобы удовлетворить тип
       />
     </div>
   )
