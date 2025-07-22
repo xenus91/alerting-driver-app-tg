@@ -720,16 +720,29 @@ export function TripCorrectionModal({
     driver_name: string
     trip_identifier: string
   }) => {
-    console.log("Opening conflict trip modal with:", conflict)
-
-    // Закрываем текущую модалку
-    onClose()
-
-    // После закрытия открываем модалку редактирования
+    console.log("Opening conflict trip modal with:", JSON.stringify(conflict, null, 2))
+    if (!conflict.trip_id || !conflict.driver_phone || !conflict.driver_name) {
+      console.error("Cannot open conflict trip modal: missing required fields", conflict)
+      setError("Ошибка: неполные данные конфликта")
+      return
+    }
+    // Увеличиваем задержку для надежности
     setTimeout(() => {
-      onOpenConflictTrip(conflict.trip_id, conflict.driver_phone, conflict.driver_name)
-    }, 100)
+      console.log("Calling onOpenConflictTrip with:", {
+        tripId: conflict.trip_id,
+        driverPhone: conflict.driver_phone,
+        driverName: conflict.driver_name
+      })
+      try {
+        onOpenConflictTrip(conflict.trip_id, conflict.driver_phone, conflict.driver_name)
+        onClose()
+      } catch (error) {
+        console.error("Error calling onOpenConflictTrip:", error)
+        setError("Ошибка при открытии модального окна конфликта")
+      }
+    }, 300)
   }
+
 
   // Форматирование данных
   const formatDateTime = (dateString: string) => {
