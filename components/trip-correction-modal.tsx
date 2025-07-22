@@ -110,6 +110,23 @@ export function TripCorrectionModal({
   >([])
  // === НОВОЕ: Состояния для каждого водителя ===
   const [driverSearchStates, setDriverSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
+    // Выбор водителя
+  const [driversList, setDriversList] = useState<Driver[]>([])
+    // === НОВОЕ: Инициализация driverSearchStates для каждого водителя ===
+  useEffect(() => {
+    if (isOpen && mode === "create") {
+      setDriverSearchStates((prev) => {
+        const updated = { ...prev }
+        driverAssignments.forEach((_, index) => {
+          const key = `driver-${index}`
+          if (!updated[key]) {
+            updated[key] = { open: false, search: "" }
+          }
+        })
+        return updated
+      })
+    }
+  }, [isOpen, mode, driverAssignments])
 
   useEffect(() => {
     console.log("TripCorrectionModal useEffect:", {
@@ -210,21 +227,32 @@ export function TripCorrectionModal({
   // === НОВАЯ ФУНКЦИЯ: Добавление нового водителя ===
   const addNewDriver = () => {
     console.log("➕ addNewDriver called")
+    const newDriverIndex = driverAssignments.length
     setDriverAssignments([...driverAssignments, {
       driver: null,
       corrections: [createEmptyTrip()]
     }])
+    // === НОВОЕ: Инициализация состояния поиска для нового водителя ===
+    setDriverSearchStates((prev) => ({
+      ...prev,
+      [`driver-${newDriverIndex}`]: { open: false, search: "" }
+    }))
   }
 
   // === НОВАЯ ФУНКЦИЯ: Удаление водителя ===
   const removeDriver = (driverIndex: number) => {
     console.log(`🗑️ removeDriver called: driverIndex=${driverIndex}`)
     setDriverAssignments((prev) => prev.filter((_, i) => i !== driverIndex))
-    // Добавляем trip_identifier удаленных рейсов в deletedTrips
     const deletedTripIdentifiers = driverAssignments[driverIndex].corrections
       .map(trip => trip.original_trip_identifier || trip.trip_identifier)
-      .filter(id => id);
-    setDeletedTrips((prev) => [...prev, ...deletedTripIdentifiers]);
+      .filter(id => id)
+    setDeletedTrips((prev) => [...prev, ...deletedTripIdentifiers])
+    // === НОВОЕ: Удаление состояния поиска для удаленного водителя ===
+    setDriverSearchStates((prev) => {
+      const updated = { ...prev }
+      delete updated[`driver-${driverIndex}`]
+      return updated
+    })
   }
 
   // Функции перемещения точек
@@ -749,8 +777,15 @@ export function TripCorrectionModal({
     }))
   }, [])
 
-  // Выбор водителя
-  const [driversList, setDriversList] = useState<Driver[]>([])
+    const handleDriverSearchStateChange = useCallback((driverIndex: number, state: { open?: boolean; search?: string }) => {
+    console.log(`🔍 handleDriverSearchStateChange called: driverIndex=${driverIndex}, state=`, state)
+    setDriverSearchStates((prev) => ({
+      ...prev,
+      [`driver-${driverIndex}`]: { ...prev[`driver-${driverIndex}`] || { open: false, search: "" }, ...state },
+    }))
+  }, [])
+
+
 
   useEffect(() => {
     if (mode === "create" && isOpen) {
@@ -769,15 +804,17 @@ export function TripCorrectionModal({
     }
   }, [mode, isOpen])
 
-  /*const filteredDrivers = driversList.filter((driver) => {
-    const search = driverSearchValue.toLowerCase()
-    return (
-      driver.phone.toLowerCase().includes(search) ||
-      (driver.full_name || "").toLowerCase().includes(search) ||
-      (driver.first_name || "").toLowerCase().includes(search)
-    )
-  })*/
-
+// === НОВОЕ: Оптимизированная фильтрация водителей ===
+  const filteredDrivers = useMemo(() => {
+    return driversList.filter((driver) => {
+      const search = (driverSearchStates[`driver-${driverAssignments.findIndex((_, i) => i === driverAssignments.findIndex((a) => a.driver?.phone === driver.phone))}`]?.search || "").toLowerCase()
+      return (
+        driver.phone.toLowerCase().includes(search) ||
+        (driver.full_name || "").toLowerCase().includes(search) ||
+        (driver.first_name || "").toLowerCase().includes(search)
+      )
+    })
+  }, [driversList, driverSearchStates])
   const getDriverDisplayName = (driver: Driver) => {
     return driver.full_name || driver.first_name || driver.name || `ID: ${driver.telegram_id}`
   }
