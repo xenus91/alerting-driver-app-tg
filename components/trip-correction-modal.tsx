@@ -112,6 +112,13 @@ export function TripCorrectionModal({
   const [driverSearchStates, setDriverSearchStates] = useState<Record<string, { open: boolean; search: string }>>({})
     // Выбор водителя
   const [driversList, setDriversList] = useState<Driver[]>([])
+  const [dialogOpen, setDialogOpen] = useState(isOpen) // Локальное состояние для Dialog
+
+  useEffect(() => {
+    setDialogOpen(isOpen)
+    console.log("Dialog open state updated:", isOpen)
+  }, [isOpen])
+
     // === НОВОЕ: Инициализация driverSearchStates для каждого водителя ===
   useEffect(() => {
     if (isOpen && mode === "create") {
@@ -135,25 +142,24 @@ export function TripCorrectionModal({
       tripId,
       phone,
       driverName,
+      dialogOpen,
     })
-
-    if (isOpen) {
+    if (isOpen && dialogOpen) {
       setConflictedTrips([])
       setError(null)
       setSuccess(null)
-
       if (mode === "edit") {
-        console.log("Loading driver details for edit mode", {
-          tripId,
-          phone,
-        })
-
+        console.log("Loading driver details for edit mode", { tripId, phone })
         if (!phone || !tripId) {
-          console.error("Phone or tripId missing for edit mode")
+          console.error("Phone or tripId missing for edit mode", { phone, tripId })
+          setError("Недостаточно данных для загрузки деталей рейса")
+          toast({
+            title: "Ошибка",
+            description: "Недостаточно данных для загрузки деталей рейса",
+            variant: "destructive",
+          })
           return
         }
-
-        // === ИЗМЕНЕНО: Инициализация для режима edit ===
         setDriverAssignments([{
           driver: {
             phone: phone,
@@ -166,8 +172,6 @@ export function TripCorrectionModal({
         loadDriverDetails()
       } else {
         console.log("Initializing create mode")
-
-        // === ИЗМЕНЕНО: Инициализация для режима create ===
         if (initialDriver && initialTrips && initialTrips.length > 0) {
           console.log("Using initial driver and trips:", initialDriver, initialTrips)
           setDriverAssignments([{
@@ -191,11 +195,9 @@ export function TripCorrectionModal({
           }])
         }
       }
-
       loadAvailablePoints()
     }
-  }, [isOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
-
+  }, [isOpen, dialogOpen, tripId, phone, driverName, mode, initialDriver, initialTrips])
   // Вспомогательные функции
   const createEmptyDriver = (): Driver => ({
     phone: "",
