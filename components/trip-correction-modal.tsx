@@ -982,17 +982,6 @@ export function TripCorrectionModal({
                   </div>
                 )}
 
-                <div className="flex justify-end mb-3">
-                  <Button
-                    onClick={() => addNewTrip(driverIndex)}
-                    variant="outline"
-                    className="text-green-600 bg-transparent"
-                  >
-                    <Plus className="h-4 w-4 mr-2" />
-                    Добавить новый рейс
-                  </Button>
-                </div>
-
                 {assignment.corrections.map((trip, tripIndex) => (
                   <TripRow
                     key={trip.original_trip_identifier || `trip-${driverIndex}-${tripIndex}`}
