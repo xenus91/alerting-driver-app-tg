@@ -57,6 +57,19 @@ export default function TripsPage() {
   // const [showQuickTripForm, setShowQuickTripForm] = useState(false) // Удаляем состояние QuickTripForm
   const [showCreateTripModal, setShowCreateTripModal] = useState(false) // Новое состояние для TripCorrectionModal в режиме создания
   const [currentUser, setCurrentUser] = useState<{ telegram_id?: number } | null>(null)
+  const [modalState, setModalState] = useState<{
+    isOpen: boolean
+    mode: "create" | "edit"
+    tripId: number | null
+    phone: string | null
+    driverName: string | null
+  }>({
+    isOpen: false,
+    mode: "create",
+    tripId: null,
+    phone: null,
+    driverName: null,
+  })
 
   // Состояния для диалога ошибок
   const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
