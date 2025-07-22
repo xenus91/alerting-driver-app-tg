@@ -28,7 +28,7 @@ async function sendTelegramMessage(chatId: string, message: string) {
 
     if (!response.ok) {
       console.error("Telegram API error:", result)
-      return {rum: { success: false, error: result.description || "Failed to send message" }
+      return { success: false, error: result.description || "Failed to send message" }
     }
 
     return { success: true, data: result }
