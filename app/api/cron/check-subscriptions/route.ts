@@ -123,7 +123,7 @@ export async function POST(request: NextRequest) {
           metrics.push(`🚫 Отменено: ${declined_users}`)
         }
         if (errorUsers > 0) {
-          metrics.push(`🚫 Ошибки: ${errorUsers}`)
+          metrics.push(`🆘 Ошибки: ${errorUsers}`)
         }
 
         // Добавляем метрики в сообщение, если есть ненулевые значения
