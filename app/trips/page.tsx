@@ -57,19 +57,6 @@ export default function TripsPage() {
   // const [showQuickTripForm, setShowQuickTripForm] = useState(false) // Удаляем состояние QuickTripForm
   const [showCreateTripModal, setShowCreateTripModal] = useState(false) // Новое состояние для TripCorrectionModal в режиме создания
   const [currentUser, setCurrentUser] = useState<{ telegram_id?: number } | null>(null)
-  const [modalState, setModalState] = useState<{
-    isOpen: boolean
-    mode: "create" | "edit"
-    tripId: number | null
-    phone: string | null
-    driverName: string | null
-  }>({
-    isOpen: false,
-    mode: "create",
-    tripId: null,
-    phone: null,
-    driverName: null,
-  })
 
   // Состояния для диалога ошибок
   const [showErrorsDialog, setShowErrorsDialog] = useState<number | null>(null)
@@ -388,17 +375,6 @@ export default function TripsPage() {
       setDeletingTripId(null)
       setShowDeleteConfirm(null)
     }
-  }
-
-  const handleOpenConflictTrip = (tripId: number, driverPhone: string, driverName: string) => {
-    console.log("handleOpenConflictTrip called:", { tripId, driverPhone, driverName })
-    setModalState({
-      isOpen: true,
-      mode: "edit",
-      tripId,
-      phone: driverPhone,
-      driverName,
-    })
   }
 
   return (
@@ -770,7 +746,7 @@ export default function TripsPage() {
           setShowCreateTripModal(false)
         }}
         // onOpenConflictTrip не требуется в режиме создания, так как конфликты обрабатываются внутри модалки
-        onOpenConflictTrip={handleOpenConflictTrip}// Пустая функция, чтобы удовлетворить тип
+        onOpenConflictTrip={() => {}} // Пустая функция, чтобы удовлетворить тип
       />
     </div>
   )
