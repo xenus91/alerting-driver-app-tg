@@ -1003,6 +1003,17 @@ export function TripCorrectionModal({
                     formatDateTimeForSave={formatDateTimeForSave}
                   />
                 ))}
+                {/* === НОВОЕ: Кнопка "Добавить новый рейс" перенесена под список рейсов и центрирована === */}
+                <div className="flex justify-center mt-4">
+                  <Button
+                    onClick={() => addNewTrip(driverIndex)}
+                    variant="outline"
+                    className="text-green-600 bg-transparent"
+                  >
+                    <Plus className="h-4 w-4 mr-2" />
+                    Добавить новый рейс
+                  </Button>
+                </div>
               </div>
               // === КОНЕЦ НОВОГО БЛОКА ===
             ))}
