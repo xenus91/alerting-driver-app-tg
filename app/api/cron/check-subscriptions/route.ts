@@ -28,7 +28,7 @@ async function sendTelegramMessage(chatId: string, message: string) {
 
     if (!response.ok) {
       console.error("Telegram API error:", result)
-      return { success: false, error: result.description || "Failed to send message" }
+      return {rum: { success: false, error: result.description || "Failed to send message" }
     }
 
     return { success: true, data: result }
@@ -57,29 +57,29 @@ export async function POST(request: NextRequest) {
     console.log("=== CRON: CHECKING SUBSCRIPTIONS ===")
 
     // Получаем все активные подписки, которые нужно проверить
-    // Проверяем только те, где прошло достаточно времени с последнего уведомления
     const subscriptions = await sql`
-  SELECT 
-    ts.*,
-    t.status as trip_status,
-    t.created_at as trip_created_at,
-    COUNT(DISTINCT u.telegram_id) AS total_users,
-    COUNT(DISTINCT CASE WHEN tm.status = 'sent' THEN u.telegram_id END) AS sent_users,
-    COUNT(DISTINCT CASE WHEN tm.status = 'error' THEN u.telegram_id END) AS error_users,
-    COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_users,
-    COUNT(DISTINCT CASE WHEN tm.response_status = 'rejected' THEN u.telegram_id END) AS rejected_users,
-    COUNT(DISTINCT CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN u.telegram_id END) AS pending_users
-  FROM trip_subscriptions ts
-  JOIN trips t ON ts.trip_id = t.id
-  LEFT JOIN trip_messages tm ON t.id = tm.trip_id
-  LEFT JOIN users u ON tm.phone = u.phone
-  WHERE ts.is_active = true
-    AND t.status != 'completed'
-    AND (
-      ts.last_notification_at IS NULL 
-      OR ts.last_notification_at <= NOW() - INTERVAL '1 minute' * ts.interval_minutes
-    )
-  GROUP BY ts.id, t.id, t.status, t.created_at
+      SELECT 
+        ts.*,
+        t.status as trip_status,
+        t.created_at as trip_created_at,
+        COUNT(DISTINCT u.telegram_id) AS total_users,
+        COUNT(DISTINCT CASE WHEN tm.status = 'sent' THEN u.telegram_id END) AS sent_users,
+        COUNT(DISTINCT CASE WHEN tm.status = 'error' THEN u.telegram_id END) AS error_users,
+        COUNT(DISTINCT CASE WHEN tm.response_status = 'confirmed' THEN u.telegram_id END) AS confirmed_users,
+        COUNT(DISTINCT CASE WHEN tm.response_status = 'rejected' THEN u.telegram_id END) AS rejected_users,
+        COUNT(DISTINCT CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN u.telegram_id END) AS pending_users,
+        COUNT(DISTINCT CASE WHEN tm.response_status = 'declined' THEN u.telegram_id END) AS declined_users
+      FROM trip_subscriptions ts
+      JOIN trips t ON ts.trip_id = t.id
+      LEFT JOIN trip_messages tm ON t.id = tm.trip_id
+      LEFT JOIN users u ON tm.phone = u.phone
+      WHERE ts.is_active = true
+        AND t.status != 'completed'
+        AND (
+          ts.last_notification_at IS NULL 
+          OR ts.last_notification_at <= NOW() - INTERVAL '1 minute' * ts.interval_minutes
+        )
+      GROUP BY ts.id, t.id, t.status, t.created_at
     `
 
     console.log(`CRON: Found ${subscriptions.length} subscriptions to check`)
@@ -89,51 +89,65 @@ export async function POST(request: NextRequest) {
     let errors = 0
 
     for (const subscription of subscriptions) {
-  try {
-    const totalUsers = Number(subscription.total_users)
-    const sentUsers = Number(subscription.sent_users)
-    const errorUsers = Number(subscription.error_users)
-    const confirmedUsers = Number(subscription.confirmed_users)
-    const rejectedUsers = Number(subscription.rejected_users)
-    const pendingUsers = Number(subscription.pending_users)
+      try {
+        const totalUsers = Number(subscription.total_users)
+        const sentUsers = Number(subscription.sent_users)
+        const errorUsers = Number(subscription.error_users)
+        const confirmedUsers = Number(subscription.confirmed_users)
+        const rejectedUsers = Number(subscription.rejected_users)
+        const pendingUsers = Number(subscription.pending_users)
+        const declined_users = Number(subscription.declined_users)
 
-    const totalResponses = confirmedUsers + rejectedUsers
-    const responsePercentage = sentUsers > 0 ? Math.round((totalResponses / sentUsers) * 100) : 0
-    const sentPercentage = totalUsers > 0 ? Math.round((sentUsers / totalUsers) * 100) : 0
+        const totalResponses = confirmedUsers + rejectedUsers + declined_users
+        const responsePercentage = sentUsers > 0 ? Math.round((totalResponses / sentUsers) * 100) : 0
+        const sentPercentage = totalUsers > 0 ? Math.round((sentUsers / totalUsers) * 100) : 0
 
-    // Формируем сообщение с прогрессом
-    let message = `📊 <b>Прогресс рассылки #${subscription.trip_id}</b>\n\n`
+        // Формируем сообщение с прогрессом
+        let message = `📊 <b>Прогресс рассылки #${subscription.trip_id}</b>\n\n`
 
-    message += `👤 <b>Водители, отправка:</b> ${sentUsers}/${totalUsers} (${sentPercentage}%)\n`
-    message += `📥 <b>Водители, ответы:</b> ${totalResponses}/${sentUsers} (${responsePercentage}%)\n\n`
+        message += `👤 <b>Водители, отправка:</b> ${sentUsers}/${totalUsers} (${sentPercentage}%)\n`
+        message += `📥 <b>Водители, ответы:</b> ${totalResponses}/${sentUsers} (${responsePercentage}%)\n\n`
 
-    message += `✅ Подтверждено: ${confirmedUsers}\n`
-    message += `❌ Отклонено: ${rejectedUsers}\n`
-    message += `⏳ Ожидают: ${pendingUsers}\n`
+        // === НОВОЕ: Добавляем строки только для ненулевых значений ===
+        const metrics = []
+        if (confirmedUsers > 0) {
+          metrics.push(`✅ Подтверждено: ${confirmedUsers}`)
+        }
+        if (rejectedUsers > 0) {
+          metrics.push(`❌ Отклонено: ${rejectedUsers}`)
+        }
+        if (pendingUsers > 0) {
+          metrics.push(`⏳ Ожидают: ${pendingUsers}`)
+        }
+        if (declined_users > 0) {
+          metrics.push(`🚫 Отменено: ${declined_users}`)
+        }
+        if (errorUsers > 0) {
+          metrics.push(`🚫 Ошибки: ${errorUsers}`)
+        }
 
-    if (errorUsers > 0) {
-      message += `🚫 Ошибки: ${errorUsers}\n`
-    }
+        // Добавляем метрики в сообщение, если есть ненулевые значения
+        if (metrics.length > 0) {
+          message += metrics.join('\n') + '\n\n'
+        }
 
-    message += `\n`
+        // Определяем статус и завершаем ли подписку
+        let shouldCompleteSubscription = false
 
-    // Определяем статус и завершаем ли подписку
-    let shouldCompleteSubscription = false
+        if (totalResponses === sentUsers && sentUsers === totalUsers && totalUsers > 0) {
+          message += `🎉 <b>Рассылка завершена!</b>\n`
+          message += `Все водители ответили. Подписка автоматически отменена.`
+          shouldCompleteSubscription = true
+        } else if (sentUsers < totalUsers) {
+          message += `🚀 Рассылка в процессе отправки...`
+        } else if (pendingUsers > 0) {
+          message += `⏰ Ожидаем ответы от ${pendingUsers} водителей...`
+        } else {
+          message += `📋 Статус рассылки обновлен`
+        }
 
-    if (totalResponses === sentUsers && sentUsers === totalUsers && totalUsers > 0) {
-      message += `🎉 <b>Рассылка завершена!</b>\n`
-      message += `Все водители ответили. Подписка автоматически отменена.`
-      shouldCompleteSubscription = true
-    } else if (sentUsers < totalUsers) {
-      message += `🚀 Рассылка в процессе отправки...`
-    } else if (pendingUsers > 0) {
-      message += `⏰ Ожидаем ответы от ${pendingUsers} водителей...`
-    } else {
-      message += `📋 Статус рассылки обновлен`
-    }
-
-    // Добавляем ссылку на просмотр рассылки
-    message += `\n\n🔗 <a href="https://v0-tg-bot-allerting.vercel.app/trips/ ${subscription.trip_id}">Посмотреть детали рассылки</a>`
+        // Добавляем ссылку на просмотр рассылки
+        message += `\n\n🔗 <a href="https://v0-tg-bot-allerting.vercel.app/trips/${subscription.trip_id}">Посмотреть детали рассылки</a>`
 
         // Отправляем уведомление
         const telegramResult = await sendTelegramMessage(subscription.user_telegram_id, message)
@@ -179,8 +193,8 @@ export async function POST(request: NextRequest) {
     }
 
     console.log(
-  `=== CRON: COMPLETED - ${notificationsSent} notifications sent, ${subscriptionsCompleted} subscriptions completed, ${errors} errors ===`,
-)
+      `=== CRON: COMPLETED - ${notificationsSent} notifications sent, ${subscriptionsCompleted} subscriptions completed, ${errors} errors ===`,
+    )
 
     return NextResponse.json({
       success: true,
