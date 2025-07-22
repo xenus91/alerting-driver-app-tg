@@ -227,18 +227,12 @@ export const TripRow = memo(
       <div key={trip.original_trip_identifier || `trip-${tripIndex}`} className="border rounded-lg p-4">
         <div className="flex items-center justify-between mb-4">
           <h3 className="text-lg font-semibold">Рейс {trip.trip_identifier || `Новый ${tripIndex + 1}`}</h3>
-          <div className="flex gap-2">
-            <Button onClick={() => addNewPoint(driverIndex, tripIndex)} variant="outline" size="sm" className="text-blue-600">
-              <Plus className="h-4 w-4 mr-2" />
-              Добавить точку
+          {correctionsLength > 1 && (
+            <Button onClick={() => removeTrip(driverIndex, tripIndex)} variant="outline" size="sm" className="text-red-600">
+              <Trash2 className="h-4 w-4 mr-2" />
+              Удалить рейс
             </Button>
-            {correctionsLength > 1 && (
-              <Button onClick={() => removeTrip(driverIndex, tripIndex)} variant="outline" size="sm" className="text-red-600">
-                <Trash2 className="h-4 w-4 mr-2" />
-                Удалить рейс
-              </Button>
-            )}
-          </div>
+          )}
         </div>
 
         <div className="grid grid-cols-4 gap-4 mb-4">
@@ -371,6 +365,13 @@ export const TripRow = memo(
             })}
           </TableBody>
         </Table>
+        {/* === НОВОЕ: Кнопка "Добавить точку" перенесена под таблицу и центрирована === */}
+        <div className="flex justify-center mt-4">
+          <Button onClick={() => addNewPoint(driverIndex, tripIndex)} variant="outline" className="text-blue-600">
+            <Plus className="h-4 w-4 mr-2" />
+            Добавить точку
+          </Button>
+        </div>
       </div>
     )
   },
