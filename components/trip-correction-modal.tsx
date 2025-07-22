@@ -261,7 +261,7 @@ export function TripCorrectionModal({
 
     setDriverAssignments((prev) => {
       const updated = [...prev]
-      const points = [...updated[driverIndex].corrections[tripIndex].Touch]
+      const points = [...updated[driverIndex].corrections[tripIndex].points]
 
       console.log(
         "Points before movePointUp:",
