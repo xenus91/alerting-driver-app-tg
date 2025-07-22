@@ -19,7 +19,7 @@ export async function POST(request: NextRequest) {
         COUNT(CASE WHEN tm.response_status = 'confirmed' THEN 1 END) as confirmed_responses,
         COUNT(CASE WHEN tm.response_status = 'rejected' THEN 1 END) as rejected_responses,
         COUNT(CASE WHEN tm.response_status = 'pending' AND tm.status = 'sent' THEN 1 END) as pending_responses,
-        COUNT(CASE WHEN t.status = 'declined' THEN 1 END) as declinedResponses
+        COUNT(CASE WHEN tm.response_status = 'declined' THEN 1 END) as declinedResponses
       FROM trip_subscriptions ts
       JOIN trips t ON ts.trip_id = t.id
       LEFT JOIN trip_messages tm ON t.id = tm.trip_id
