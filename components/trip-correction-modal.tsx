@@ -844,7 +844,10 @@ export function TripCorrectionModal({
   }
 
  return (
-    <Dialog open={isOpen} onOpenChange={onClose}>
+        <Dialog open={dialogOpen} onOpenChange={(open) => {
+      setDialogOpen(open)
+      if (!open) onClose()
+    }}>
       <DialogContent className="max-w-6xl max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
@@ -1049,7 +1052,10 @@ export function TripCorrectionModal({
             )}
 
             <div className="flex gap-4 justify-end">
-              <Button onClick={onClose} variant="outline">
+              <Button onClick={() => {
+                setDialogOpen(false)
+                onClose()
+              }} variant="outline">
                 Отмена
               </Button>
               <Button
