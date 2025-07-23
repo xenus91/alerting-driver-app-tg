@@ -745,3 +745,247 @@ export async function deleteMessage(chatId: number, messageId: number) {
     return false
   }
 }
+
+
+// lib/telegram.ts
+
+// Функция для генерации текста сообщения (идентичного sendMultipleTripMessageWithButtons)
+export function generateMultipleTripMessageText(
+  trips: Array<{
+    trip_identifier: string
+    vehicle_number: string
+    planned_loading_time: string
+    driver_comment: string
+    loading_points: Array<{
+      point_id: string
+      point_name: string
+      door_open_1?: string
+      door_open_2?: string
+      door_open_3?: string
+      latitude?: number | string
+      longitude?: number | string
+      adress?: string
+      point_num?: string
+    }>
+    unloading_points: Array<{
+      point_id: string
+      point_name: string
+      door_open_1?: string
+      door_open_2?: string
+      door_open_3?: string
+      latitude?: number | string
+      longitude?: number | string
+      adress?: string
+      point_num?: string
+    }>
+  }>,
+  firstName: string,
+  isCorrection = false,
+  isResend = false
+): string {
+  console.log(`=== GENERATING MULTIPLE TRIP MESSAGE TEXT ===`)
+  console.log(`Trips count: ${trips.length}, Is correction: ${isCorrection}, Is resend: ${isResend}`)
+
+  let message = ""
+
+  // Обновляем логику выбора шапки сообщения
+  if (isCorrection) {
+    message += `🔄 <b>КОРРЕКТИРОВКА РЕЙСОВ</b>\n\n`
+    console.log("Added correction header")
+  } else if (isResend) {
+    message += `🔄 <b>ПОВТОРНАЯ ОТПРАВКА ЗАЯВОК</b>\n\n`
+    console.log("Added resend header")
+  }
+
+  message += `🌅 <b>Доброго времени суток!</b>\n\n`
+  message += `👤 Уважаемый, <b>${firstName}</b>\n\n`
+
+  // Определяем множественное или единственное число
+  const isMultiple = trips.length > 1
+  message += `🚛 На Вас запланирован${isMultiple ? "ы" : ""} <b>${trips.length} рейс${trips.length > 1 ? "а" : ""}:</b>\n\n`
+
+  // Сортируем рейсы по времени погрузки
+  const sortedTrips = [...trips].sort((a, b) => {
+    const timeA = new Date(a.planned_loading_time || "").getTime()
+    const timeB = new Date(b.planned_loading_time || "").getTime()
+    return timeA - timeB
+  })
+
+  // Перебираем все рейсы
+  sortedTrips.forEach((trip, tripIndex) => {
+    console.log(`Processing trip ${tripIndex + 1}: ${trip.trip_identifier}`)
+
+    message += `<b>Рейс ${tripIndex + 1}:</b>\n`
+    message += `Транспортировка: <b>${trip.trip_identifier}</b>\n`
+    message += `🚗 Транспорт: <b>${trip.vehicle_number}</b>\n`
+
+    // Форматируем дату и время БЕЗ смещения часового пояса
+    const formatDateTime = (dateTimeString: string): string => {
+      try {
+        if (!dateTimeString) return "Не указано"
+
+        const date = new Date(dateTimeString)
+        if (isNaN(date.getTime())) return dateTimeString
+
+        const day = date.getDate()
+        const monthNames = [
+          "января",
+          "февраля",
+          "марта",
+          "апреля",
+          "мая",
+          "июня",
+          "июля",
+          "августа",
+          "сентября",
+          "октября",
+          "ноября",
+          "декабря",
+        ]
+        const month = monthNames[date.getMonth()]
+
+        const hours = date.getHours().toString().padStart(2, "0")
+        const minutes = date.getMinutes().toString().padStart(2, "0")
+        const time = `${hours}:${minutes}`
+
+        return `${day} ${month} ${time}`
+      } catch (error) {
+        console.error("Error formatting date:", error)
+        return dateTimeString
+      }
+    }
+
+    message += `⏰ Плановое время погрузки: <b>${formatDateTime(trip.planned_loading_time)}</b>\n\n`
+
+    // Объединяем все пункты и сортируем по point_num
+    const allPoints = [
+      ...trip.loading_points.map((point) => ({ ...point, type: "loading" })),
+      ...trip.unloading_points.map((point) => ({ ...point, type: "unloading" })),
+    ].sort((a, b) => {
+      const aNum = Number.parseInt(a.point_num || "0")
+      const bNum = Number.parseInt(b.point_num || "0")
+      return aNum - bNum
+    })
+
+    if (allPoints.length > 0) {
+      message += `📍 <b>Маршрут:</b>\n`
+      allPoints.forEach((point, index) => {
+        const typeIcon = point.type === "loading" ? "📦" : "📤"
+        const typeText = point.type === "loading" ? "Погрузка" : "Разгрузка"
+        const pointNum = point.point_num || index + 1
+
+        message += `${pointNum}) ${typeIcon} <b>${point.point_id} ${point.point_name}</b> (${typeText})\n`
+
+        // Добавляем адрес с гиперссылкой
+        if (point.adress) {
+          if (point.latitude && point.longitude) {
+            const lat = typeof point.latitude === "string" ? point.latitude : String(point.latitude)
+            const lng = typeof point.longitude === "string" ? point.longitude : String(point.longitude)
+            const mapUrl = `https://yandex.ru/maps/?pt=${lng},${lat}&z=16&l=map`
+            message += `   📍 <a href="${mapUrl}">${point.adress}</a>\n`
+          } else {
+            message += `   📍 ${point.adress}\n`
+          }
+        }
+
+        // Окна приемки (только для разгрузки)
+        if (point.type === "unloading") {
+          const windows = [point.door_open_1, point.door_open_2, point.door_open_3].filter((w) => w && w.trim())
+          if (windows.length > 0) {
+            message += `   🕐 Окна приемки: <code>${windows.join(" | ")}</code>\n`
+          }
+        }
+      })
+      message += `\n`
+    }
+
+    // Комментарий
+    if (trip.driver_comment && trip.driver_comment.trim()) {
+      message += `💬 <b>Комментарий по рейсу:</b>\n<i>${trip.driver_comment}</i>\n\n`
+    }
+
+    // Строим маршрут для этого рейса
+    const routePoints = allPoints
+    console.log(
+      `Route points for trip ${trip.trip_identifier}:`,
+      routePoints.map((p) => ({ id: p.point_id, lat: p.latitude, lng: p.longitude })),
+    )
+
+    const routeUrl = buildRouteUrl(routePoints)
+
+    if (routeUrl) {
+      message += `🗺️ <a href="${routeUrl}">Построить маршрут</a>\n\n`
+      console.log(`Added route URL for trip ${trip.trip_identifier}`)
+    } else {
+      console.log(`No route URL generated for trip ${trip.trip_identifier} - insufficient coordinates`)
+    }
+
+    // Добавляем разделитель между рейсами (кроме последнего)
+    if (tripIndex < sortedTrips.length - 1) {
+      message += `━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n`
+    }
+  })
+
+  message += `ℹ️ <i>Это сообщение содержит обновленные данные о ваших рейсах</i>`
+
+  console.log(`Generated message length: ${message.length}`)
+  console.log(`Message preview: ${message.substring(0, 200)}...`)
+  
+  return message
+}
+
+// Новая функция для отправки реплая с идентичным текстом
+export async function sendMultipleTripMessageAsReply(
+  chatId: number,
+  trips: Array<{
+    trip_identifier: string
+    vehicle_number: string
+    planned_loading_time: string
+    driver_comment: string
+    loading_points: Array<{
+      point_id: string
+      point_name: string
+      door_open_1?: string
+      door_open_2?: string
+      door_open_3?: string
+      latitude?: number | string
+      longitude?: number | string
+      adress?: string
+      point_num?: string
+    }>
+    unloading_points: Array<{
+      point_id: string
+      point_name: string
+      door_open_1?: string
+      door_open_2?: string
+      door_open_3?: string
+      latitude?: number | string
+      longitude?: number | string
+      adress?: string
+      point_num?: string
+    }>
+  }>,
+  firstName: string,
+  replyToMessageId: number,
+  isCorrection = false,
+  isResend = false,
+): Promise<{ message_id: number }> {
+  try {
+    console.log(`=== SENDING MULTIPLE TRIP MESSAGE AS REPLY ===`)
+    console.log(`Chat ID: ${chatId}, Reply to: ${replyToMessageId}`)
+    
+    // Генерируем текст сообщения
+    const messageText = generateMultipleTripMessageText(
+      trips,
+      firstName,
+      isCorrection,
+      isResend
+    )
+
+    // Отправляем как реплай
+    return await sendReplyToMessage(chatId, replyToMessageId, messageText)
+  } catch (error) {
+    console.error("Error sending multiple trip message as reply:", error)
+    throw error
+  }
+}
