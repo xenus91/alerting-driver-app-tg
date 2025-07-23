@@ -175,17 +175,20 @@ export function parseExcelData(buffer: ArrayBuffer): ExcelRow[] {
           driver_comment,
         })
 
-          if (phone && trip_identifier && vehicle_number && planned_loading_time && point_id) {
-        rows.push({
-          phone, // сохраняем оригинальное значение
-          trip_identifier,
-          vehicle_number,
-          planned_loading_time,
-          point_type,
-          point_num,
-          point_id,
-          driver_comment,
-        })
+        if (phone && trip_identifier && vehicle_number && planned_loading_time && point_id) {
+          // Нормализуем номер телефона (БЕЗ знака +)
+          const normalizedPhone = normalizePhone(phone)
+          if (normalizedPhone) {
+            rows.push({
+              phone: normalizedPhone,
+              trip_identifier,
+              vehicle_number,
+              planned_loading_time,
+              point_type,
+              point_num,
+              point_id,
+              driver_comment,
+            })
           } else {
             console.warn(`Строка ${i + 2}: неверный формат номера - "${phone}"`)
           }
@@ -261,16 +264,18 @@ function parseCSVData(buffer: ArrayBuffer): ExcelRow[] {
         const driver_comment = parts[7].trim().replace(/['"]/g, "")
 
         if (phone && trip_identifier && vehicle_number && planned_loading_time && point_id) {
-        rows.push({
-          phone, // оригинальное значение
-          trip_identifier,
-          vehicle_number,
-          planned_loading_time,
-          point_type,
-          point_num,
-          point_id,
-          driver_comment,
-        })
+          const normalizedPhone = normalizePhone(phone)
+          if (normalizedPhone) {
+            rows.push({
+              phone: normalizedPhone,
+              trip_identifier,
+              vehicle_number,
+              planned_loading_time,
+              point_type,
+              point_num,
+              point_id,
+              driver_comment,
+            })
           }
         }
       } catch (error) {
@@ -283,7 +288,7 @@ function parseCSVData(buffer: ArrayBuffer): ExcelRow[] {
     throw new Error("Ошибка при обработке CSV файла")
   }
 }
-{/*
+
 function normalizePhone(phone: string): string | null {
   // Удаляем все символы кроме цифр и +
   const cleaned = phone.replace(/[^\d+]/g, "")
@@ -313,7 +318,7 @@ function normalizePhone(phone: string): string | null {
 
   console.warn(`Invalid phone format: "${phone}" (cleaned: "${cleaned}")`)
   return null
-}*/}
+}
 
 export function validateExcelData(rows: ExcelRow[]): { valid: ExcelRow[]; errors: string[] } {
   const valid: ExcelRow[] = []
@@ -353,7 +358,13 @@ export function validateExcelData(rows: ExcelRow[]): { valid: ExcelRow[]; errors
     }
 
     // Проверяем формат номера (поддерживаем российские и украинские)
-    
+    if (!row.phone.match(/^(7\d{10}|380\d{9})$/)) {
+      errors.push(
+        `Строка ${i + 2}: неверный формат номера телефона "${row.phone}" (ожидается 7XXXXXXXXXX или 380XXXXXXXXX)`,
+      )
+      continue
+    }
+
     valid.push(row)
   }
 
