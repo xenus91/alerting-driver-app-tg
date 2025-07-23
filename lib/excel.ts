@@ -353,13 +353,7 @@ export function validateExcelData(rows: ExcelRow[]): { valid: ExcelRow[]; errors
     }
 
     // Проверяем формат номера (поддерживаем российские и украинские)
-    if (!row.phone.match(/^(7\d{10}|380\d{9})$/)) {
-      errors.push(
-        `Строка ${i + 2}: неверный формат номера телефона "${row.phone}" (ожидается 7XXXXXXXXXX или 380XXXXXXXXX)`,
-      )
-      continue
-    }
-
+    
     valid.push(row)
   }
 
